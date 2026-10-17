@@ -1,0 +1,29 @@
+# LLM routing. Providers are tried in order; on 429/5xx the gateway falls through.
+# Model names change often on free tiers: update here, never in code.
+providers:
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+  cloudflare:
+    base_url: https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1
+    api_key_env: CLOUDFLARE_API_TOKEN
+
+profiles:
+  fast:      # chat, marking
+    - { provider: groq, model: llama-3.1-8b-instant, rpm: 30 }
+    - { provider: openrouter, model: "meta-llama/llama-3.3-70b-instruct:free", rpm: 20 }
+    - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct", rpm: 50 }
+  quality:   # questions, explanations, outlines
+    - { provider: groq, model: llama-3.3-70b-versatile, rpm: 30 }
+    - { provider: openrouter, model: "qwen/qwen-2.5-72b-instruct:free", rpm: 20 }
+    - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
+
+tasks:
+  chat: fast
+  marking: fast
+  outline: quality
+  explanation: quality
+  questions: quality
