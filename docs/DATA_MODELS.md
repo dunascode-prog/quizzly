@@ -1,4 +1,4 @@
-# NoteGenie — Data Models
+# Quizzly — Data Models
 
 | | |
 |---|---|

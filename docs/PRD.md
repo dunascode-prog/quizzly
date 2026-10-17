@@ -1,4 +1,4 @@
-# NoteGenie — Product Requirements Document (PRD)
+# Quizzly — Product Requirements Document (PRD)
 
 | | |
 |---|---|
@@ -11,7 +11,7 @@
 
 ## 1. Summary
 
-NoteGenie is an Android-first mobile app (iOS later) for Nigerian university students. A student uploads lecture notes or slides (PDF, PPTX, or photos of handwritten/printed notes), and NoteGenie:
+Quizzly is an Android-first mobile app (iOS later) for Nigerian university students. A student uploads lecture notes or slides (PDF, PPTX, or photos of handwritten/printed notes), and Quizzly:
 
 1. **Explains** the material more clearly, topic by topic, in plain language with examples.
 2. **Generates practice questions** from it (multiple choice, true/false, fill-in-the-blank, short answer, and theory/essay questions in the style of Nigerian university exams), with answers and explanations.

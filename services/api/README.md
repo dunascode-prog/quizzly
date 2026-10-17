@@ -1,4 +1,4 @@
-# NoteGenie API and worker
+# Quizzly API and worker
 
 FastAPI app and background worker (one Python codebase, two processes). Not scaffolded yet.
 

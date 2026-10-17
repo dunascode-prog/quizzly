@@ -1,4 +1,4 @@
-# NoteGenie mobile app
+# Quizzly mobile app
 
 Expo (React Native, TypeScript) app. Not scaffolded yet. It will be created with:
 

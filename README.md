@@ -1,6 +1,6 @@
-# NoteGenie
+# Quizzly
 
-AI study companion for Nigerian university students. Upload lecture notes or slides (PDF, PPTX, or photos), and NoteGenie explains them topic by topic, generates exam-style practice questions with answers, and answers questions about the notes with page citations.
+AI study companion for Nigerian university students. Upload lecture notes or slides (PDF, PPTX, or photos), and Quizzly explains them topic by topic, generates exam-style practice questions with answers, and answers questions about the notes with page citations.
 
 Built on open-source models through free hosted tiers, with a retrieval-augmented generation (RAG) pipeline designed to cost close to $0/month during beta.
 

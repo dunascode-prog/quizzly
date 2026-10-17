@@ -1,4 +1,4 @@
-# NoteGenie — Architecture
+# Quizzly — Architecture
 
 | | |
 |---|---|
@@ -31,11 +31,11 @@
 
 ```mermaid
 flowchart LR
-    Student([Student<br/>mobile app]) -->|HTTPS JSON, SSE| API[NoteGenie API<br/>FastAPI]
+    Student([Student<br/>mobile app]) -->|HTTPS JSON, SSE| API[Quizzly API<br/>FastAPI]
     Student -->|sign in| Auth[Supabase Auth]
     Student -->|upload / view file<br/>signed URL| Storage[(Supabase Storage)]
     API --> DB[(Supabase Postgres<br/>+ pgvector)]
-    Worker[NoteGenie Worker<br/>Python] --> DB
+    Worker[Quizzly Worker<br/>Python] --> DB
     Worker --> Storage
     Worker -->|chat completions| LLM[LLM providers<br/>Groq · OpenRouter · CF Workers AI]
     API -->|streaming chat, marking| LLM
@@ -86,7 +86,7 @@ Both share the same domain modules, so there is no separate service to keep in s
 ## 4. Repository layout (monorepo)
 
 ```
-notegenie/
+quizzly/
 ├── apps/
 │   └── mobile/                # Expo app (TypeScript)
 ├── services/

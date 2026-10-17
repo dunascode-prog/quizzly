@@ -1,4 +1,4 @@
-# NoteGenie — Functional Requirements Document (FRD)
+# Quizzly — Functional Requirements Document (FRD)
 
 | | |
 |---|---|

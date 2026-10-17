@@ -1,4 +1,4 @@
-# NoteGenie — Data Flow Diagrams
+# Quizzly — Data Flow Diagrams
 
 | | |
 |---|---|
@@ -21,7 +21,7 @@ Process numbers match the level-1 diagram.
 
 ```mermaid
 flowchart LR
-    S[Student] -- "credentials, files, quiz answers, chat questions" --> P0((0. NoteGenie))
+    S[Student] -- "credentials, files, quiz answers, chat questions" --> P0((0. Quizzly))
     P0 -- "outlines, explanations, quizzes, scores, chat answers" --> S
     A[Admin] -- "moderation decisions, limits, takedowns" --> P0
     P0 -- "reports, cost and usage figures" --> A

@@ -1,4 +1,4 @@
--- NoteGenie initial schema. See docs/DATA_MODELS.md for the meaning of each table.
+-- Quizzly initial schema. See docs/DATA_MODELS.md for the meaning of each table.
 
 create extension if not exists vector;
 create extension if not exists pg_trgm;
