@@ -15,6 +15,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - run: uv run ruff check .
+      - run: uv run ruff format --check .
       - run: uv run pytest -q
 
   mobile:
@@ -27,7 +28,8 @@ jobs:
         with: { node-version: 22, cache: npm, cache-dependency-path: apps/mobile/package-lock.json }
       - run: npm ci
       - run: npx tsc --noEmit
-      - run: npm run lint --if-present
+      - run: npm run lint
+      - run: npx expo-doctor
 
   migrations:
     runs-on: ubuntu-latest
