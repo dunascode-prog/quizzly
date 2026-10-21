@@ -1,0 +1,35 @@
+# Production-style stack for the Oracle Cloud Always Free VM (ARCHITECTURE §1).
+# Usage: cd infra && docker compose up -d --build
+services:
+  api:
+    build: ../services/api
+    env_file: ../services/api/.env
+    restart: unless-stopped
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build: ../services/api
+    env_file: ../services/api/.env
+    command: ["python", "-m", "app.worker.main"]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+
+volumes:
+  caddy_data:
+  caddy_config:

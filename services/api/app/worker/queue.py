@@ -1,0 +1,105 @@
+"""Postgres-backed job queue (`jobs` table). Workers claim with FOR UPDATE SKIP LOCKED."""
+
+import json
+from datetime import timedelta
+from typing import Any
+from uuid import UUID
+
+from psycopg import AsyncConnection
+
+BASE_BACKOFF = timedelta(seconds=15)
+MAX_BACKOFF = timedelta(minutes=30)
+LEASE = timedelta(minutes=10)
+
+
+def backoff_for(attempts: int) -> timedelta:
+    """Exponential backoff: 15 s, 30 s, 1 min, 2 min… capped at 30 min."""
+    return min(BASE_BACKOFF * (2 ** max(attempts - 1, 0)), MAX_BACKOFF)
+
+
+async def enqueue(
+    conn: AsyncConnection,
+    job_type: str,
+    payload: dict[str, Any],
+    *,
+    user_id: UUID | None = None,
+    dedupe_key: str | None = None,
+) -> UUID | None:
+    """Insert a job. Returns None if an active job with the same dedupe_key already exists."""
+    row = await (
+        await conn.execute(
+            """
+            insert into jobs (type, user_id, payload, dedupe_key)
+            values (%s, %s, %s, %s)
+            on conflict (dedupe_key) where status in ('queued', 'running') do nothing
+            returning id
+            """,
+            (job_type, user_id, json.dumps(payload), dedupe_key),
+        )
+    ).fetchone()
+    return row["id"] if row else None
+
+
+async def claim(conn: AsyncConnection, worker_id: str) -> dict | None:
+    """Take the oldest runnable job, or one whose lease expired (crashed worker)."""
+    return await (
+        await conn.execute(
+            """
+            update jobs set status = 'running', locked_by = %s, locked_at = now(),
+                            attempts = attempts + 1
+            where id = (
+                select id from jobs
+                where (status = 'queued' and run_after <= now())
+                   or (status = 'running' and locked_at < now() - %s)
+                order by run_after
+                for update skip locked
+                limit 1
+            )
+            returning *
+            """,
+            (worker_id, LEASE),
+        )
+    ).fetchone()
+
+
+async def set_progress(conn: AsyncConnection, job_id: UUID, progress: int) -> None:
+    await conn.execute(
+        "update jobs set progress = %s where id = %s", (max(0, min(progress, 100)), job_id)
+    )
+
+
+async def succeed(conn: AsyncConnection, job_id: UUID) -> None:
+    await conn.execute(
+        "update jobs set status = 'succeeded', progress = 100, locked_by = null where id = %s",
+        (job_id,),
+    )
+
+
+async def fail(conn: AsyncConnection, job: dict, error: str, *, retry: bool = True) -> None:
+    """Retry with backoff while attempts remain, otherwise mark the job failed."""
+    if retry and job["attempts"] < job["max_attempts"]:
+        await conn.execute(
+            """
+            update jobs set status = 'queued', locked_by = null, error = %s,
+                            run_after = now() + %s
+            where id = %s
+            """,
+            (error, backoff_for(job["attempts"]), job["id"]),
+        )
+    else:
+        await conn.execute(
+            "update jobs set status = 'failed', locked_by = null, error = %s where id = %s",
+            (error, job["id"]),
+        )
+
+
+async def requeue(conn: AsyncConnection, job: dict, delay: timedelta) -> None:
+    """Put a job back without spending an attempt (e.g. every LLM provider is rate-limited)."""
+    await conn.execute(
+        """
+        update jobs set status = 'queued', locked_by = null, attempts = attempts - 1,
+                        run_after = now() + %s
+        where id = %s
+        """,
+        (delay, job["id"]),
+    )

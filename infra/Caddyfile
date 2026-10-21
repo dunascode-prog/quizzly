@@ -1,0 +1,5 @@
+# Caddy obtains and renews the TLS certificate for API_DOMAIN automatically.
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy api:8000
+}

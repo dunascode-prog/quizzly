@@ -6,7 +6,7 @@ Built on open-source models through free hosted tiers, with a retrieval-augmente
 
 ## Status
 
-**M0: Foundations.** Docs, database schema and repository skeleton are in place. No application code yet.
+**M1: Scaffolding.** The mobile app and the API/worker are scaffolded and tested: sign-in token checks, the LLM gateway with provider fallback, and the Postgres job queue. Document ingestion is next.
 
 ## Documentation
 
@@ -42,14 +42,24 @@ docs/                 Product and technical docs
 
 ## Getting started
 
-Coming in M1. You will need: Node 22, Python 3.12 with `uv`, the Supabase CLI, and Docker.
+You need Node 22, Python 3.12 and [`uv`](https://docs.astral.sh/uv/) (`pip install uv`). Docker and the Supabase CLI are optional for now.
 
-To apply the schema to a Supabase project today:
+```bash
+# API (http://localhost:8000/docs)
+cd services/api && uv sync && cp .env.example .env && uv run uvicorn app.main:app --reload
+
+# Mobile app
+cd apps/mobile && npm install && cp .env.example .env.local && npx expo start
+```
+
+Apply the database schema to a Supabase project:
 
 ```bash
 supabase link --project-ref <ref>
 supabase db push
 ```
+
+More detail: [apps/mobile](apps/mobile/README.md) · [services/api](services/api/README.md) · [infra](infra/README.md).
 
 ## Contributing
 
