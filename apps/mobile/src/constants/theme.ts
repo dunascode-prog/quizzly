@@ -1,6 +1,9 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://unistyl.es/), etc.
+ * Quizzly design tokens. See docs/DESIGN.md for how each token is used.
+ * Screens must read colours, type and spacing from here, never hard-code them.
+ *
+ * Existing keys (text, background, backgroundElement, backgroundSelected,
+ * textSecondary) are kept so current components keep working.
  */
 
 import '@/global.css';
@@ -9,23 +12,74 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#0D0D10', // ink: text, hero cards, primary pills, tab bar
+    onInk: '#FFFFFF', // text and icons on ink
+    textSecondary: '#4D4E5A', // muted: secondary text on ground/surface
+    mutedOnInk: '#A3A4AE', // secondary text on ink
+    background: '#DCDDE8', // ground: screen background
+    backgroundElement: '#ECEDF4', // surface: light cards, sheets
+    backgroundSelected: '#F5F5FA', // field: inputs, white pills, options
+    inkRaised: '#1B1C22', // tiles inside ink cards
+    inactiveOnInk: '#C9CAD3', // inactive tab icons, unselected segments on ink
+    line: '#C5C6D3',
+    track: '#3A3B44', // ring/bar track on ink
+    scrim: 'rgba(13, 13, 16, 0.6)',
+    success: '#186A33',
+    successSoft: '#D6EEDC',
+    danger: '#B42318',
+    dangerSoft: '#F7DCD9',
+    warning: '#7A5200',
+    warningSoft: '#F3E6C4',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#F5F5FA',
+    onInk: '#0D0D10',
+    textSecondary: '#A3A4AE',
+    mutedOnInk: '#4D4E5A',
+    background: '#0D0D10',
+    backgroundElement: '#1B1C22',
+    backgroundSelected: '#26272E',
+    inkRaised: '#E4E5EC',
+    inactiveOnInk: '#4D4E5A',
+    line: '#33343C',
+    track: '#C5C6D3',
+    scrim: 'rgba(0, 0, 0, 0.7)',
+    success: '#7BD69A',
+    successSoft: '#16301F',
+    danger: '#FF9D94',
+    dangerSoft: '#3A1C1A',
+    warning: '#F2C46D',
+    warningSoft: '#352A12',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/**
+ * Font family names as registered with expo-font:
+ * - Inter_400Regular / Inter_500Medium / Inter_600SemiBold from @expo-google-fonts/inter
+ * - InterDisplay-SemiBold from assets/fonts/InterDisplay-SemiBold.ttf (rsms/inter release)
+ */
+export const FontFamily = {
+  display: 'InterDisplay-SemiBold',
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+} as const;
+
+export const Type = {
+  hero: { fontFamily: FontFamily.display, fontSize: 44, lineHeight: 48, letterSpacing: -1.1 },
+  display: { fontFamily: FontFamily.display, fontSize: 40, lineHeight: 44, letterSpacing: -1 },
+  title: { fontFamily: FontFamily.display, fontSize: 26, lineHeight: 32, letterSpacing: -0.4 },
+  heading: { fontFamily: FontFamily.semibold, fontSize: 20, lineHeight: 26 },
+  reading: { fontFamily: FontFamily.regular, fontSize: 17, lineHeight: 27 },
+  body: { fontFamily: FontFamily.regular, fontSize: 15, lineHeight: 23 },
+  label: { fontFamily: FontFamily.medium, fontSize: 16, lineHeight: 20 },
+  small: { fontFamily: FontFamily.regular, fontSize: 13, lineHeight: 18 },
+  caption: { fontFamily: FontFamily.medium, fontSize: 12, lineHeight: 16 },
+} as const;
+
+/** Kept for existing components; prefer FontFamily/Type in new code. */
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
@@ -55,11 +109,31 @@ export const Spacing = {
   half: 2,
   one: 4,
   two: 8,
+  twoHalf: 12,
   three: 16,
+  gutter: 20,
   four: 24,
   five: 32,
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+export const Radius = {
+  field: 20,
+  option: 22,
+  card: 28,
+  sheet: 32,
+  full: 999,
+} as const;
+
+export const Size = {
+  iconButton: 52,
+  actionPill: 64,
+  pill: 44,
+  field: 64,
+  tabBar: 68,
+  minTouch: 48,
+} as const;
+
+/** Space to leave above the floating tab bar (68 tall + 24 from the bottom). */
+export const BottomTabInset = Size.tabBar + Spacing.four + Spacing.three;
 export const MaxContentWidth = 800;
