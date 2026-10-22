@@ -19,7 +19,9 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def client(settings: Settings):
+def client(settings: Settings, monkeypatch):
+    # Keep tests away from a developer's real .env (e.g. a live DATABASE_URL).
+    monkeypatch.setattr("app.main.get_settings", lambda: settings)
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: settings
     with TestClient(app) as c:

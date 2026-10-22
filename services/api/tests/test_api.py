@@ -29,6 +29,13 @@ def test_healthz(client):
     assert response.headers["x-request-id"]
 
 
+def test_cors_allows_local_web_preview_only(client):
+    ok = client.get("/healthz", headers={"Origin": "http://localhost:8082"})
+    assert ok.headers["access-control-allow-origin"] == "http://localhost:8082"
+    evil = client.get("/healthz", headers={"Origin": "https://evil.example.com"})
+    assert "access-control-allow-origin" not in evil.headers
+
+
 def test_me_requires_token(client):
     assert client.get("/v1/me").status_code == 401
 
