@@ -26,6 +26,17 @@ async def take(
     return row["count"] if row else None
 
 
+async def give_back(conn: AsyncConnection, user_id: UUID, resource: str, n: int, tz: str) -> None:
+    """Returns n units to today's allowance (never below zero), e.g. a deleted upload."""
+    if n <= 0:
+        return
+    await conn.execute(
+        f"update usage_counters set count = greatest(count - %(n)s, 0) "
+        f"where user_id = %(user)s and day = {_TODAY} and resource = %(resource)s",
+        {"user": user_id, "resource": resource, "n": n, "tz": tz},
+    )
+
+
 async def used_today(conn: AsyncConnection, user_id: UUID, tz: str) -> dict[str, int]:
     rows = await (
         await conn.execute(

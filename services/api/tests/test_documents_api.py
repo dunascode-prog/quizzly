@@ -64,7 +64,7 @@ def fake(client, monkeypatch):
         state["courses"][c["id"]] = c | {"created_at": NOW}
         return state["courses"][c["id"]]
 
-    async def delete_course(conn, user_id, course_id, delete_documents):
+    async def delete_course(conn, user_id, course_id, delete_documents, tz):
         if state["courses"].pop(course_id, None) is None:
             return None
         return ["uploads/a.pdf"] if delete_documents else []
@@ -187,3 +187,15 @@ def test_failed_documents_carry_a_readable_message(client, fake):
     body = client.get(f"/v1/documents/{d['id']}", headers=auth()).json()
     assert body["failure_reason"] == "encrypted"
     assert body["failure_message"].startswith("We couldn't read this file")
+
+
+async def test_deleting_documents_gives_back_only_todays_uploads(monkeypatch):
+    returned = []
+
+    async def give_back(conn, user_id, resource, n, tz):
+        returned.append((resource, n, tz))
+
+    monkeypatch.setattr(usage, "give_back", give_back)
+    deleted = [{"uploaded_today": True}, {"uploaded_today": False}, {"uploaded_today": True}]
+    await documents.refund_uploads(None, USER, deleted, "Africa/Lagos")
+    assert returned == [("upload", 2, "Africa/Lagos")]
