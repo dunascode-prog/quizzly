@@ -14,6 +14,8 @@ export const supabase = createClient(env.supabaseUrl || 'http://localhost', env.
     autoRefreshToken: storage !== undefined,
     persistSession: storage !== undefined,
     detectSessionInUrl: false,
+    // PKCE lets the Google redirect return a one-time code instead of tokens in the URL.
+    flowType: 'pkce',
   },
 });
 
