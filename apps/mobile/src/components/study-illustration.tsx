@@ -97,7 +97,8 @@ function Sparkle({ d, x, y, delay, reduceMotion, color }: {
   );
 }
 
-export function StudyIllustration() {
+/** `width` lets a screen shrink the art to fit the space it has; by default it fills the row. */
+export function StudyIllustration({ width }: { width?: number }) {
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const unit = useSharedValue(1);
@@ -142,7 +143,7 @@ export function StudyIllustration() {
 
   return (
     <View
-      style={styles.frame}
+      style={[styles.frame, width !== undefined && { width }]}
       accessible
       accessibilityRole="image"
       accessibilityLabel="A student studying at a laptop"

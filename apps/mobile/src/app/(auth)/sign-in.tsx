@@ -17,6 +17,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { sendEmailCode, SignInCancelled, signInWithGoogle, verifyEmailCode } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 
+const ART_RATIO = 340 / 230; // study-illustration viewBox
+const ART_MIN_HEIGHT = 72; // below this the art is too small to read, so it's hidden
 const CODE_LENGTH = 6;
 const RESEND_AFTER_S = 60;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -31,6 +33,7 @@ export default function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
   const codeRef = useRef<TextInput>(null);
+  const [artWidth, setArtWidth] = useState<number>();
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -110,13 +113,19 @@ export default function SignInScreen() {
     );
 
   return (
-    <Screen footer={footer}>
+    <Screen footer={footer} fit>
       <View style={[styles.logo, { backgroundColor: theme.text }]}>
         <Logo size={30} color={theme.onInk} />
       </View>
 
-      <View style={styles.art}>
-        <StudyIllustration />
+      {/* Takes only the height left over, so the email field shows without scrolling. */}
+      <View
+        style={styles.art}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          setArtWidth(height < ART_MIN_HEIGHT ? 0 : Math.min(width, height * ART_RATIO));
+        }}>
+        {artWidth ? <StudyIllustration width={artWidth} /> : null}
       </View>
 
       <HeroCard>
@@ -174,8 +183,11 @@ const styles = StyleSheet.create({
   },
   art: {
     flexGrow: 1,
+    flexBasis: 0,
+    flexShrink: 1,
+    minHeight: 0,
     justifyContent: 'center',
-    paddingVertical: Spacing.two,
+    alignItems: 'center',
   },
   heroFoot: {
     flexDirection: 'row',
