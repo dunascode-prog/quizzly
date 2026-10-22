@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 25 * 1024 * 1024
     max_document_pages: int = 150
     daily_uploads: int = 5
+    daily_explanations: int = 30
 
     models_config_path: Path = SERVICE_ROOT / "config" / "models.yaml"
     embedding_model: str = "BAAI/bge-small-en-v1.5"

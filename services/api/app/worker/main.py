@@ -17,14 +17,17 @@ from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.llm.gateway import AllProvidersBusy
-from app.worker import ingest, queue
+from app.worker import explain, ingest, queue
 
 log = logging.getLogger("quizzly.worker")
 
 Handler = Callable[[AsyncConnection, dict], Awaitable[None]]
 
-# Filled in as features land: generate_explanation, generate_questions, …
-HANDLERS: dict[str, Handler] = {"ingest_document": ingest.ingest_document}
+# Filled in as features land: generate_questions, mark_answers, …
+HANDLERS: dict[str, Handler] = {
+    "ingest_document": ingest.ingest_document,
+    "generate_explanation": explain.generate_explanation,
+}
 
 POLL_INTERVAL = 2.0
 HEARTBEAT_INTERVAL = 60.0

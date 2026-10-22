@@ -1,0 +1,193 @@
+from typing import Annotated, Literal
+from uuid import UUID
+
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
+
+from app.api.deps import AppSettings, Conn, User
+from app.domain import study, usage
+from app.rag.explain import PROMPT_VERSION
+from app.worker import queue
+
+router = APIRouter(tags=["study"])
+
+Style = Literal["standard", "simple", "exam"]
+
+
+class TopicOut(BaseModel):
+    id: UUID
+    ordinal: int
+    title: str
+    summary: str | None
+    page_start: int | None
+    page_end: int | None
+
+
+class OutlineDocument(BaseModel):
+    id: UUID
+    title: str
+    course_code: str | None
+    page_count: int | None
+    topic_count: int
+
+
+class OutlineOut(BaseModel):
+    document: OutlineDocument
+    topics: list[TopicOut]
+
+
+class PageOut(BaseModel):
+    page_number: int
+    page_count: int | None
+    text: str
+
+
+class ExplanationOut(BaseModel):
+    id: UUID
+    style: Style
+    # pending/generating while the worker writes it; ready or failed after.
+    status: str
+    content_md: str | None
+    citations: list[int]
+
+
+class ExplanationRequest(BaseModel):
+    style: Style = "standard"
+
+
+class FeedbackIn(BaseModel):
+    target_type: Literal["explanation"]
+    target_id: UUID
+    rating: Literal[-1, 1]
+
+
+class ReportIn(BaseModel):
+    target_type: Literal["explanation"]
+    target_id: UUID
+    reason: Literal["wrong", "unclear", "inappropriate", "other"]
+    note: str | None = Field(default=None, max_length=500)
+
+
+async def _document(conn, user_id: UUID, document_id: UUID) -> dict:
+    doc = await study.ready_document(conn, user_id, document_id)
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found or not ready yet")
+    return doc
+
+
+async def _topic(conn, doc: dict, topic_id: UUID) -> dict:
+    found = next(
+        (t for t in await study.topics(conn, doc["source_file_id"]) if t["id"] == topic_id), None
+    )
+    if found is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Topic not found")
+    return found
+
+
+def _out(row: dict) -> ExplanationOut:
+    return ExplanationOut(
+        id=row["id"],
+        style=row["style"],
+        status=row["status"],
+        content_md=row["content_md"] if row["status"] == "ready" else None,
+        citations=row["citations"] or [],
+    )
+
+
+@router.get("/v1/documents/{document_id}/outline")
+async def outline(document_id: UUID, user: User, conn: Conn) -> OutlineOut:
+    doc = await _document(conn, user.id, document_id)
+    rows = await study.topics(conn, doc["source_file_id"])
+    return OutlineOut(
+        document=OutlineDocument(**doc, topic_count=len(rows)),
+        topics=[TopicOut(**t) for t in rows],
+    )
+
+
+@router.get("/v1/documents/{document_id}/pages/{number}")
+async def source_page(document_id: UUID, number: int, user: User, conn: Conn) -> PageOut:
+    """Text of one page, for citation chips (FR-DOC-10)."""
+    doc = await _document(conn, user.id, document_id)
+    row = await study.page(conn, doc["source_file_id"], number)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Page not found")
+    return PageOut(page_number=number, page_count=doc["page_count"], text=row["text"])
+
+
+@router.get("/v1/documents/{document_id}/topics/{topic_id}/explanation")
+async def get_explanation(
+    document_id: UUID,
+    topic_id: UUID,
+    user: User,
+    conn: Conn,
+    style: Annotated[Style, Query()] = "standard",
+) -> ExplanationOut:
+    """Poll while an explanation is being written."""
+    doc = await _document(conn, user.id, document_id)
+    await _topic(conn, doc, topic_id)
+    row = await study.explanation(conn, topic_id, style, PROMPT_VERSION)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No explanation requested yet")
+    return _out(row)
+
+
+@router.post("/v1/documents/{document_id}/topics/{topic_id}/explanation")
+async def request_explanation(
+    document_id: UUID,
+    topic_id: UUID,
+    body: ExplanationRequest,
+    user: User,
+    conn: Conn,
+    settings: AppSettings,
+) -> ExplanationOut:
+    """Cached explanations come back at once and are free (FR-EXPL-04); otherwise one is
+    queued, using one of the student's daily explanations (FR-LIM-01)."""
+    doc = await _document(conn, user.id, document_id)
+    await _topic(conn, doc, topic_id)
+    row = await study.explanation(conn, topic_id, body.style, PROMPT_VERSION)
+    if row is None:
+        limit = settings.daily_explanations
+        if await usage.take(conn, user.id, "explanation", limit, settings.timezone) is None:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                f"You've used today's {limit} explanations. Resets at 12:00 AM.",
+            )
+        await study.create_explanation(
+            conn, doc["source_file_id"], topic_id, body.style, PROMPT_VERSION
+        )
+        row = await study.explanation(conn, topic_id, body.style, PROMPT_VERSION)
+    elif row["status"] == "failed":
+        # Our failure, not the student's request: retry without using another explanation.
+        await study.retry_explanation(conn, row["id"])
+        row = {**row, "status": "pending"}
+    if row["status"] == "pending":
+        await queue.enqueue(
+            conn,
+            "generate_explanation",
+            {"explanation_id": str(row["id"])},
+            user_id=user.id,
+            dedupe_key=f"explain:{row['id']}",
+        )
+    return _out(row)
+
+
+async def _check_target(conn, user_id: UUID, target_id: UUID) -> None:
+    if not await study.can_see_explanation(conn, user_id, target_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+
+@router.post("/v1/feedback", status_code=status.HTTP_204_NO_CONTENT)
+async def feedback(body: FeedbackIn, user: User, conn: Conn) -> Response:
+    """Thumbs up/down (FR-MOD-03)."""
+    await _check_target(conn, user.id, body.target_id)
+    await study.rate(conn, user.id, body.target_type, body.target_id, body.rating)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/v1/reports", status_code=status.HTTP_204_NO_CONTENT)
+async def report(body: ReportIn, user: User, conn: Conn) -> Response:
+    """Wrong / unclear / inappropriate (FR-MOD-01)."""
+    await _check_target(conn, user.id, body.target_id)
+    note = body.note.strip() or None if body.note else None
+    await study.report(conn, user.id, body.target_type, body.target_id, body.reason, note)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
