@@ -4,6 +4,7 @@
 |---|---|
 | `migrations/0001_init.sql` | Schema, RLS policies, storage bucket, sign-up trigger |
 | `migrations/0002_seed_institutions.sql` | Nigerian universities, polytechnics and colleges of education for onboarding search (FR-PROF-02). Re-runnable. |
+| `migrations/0003_jobs_dedupe_key_index.sql` | Index for looking up a document's processing job (progress in the app) |
 
 Apply with `supabase db push` (or any Postgres client; each file runs once, in order).
 

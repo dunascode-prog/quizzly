@@ -15,6 +15,14 @@ import { useMe } from '@/lib/profile';
 import { queryClient } from '@/lib/query-client';
 
 SplashScreen.preventAutoHideAsync();
+
+// Sheets slide up over the screen (DESIGN.md §7, 04): radius 32 top corners, dimmed behind.
+const SHEET = {
+  presentation: 'formSheet',
+  sheetAllowedDetents: 'fitToContents',
+  sheetCornerRadius: 32,
+  sheetGrabberVisible: true,
+} as const;
 startAuthListener();
 
 function RootNavigator() {
@@ -50,6 +58,11 @@ function RootNavigator() {
         </Stack.Protected>
         <Stack.Protected guard={signedIn && onboarded}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="course/[id]/index" />
+          <Stack.Screen name="upload" options={SHEET} />
+          <Stack.Screen name="course/new" options={SHEET} />
+          <Stack.Screen name="course/[id]/edit" options={SHEET} />
+          <Stack.Screen name="document/[id]/edit" options={SHEET} />
         </Stack.Protected>
         <Stack.Screen name="auth-callback" />
       </Stack>

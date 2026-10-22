@@ -1,19 +1,14 @@
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from psycopg import AsyncConnection
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import CurrentUser, get_current_user
-from app.core.config import Settings, get_settings
-from app.core.db import get_conn
+from app.api.deps import AppSettings, Conn, User
+from app.core.auth import CurrentUser
 from app.domain import accounts
 
 router = APIRouter()
-
-User = Annotated[CurrentUser, Depends(get_current_user)]
-Conn = Annotated[AsyncConnection, Depends(get_conn)]
 
 Level = Literal["100L", "200L", "300L", "400L", "500L", "600L", "700L", "other"]
 
@@ -98,7 +93,7 @@ async def update_me(
     body: ProfileUpdate,
     user: User,
     conn: Conn,
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: AppSettings,
 ) -> MeOut:
     fields = body.model_dump(exclude_unset=True, exclude={"accept_terms"})
     # A listed school and a typed-in one are alternatives; setting one clears the other.
