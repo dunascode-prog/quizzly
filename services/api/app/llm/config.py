@@ -2,12 +2,26 @@
 
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
+from dotenv import dotenv_values
 from pydantic import BaseModel
 
+from app.core.config import SERVICE_ROOT
+
 _ENV_VAR = re.compile(r"\$\{(\w+)\}")
+
+
+@lru_cache
+def _dotenv() -> dict[str, str]:
+    return {k: v for k, v in dotenv_values(SERVICE_ROOT / ".env").items() if v}
+
+
+def _env(name: str) -> str:
+    """Real environment first (Docker passes .env in), then services/api/.env for local runs."""
+    return os.environ.get(name) or _dotenv().get(name, "")
 
 
 class Provider(BaseModel):
@@ -16,7 +30,7 @@ class Provider(BaseModel):
 
     @property
     def api_key(self) -> str:
-        return os.environ.get(self.api_key_env, "")
+        return _env(self.api_key_env)
 
 
 class Route(BaseModel):
@@ -36,7 +50,7 @@ class ModelsConfig(BaseModel):
 
 def load_models_config(path: Path) -> ModelsConfig:
     raw = path.read_text(encoding="utf-8")
-    expanded = _ENV_VAR.sub(lambda m: os.environ.get(m.group(1), ""), raw)
+    expanded = _ENV_VAR.sub(lambda m: _env(m.group(1)), raw)
     config = ModelsConfig.model_validate(yaml.safe_load(expanded))
     for profile, routes in config.profiles.items():
         for route in routes:
