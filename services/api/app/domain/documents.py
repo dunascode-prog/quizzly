@@ -13,6 +13,14 @@ MIME_TYPES = {
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
+MAX_IMAGES = 30
+
+
+def image_paths(upload_path: str, count: int) -> list[str]:
+    """Where each photo of a photo set goes, in page order (the app sends JPEGs)."""
+    return [f"{upload_path}page-{i:03d}.jpg" for i in range(1, count + 1)]
+
+
 # Shown to the student for documents.failure_reason codes (FRD §4 copy where it exists).
 FAILURE_MESSAGES = {
     "encrypted": "We couldn't read this file (password-protected / damaged). "
@@ -28,7 +36,7 @@ FAILURE_MESSAGES = {
 
 _SELECT = """
 select d.id, d.title, d.original_filename, d.course_id, d.status::text as status,
-       d.failure_reason, d.upload_path, d.source_file_id, d.created_at,
+       d.failure_reason, d.upload_path, d.source_file_id, d.created_at, d.image_count,
        sf.page_count, coalesce(cardinality(sf.low_ocr_pages), 0) as low_ocr_page_count,
        (select count(*) from topics t
          where t.source_file_id = d.source_file_id and t.parent_id is null) as topic_count,
@@ -88,15 +96,23 @@ async def course_belongs_to(conn: AsyncConnection, user_id: UUID, course_id: UUI
 
 
 async def create_document(
-    conn: AsyncConnection, user_id: UUID, filename: str, course_id: UUID | None
+    conn: AsyncConnection,
+    user_id: UUID,
+    filename: str,
+    course_id: UUID | None,
+    image_count: int | None = None,
 ) -> dict:
+    """A file upload, or with image_count a photo set (its upload_path is a folder)."""
     doc_id = uuid4()
-    title = filename.rpartition(".")[0] or filename
-    path = f"uploads/{user_id}/{doc_id}/{safe_name(filename)}"
+    folder = f"uploads/{user_id}/{doc_id}/"
+    if image_count:
+        title, path = filename, folder
+    else:
+        title, path = filename.rpartition(".")[0] or filename, folder + safe_name(filename)
     await conn.execute(
-        "insert into documents (id, user_id, course_id, title, original_filename, upload_path) "
-        "values (%s, %s, %s, %s, %s, %s)",
-        (doc_id, user_id, course_id, title[:200], filename[:255], path),
+        "insert into documents (id, user_id, course_id, title, original_filename, upload_path, "
+        "image_count) values (%s, %s, %s, %s, %s, %s, %s)",
+        (doc_id, user_id, course_id, title[:200], filename[:255], path, image_count),
     )
     return await get_document(conn, user_id, doc_id)
 

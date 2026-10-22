@@ -29,6 +29,8 @@ class OutlineDocument(BaseModel):
     course_code: str | None
     page_count: int | None
     topic_count: int
+    # OCR'd pages that were hard to read (FR-DOC-07); the app lists them.
+    low_ocr_pages: list[int] = []
 
 
 class OutlineOut(BaseModel):

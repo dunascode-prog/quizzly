@@ -14,7 +14,14 @@ export type Topic = {
 };
 
 export type Outline = {
-  document: { id: string; title: string; course_code: string | null; page_count: number | null; topic_count: number };
+  document: {
+    id: string;
+    title: string;
+    course_code: string | null;
+    page_count: number | null;
+    topic_count: number;
+    low_ocr_pages: number[];
+  };
   topics: Topic[];
 };
 

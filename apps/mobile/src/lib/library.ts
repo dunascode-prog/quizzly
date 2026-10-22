@@ -131,10 +131,12 @@ export function useDeleteDocument(docId: string) {
 }
 
 // --- Uploads -------------------------------------------------------------------------------------
-// The file goes straight to Storage through a signed URL (FR-DOC-03). The picked file stays known
-// while the app is open, so a dropped upload can be retried without picking it again (FR-DOC-04).
+// Files go straight to Storage through signed URLs (FR-DOC-03): one for a PDF/PPTX, one per photo
+// for a photo set. The picked files stay known while the app is open, so a dropped upload can be
+// retried without picking them again (FR-DOC-04).
 
-type UploadState = { uri: string; mimeType?: string; progress: number; failed: boolean };
+type LocalFile = { uri: string; mimeType?: string; size: number };
+type UploadState = { files: LocalFile[]; progress: number; failed: boolean };
 
 type UploadsStore = {
   byDoc: Record<string, UploadState>;
@@ -146,7 +148,7 @@ export const useUploads = create<UploadsStore>((setState) => ({
   byDoc: {},
   set: (docId, patch) =>
     setState((s) => ({
-      byDoc: { ...s.byDoc, [docId]: { ...(s.byDoc[docId] ?? { uri: '', progress: 0, failed: false }), ...patch } },
+      byDoc: { ...s.byDoc, [docId]: { ...(s.byDoc[docId] ?? { files: [], progress: 0, failed: false }), ...patch } },
     })),
   forget: (docId) =>
     setState((s) => {
@@ -155,21 +157,25 @@ export const useUploads = create<UploadsStore>((setState) => ({
     }),
 }));
 
-type UploadOut = { document: Doc; upload_url: string };
+type UploadOut = { document: Doc; upload_urls: string[] };
 
-async function sendFile(docId: string, url: string) {
+async function sendFiles(docId: string, urls: string[]) {
   const store = useUploads.getState();
   const entry = store.byDoc[docId];
-  if (!entry) return;
+  if (!entry || entry.files.length !== urls.length) return;
   store.set(docId, { failed: false, progress: 0 });
+  const total = entry.files.reduce((n, f) => n + f.size, 0) || 1;
+  let done = 0;
   try {
-    const result = await new File(entry.uri).upload(url, {
-      httpMethod: 'PUT',
-      mimeType: entry.mimeType,
-      onProgress: ({ bytesSent, totalBytes }) =>
-        useUploads.getState().set(docId, { progress: totalBytes ? bytesSent / totalBytes : 0 }),
-    });
-    if (result.status < 200 || result.status >= 300) throw new Error(`upload HTTP ${result.status}`);
+    for (const [i, file] of entry.files.entries()) {
+      const result = await new File(file.uri).upload(urls[i], {
+        httpMethod: 'PUT',
+        mimeType: file.mimeType,
+        onProgress: ({ bytesSent }) => useUploads.getState().set(docId, { progress: (done + bytesSent) / total }),
+      });
+      if (result.status < 200 || result.status >= 300) throw new Error(`upload HTTP ${result.status}`);
+      done += file.size;
+    }
     await apiFetch<Doc>(`/v1/documents/${docId}/uploaded`, { method: 'POST' });
     useUploads.getState().forget(docId);
   } catch (e) {
@@ -180,26 +186,45 @@ async function sendFile(docId: string, url: string) {
   }
 }
 
-/** Registers the upload, then sends the file in the background. Resolves once registered. */
-export async function startUpload(
+async function register(body: object, files: LocalFile[]): Promise<Doc> {
+  const reg = await apiFetch<UploadOut>('/v1/documents', { method: 'POST', body: JSON.stringify(body) });
+  useUploads.getState().set(reg.document.id, { files, progress: 0, failed: false });
+  invalidateLibrary();
+  void sendFiles(reg.document.id, reg.upload_urls);
+  return reg.document;
+}
+
+/** A PDF or PPTX: registers the upload, then sends it in the background. */
+export function startUpload(
   file: { uri: string; name: string; size: number; mimeType?: string },
   courseId: string | null,
 ): Promise<Doc> {
-  const reg = await apiFetch<UploadOut>('/v1/documents', {
-    method: 'POST',
-    body: JSON.stringify({ filename: file.name, size_bytes: file.size, course_id: courseId }),
-  });
-  useUploads.getState().set(reg.document.id, { uri: file.uri, mimeType: file.mimeType, progress: 0, failed: false });
-  invalidateLibrary();
-  void sendFile(reg.document.id, reg.upload_url);
-  return reg.document;
+  return register({ filename: file.name, size_bytes: file.size, course_id: courseId }, [file]);
+}
+
+/** 1–30 photos as one document, pages in this order (FR-DOC-01). */
+export function startPhotoUpload(
+  photos: { uri: string; size: number }[],
+  title: string,
+  courseId: string | null,
+): Promise<Doc> {
+  const files = photos.map((p) => ({ uri: p.uri, size: p.size, mimeType: 'image/jpeg' }));
+  return register(
+    {
+      filename: title,
+      size_bytes: files.reduce((n, f) => n + f.size, 0),
+      course_id: courseId,
+      image_count: files.length,
+    },
+    files,
+  );
 }
 
 export async function retryUpload(docId: string) {
   useUploads.getState().set(docId, { failed: false, progress: 0 });
   try {
-    const { upload_url } = await apiFetch<UploadOut>(`/v1/documents/${docId}/upload-url`, { method: 'POST' });
-    await sendFile(docId, upload_url);
+    const { upload_urls } = await apiFetch<UploadOut>(`/v1/documents/${docId}/upload-url`, { method: 'POST' });
+    await sendFiles(docId, upload_urls);
   } catch (e) {
     if (__DEV__) console.warn('[upload retry]', e);
     useUploads.getState().set(docId, { failed: true });

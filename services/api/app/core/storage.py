@@ -29,7 +29,23 @@ class Storage:
         r.raise_for_status()
         return r.content
 
+    async def list_folder(self, folder: str) -> list[str]:
+        """Full paths of the files directly inside `folder` (ending in "/"), sorted by name."""
+        r = await self.client.post(
+            f"{self.base}/object/list/{self.bucket}",
+            headers=self.headers,
+            json={"prefix": folder, "limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
+        )
+        r.raise_for_status()
+        # Sub-folders come back with a null id; photo sets have none, but skip them anyway.
+        return sorted(folder + o["name"] for o in r.json() if o.get("id"))
+
     async def remove(self, paths: list[str]) -> None:
+        """Deletes files; a path ending in "/" (a photo set) deletes the files inside it."""
+        files: list[str] = []
+        for path in paths:
+            files.extend(await self.list_folder(path) if path.endswith("/") else [path])
+        paths = files
         if not paths:
             return
         r = await self.client.request(

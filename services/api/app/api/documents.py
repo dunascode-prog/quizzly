@@ -38,14 +38,19 @@ class DocumentOut(BaseModel):
 
 class UploadOut(BaseModel):
     document: DocumentOut
-    # PUT the raw file bytes here; no auth header needed (FR-DOC-03).
-    upload_url: str
+    # PUT the raw file bytes to each URL, in order; no auth header needed (FR-DOC-03).
+    # One URL for a PDF/PPTX, one per photo for a photo set.
+    upload_urls: list[str]
 
 
 class DocumentCreate(BaseModel):
+    # The file name, or for a photo set the document's title.
     filename: str = Field(min_length=1, max_length=255)
+    # Total size; for a photo set, all photos together.
     size_bytes: int = Field(gt=0)
     course_id: UUID | None = None
+    # 1–30 photos combined into one document, in order (FR-DOC-01).
+    image_count: int | None = Field(default=None, ge=1, le=documents.MAX_IMAGES)
 
 
 class DocumentUpdate(BaseModel):
@@ -77,6 +82,15 @@ async def _check_course(conn, user_id: UUID, course_id: UUID | None) -> None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown course")
 
 
+async def _upload_urls(storage, doc: dict) -> list[str]:
+    paths = (
+        documents.image_paths(doc["upload_path"], doc["image_count"])
+        if doc["image_count"]
+        else [doc["upload_path"]]
+    )
+    return [await storage.signed_upload_url(p) for p in paths]
+
+
 @router.get("/v1/usage", tags=["account"])
 async def get_usage(user: User, conn: Conn, settings: AppSettings) -> UsageOut:
     used = await usage.used_today(conn, user.id, settings.timezone)
@@ -106,8 +120,8 @@ async def list_documents(
 async def create_document(
     body: DocumentCreate, user: User, conn: Conn, settings: AppSettings, storage: StorageDep
 ) -> UploadOut:
-    """Registers an upload and returns a signed URL; the file goes straight to Storage."""
-    if documents.file_kind(body.filename) is None:
+    """Registers an upload and returns signed URLs; the files go straight to Storage."""
+    if not body.image_count and documents.file_kind(body.filename) is None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Upload a PDF or PowerPoint (.pptx) file."
         )
@@ -122,9 +136,10 @@ async def create_document(
             status.HTTP_429_TOO_MANY_REQUESTS,
             f"You've used today's {limit} uploads. Resets at 12:00 AM.",
         )
-    doc = await documents.create_document(conn, user.id, body.filename, body.course_id)
-    url = await storage.signed_upload_url(doc["upload_path"])
-    return UploadOut(document=DocumentOut.of(doc), upload_url=url)
+    doc = await documents.create_document(
+        conn, user.id, body.filename.strip(), body.course_id, body.image_count
+    )
+    return UploadOut(document=DocumentOut.of(doc), upload_urls=await _upload_urls(storage, doc))
 
 
 @router.post("/v1/documents/{document_id}/upload-url")
@@ -135,8 +150,7 @@ async def new_upload_url(
     doc = await _found(conn, user.id, document_id)
     if doc["status"] not in ("awaiting_upload", "failed") or doc["source_file_id"]:
         raise HTTPException(status.HTTP_409_CONFLICT, "This document is already uploaded")
-    url = await storage.signed_upload_url(doc["upload_path"])
-    return UploadOut(document=DocumentOut.of(doc), upload_url=url)
+    return UploadOut(document=DocumentOut.of(doc), upload_urls=await _upload_urls(storage, doc))
 
 
 @router.post("/v1/documents/{document_id}/uploaded")

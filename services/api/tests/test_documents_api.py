@@ -32,6 +32,7 @@ def doc_row(**over) -> dict:
         "low_ocr_page_count": 0,
         "topic_count": 0,
         "progress": None,
+        "image_count": None,
     }
     return row | over
 
@@ -81,9 +82,14 @@ def fake(client, monkeypatch):
     async def course_belongs_to(conn, user_id, course_id):
         return course_id in state["courses"]
 
-    async def create_document(conn, user_id, filename, course_id):
+    async def create_document(conn, user_id, filename, course_id, image_count=None):
+        folder = f"uploads/{user_id}/{uuid.uuid4()}/"
         d = doc_row(
-            title=filename.rsplit(".", 1)[0], original_filename=filename, course_id=course_id
+            title=filename if image_count else filename.rsplit(".", 1)[0],
+            original_filename=filename,
+            course_id=course_id,
+            image_count=image_count,
+            upload_path=folder if image_count else folder + filename,
         )
         state["docs"][d["id"]] = d
         return d
@@ -144,7 +150,8 @@ def test_upload_is_registered_and_gets_a_signed_url(client, fake):
     )
     assert r.status_code == 201
     body = r.json()
-    assert body["upload_url"].startswith("https://storage.test/upload/uploads/")
+    assert len(body["upload_urls"]) == 1
+    assert body["upload_urls"][0].startswith("https://storage.test/upload/uploads/")
     assert body["document"]["status"] == "awaiting_upload"
 
     doc_id = body["document"]["id"]
@@ -199,3 +206,31 @@ async def test_deleting_documents_gives_back_only_todays_uploads(monkeypatch):
     deleted = [{"uploaded_today": True}, {"uploaded_today": False}, {"uploaded_today": True}]
     await documents.refund_uploads(None, USER, deleted, "Africa/Lagos")
     assert returned == [("upload", 2, "Africa/Lagos")]
+
+
+def test_photo_sets_get_one_url_per_page_in_order(client, fake):
+    r = client.post(
+        "/v1/documents",
+        headers=auth(),
+        json={"filename": "Thermodynamics notes", "size_bytes": 900_000, "image_count": 3},
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert body["document"]["title"] == "Thermodynamics notes"
+    urls = body["upload_urls"]
+    assert [u.split("/")[-1].split("?")[0] for u in urls] == [
+        "page-001.jpg",
+        "page-002.jpg",
+        "page-003.jpg",
+    ]
+    assert fake["uploads_used"] == 1  # one document, however many photos
+
+
+def test_photo_sets_are_limited_to_30_and_25_mb(client, fake):
+    def post(**body):
+        return client.post("/v1/documents", headers=auth(), json={"filename": "Notes", **body})
+
+    assert post(size_bytes=1000, image_count=31).status_code == 422
+    assert post(size_bytes=1000, image_count=0).status_code == 422
+    assert post(size_bytes=26 * 1024 * 1024, image_count=5).status_code == 422
+    assert fake["uploads_used"] == 0
