@@ -92,6 +92,7 @@ const styles = StyleSheet.create({
     lineHeight: undefined,
     padding: 0,
     margin: 0,
+    outlineWidth: 0, // web: the field's own 2 px border is the focus indicator
   },
   value: {
     paddingVertical: 1,

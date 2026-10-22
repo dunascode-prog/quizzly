@@ -12,6 +12,15 @@ MAX_BACKOFF = timedelta(minutes=30)
 LEASE = timedelta(minutes=10)
 
 
+class RetryLater(Exception):
+    """Raised by a handler that must wait for other work; the job is re-queued without
+    spending an attempt."""
+
+    def __init__(self, delay: timedelta, reason: str = ""):
+        super().__init__(reason)
+        self.delay = delay
+
+
 def backoff_for(attempts: int) -> timedelta:
     """Exponential backoff: 15 s, 30 s, 1 min, 2 min… capped at 30 min."""
     return min(BASE_BACKOFF * (2 ** max(attempts - 1, 0)), MAX_BACKOFF)

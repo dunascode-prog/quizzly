@@ -23,8 +23,11 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   const response = await fetch(`${env.apiUrl}${path}`, { ...init, headers });
   if (!response.ok) {
-    const detail = await response.json().catch(() => null);
-    throw new ApiError(response.status, detail?.detail ?? response.statusText);
+    const body = await response.json().catch(() => null);
+    // FastAPI sends a sentence for our own errors and a list for request-validation errors.
+    const detail = Array.isArray(body?.detail) ? body.detail[0]?.msg : body?.detail;
+    throw new ApiError(response.status, detail ?? response.statusText);
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }

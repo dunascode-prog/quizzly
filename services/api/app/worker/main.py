@@ -17,14 +17,14 @@ from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.llm.gateway import AllProvidersBusy
-from app.worker import queue
+from app.worker import ingest, queue
 
 log = logging.getLogger("quizzly.worker")
 
 Handler = Callable[[AsyncConnection, dict], Awaitable[None]]
 
-# Filled in as features land: ingest_document, build_outline, generate_questions, …
-HANDLERS: dict[str, Handler] = {}
+# Filled in as features land: generate_explanation, generate_questions, …
+HANDLERS: dict[str, Handler] = {"ingest_document": ingest.ingest_document}
 
 POLL_INTERVAL = 2.0
 HEARTBEAT_INTERVAL = 60.0
@@ -46,6 +46,9 @@ async def run_one(conn: AsyncConnection, worker_id: str) -> bool:
         await handler(conn, job)
         await queue.succeed(conn, job["id"])
         log.info("job %s succeeded", job["type"], extra=extra)
+    except queue.RetryLater as exc:
+        await queue.requeue(conn, job, exc.delay)
+        log.info("job %s waiting: %s", job["type"], exc, extra=extra)
     except AllProvidersBusy as exc:
         await queue.requeue(conn, job, BUSY_REQUEUE_DELAY)
         log.warning("LLM providers busy, requeued: %s", exc, extra=extra)

@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Bump when the Terms or Privacy Policy change; stored on the profile at consent (FR-AUTH-03).
     terms_version: str = "2026-10-22"
 
+    # Free-plan limits (PRD §9, FR-DOC-02, FR-LIM-01).
+    max_upload_bytes: int = 25 * 1024 * 1024
+    max_document_pages: int = 150
+    daily_uploads: int = 5
+
     models_config_path: Path = SERVICE_ROOT / "config" / "models.yaml"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 

@@ -32,7 +32,10 @@ uv run ruff format --check .
 |---|---|
 | `app/main.py` | App factory, request-ID middleware, DB pool lifecycle |
 | `app/api/routes.py` | HTTP routes: `/healthz`, `/v1/me` (GET/PATCH), `/v1/institutions` |
-| `app/domain/accounts.py` | Profile and institution queries |
+| `app/api/courses.py`, `app/api/documents.py` | Courses, uploads (signed URLs), documents, `/v1/usage` |
+| `app/domain/` | Queries: accounts, courses, documents, usage limits |
+| `app/rag/` | Extract (PDF/PPTX), clean, chunk, embed (bge-small), topic outline |
+| `app/worker/ingest.py` | The `ingest_document` job: upload → pages → chunks → outline |
 | `app/core/auth.py` | Verifies Supabase access tokens (JWKS, or a legacy HS256 secret) |
 | `app/core/config.py` | Settings from environment variables / `.env` |
 | `app/core/db.py` | Async Postgres connection pool |
@@ -40,7 +43,6 @@ uv run ruff format --check .
 | `app/llm/config.py` | Loads and validates `config/models.yaml` |
 | `app/worker/queue.py` | Postgres job queue (enqueue, claim with `SKIP LOCKED`, retry, backoff) |
 | `app/worker/main.py` | Worker loop, job handler registry, heartbeat |
-| `app/domain/`, `app/rag/` | Business logic and the ingestion pipeline (M1 onwards) |
 | `prompts/` | Versioned prompt files |
 
 See [ARCHITECTURE](../../docs/ARCHITECTURE.md) for the design.
