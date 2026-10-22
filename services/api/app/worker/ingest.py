@@ -17,12 +17,12 @@ from app.core.config import get_settings
 from app.core.storage import Storage
 from app.llm.config import load_models_config
 from app.llm.gateway import AllProvidersBusy, LLMGateway
-from app.rag import embed, extract, outline, text
+from app.rag import embed, extract, ocr, outline, text
 from app.worker import queue
 
 log = logging.getLogger("quizzly.ingest")
 
-PIPELINE_VERSION = 1
+PIPELINE_VERSION = 2  # 2: OCR for scanned pages and photo sets
 MIN_TEXT_CHARS = 40  # below this a file is treated as having no readable text
 
 _storage: Storage | None = None
@@ -107,7 +107,7 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
     document_id = UUID(job["payload"]["document_id"])
     doc = await (
         await conn.execute(
-            "select id, user_id, upload_path, source_file_id, status::text as status "
+            "select id, user_id, upload_path, source_file_id, image_count, status::text as status "
             "from documents where id = %s and deleted_at is null",
             (document_id,),
         )
@@ -122,32 +122,46 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
         )
         await queue.set_progress(conn, job["id"], 5)
 
-        try:
-            data = await storage().download(doc["upload_path"])
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code in (400, 404):
-                await _fail(conn, document_id, "upload_missing")
-                return
-            raise
-        if len(data) > settings.max_upload_bytes:
+        files = await _download(doc)
+        if files is None:
+            await _fail(conn, document_id, "upload_missing")
+            return
+        size = sum(len(f) for f in files)
+        if size > settings.max_upload_bytes:
             await _fail(conn, document_id, "too_large")
             return
 
-        mime = extract.sniff(data)
-        sha = hashlib.sha256(data).hexdigest()
-        source_file_id, ready = await _claim_source_file(conn, doc, sha, mime, len(data))
+        photos = doc["upload_path"].endswith("/")
+        if photos:
+            mime = extract.IMAGES_MIME
+            for f in files:
+                await asyncio.to_thread(extract.check_image, f)
+            # The same photos in the same order are the same document (FR-DOC-06).
+            sha = hashlib.sha256(b"".join(hashlib.sha256(f).digest() for f in files)).hexdigest()
+        else:
+            mime = extract.sniff(files[0])
+            sha = hashlib.sha256(files[0]).hexdigest()
+        source_file_id, ready = await _claim_source_file(conn, doc, sha, mime, size)
         if ready:
             await _link_ready(conn, document_id, source_file_id, doc["upload_path"])
             return
         await queue.set_progress(conn, job["id"], 10)
 
-        if await asyncio.to_thread(extract.page_count, data, mime) > settings.max_document_pages:
-            await _fail(conn, document_id, "too_large", source_file_id)
-            return
-        pages = await asyncio.to_thread(extract.extract, data, mime)
+        if photos:
+            pages = await _ocr_photos(conn, job, files)
+        else:
+            data = files[0]
+            if (
+                await asyncio.to_thread(extract.page_count, data, mime)
+                > settings.max_document_pages
+            ):
+                await _fail(conn, document_id, "too_large", source_file_id)
+                return
+            pages = await asyncio.to_thread(extract.extract, data, mime)
+            if mime == extract.PDF_MIME:
+                pages = await _ocr_scanned_pages(conn, job, data, pages)
         pages = text.guess_headings(text.clean_pages(pages))
         if sum(len(p.text) for p in pages) < MIN_TEXT_CHARS:
-            # Scans and photos need OCR, which isn't built yet (FR-DOC-07).
             await _fail(conn, document_id, "no_text", source_file_id)
             return
         await queue.set_progress(conn, job["id"], 30)
@@ -179,6 +193,60 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
         if job["attempts"] >= job["max_attempts"]:
             await _fail(conn, document_id, "internal", source_file_id)
         raise
+
+
+async def _download(doc: dict) -> list[bytes] | None:
+    """The uploaded file, or a photo set's photos in page order. None if the upload is missing."""
+    path = doc["upload_path"]
+    try:
+        if not path.endswith("/"):
+            return [await storage().download(path)]
+        names = await storage().list_folder(path)
+        if not names or len(names) < (doc["image_count"] or 1):
+            return None
+        return list(await asyncio.gather(*(storage().download(n) for n in names)))
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (400, 404):
+            return None
+        raise
+
+
+def _ocr_page(number: int, result: ocr.OcrResult) -> extract.Page:
+    return extract.Page(
+        number=number,
+        text=result.text,
+        method="ocr",
+        ocr_confidence=result.confidence,
+        low_confidence=result.low,
+    )
+
+
+async def _ocr_photos(conn: AsyncConnection, job: dict, files: list[bytes]) -> list[extract.Page]:
+    pages = []
+    for i, data in enumerate(files, start=1):
+        pages.append(_ocr_page(i, await asyncio.to_thread(ocr.ocr_bytes, data)))
+        await queue.set_progress(conn, job["id"], 10 + round(20 * i / len(files)))
+    return pages
+
+
+def _render_and_ocr(data: bytes, number: int) -> ocr.OcrResult:
+    for _, image in extract.render_pdf_pages(data, [number]):
+        return ocr.ocr_image(image)
+    return ocr.OcrResult(text="", confidence=0.0)
+
+
+async def _ocr_scanned_pages(
+    conn: AsyncConnection, job: dict, data: bytes, pages: list[extract.Page]
+) -> list[extract.Page]:
+    """OCR only the PDF pages without a text layer (scans), keeping the rest as they are."""
+    scanned = [p.number for p in pages if len(p.text.strip()) < extract.SCANNED_PAGE_CHARS]
+    if not scanned:
+        return pages
+    results: dict[int, ocr.OcrResult] = {}
+    for i, n in enumerate(scanned, start=1):
+        results[n] = await asyncio.to_thread(_render_and_ocr, data, n)
+        await queue.set_progress(conn, job["id"], 10 + round(20 * i / len(scanned)))
+    return [_ocr_page(p.number, results[p.number]) if p.number in results else p for p in pages]
 
 
 async def _link_ready(
@@ -214,9 +282,9 @@ async def _save(
     async with conn.transaction():
         async with conn.cursor() as cur:
             await cur.executemany(
-                "insert into pages (source_file_id, page_number, text, extraction_method) "
-                "values (%s, %s, %s, 'text')",
-                [(source_file_id, p.number, p.text) for p in pages],
+                "insert into pages (source_file_id, page_number, text, extraction_method, "
+                "ocr_confidence) values (%s, %s, %s, %s, %s)",
+                [(source_file_id, p.number, p.text, p.method, p.ocr_confidence) for p in pages],
             )
         topic_ids = []
         for ordinal, (d, tok) in enumerate(zip(drafts, tokens, strict=True)):
@@ -258,8 +326,14 @@ async def _save(
             )
         await conn.execute(
             "update source_files set status = 'ready', page_count = %s, embedding_model = %s, "
-            "pipeline_version = %s, processed_at = now() where id = %s",
-            (len(pages), embedding_model, PIPELINE_VERSION, source_file_id),
+            "pipeline_version = %s, low_ocr_pages = %s, processed_at = now() where id = %s",
+            (
+                len(pages),
+                embedding_model,
+                PIPELINE_VERSION,
+                [p.number for p in pages if p.low_confidence],
+                source_file_id,
+            ),
         )
         # Every document waiting on this file becomes ready together.
         await conn.execute(

@@ -12,6 +12,11 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0   # API on port 8000 (docs a
 uv run python -m app.worker.main          # worker (needs DATABASE_URL)
 ```
 
+**OCR (scanned PDFs and photos)** needs [Tesseract](https://github.com/tesseract-ocr/tesseract) where the
+worker runs. Windows: install the 64-bit build from https://github.com/UB-Mannheim/tesseract/wiki to the default
+folder (`C:\Program Files\Tesseract-OCR`), and the worker finds it. Elsewhere it must be on `PATH`, or set
+`TESSERACT_CMD`. The Docker image installs it.
+
 The API starts without a database (it logs a warning), so `/healthz` works before Supabase is set up.
 `--host 0.0.0.0` lets a phone on the same Wi-Fi reach it (set `EXPO_PUBLIC_API_URL` to your PC's LAN IP).
 
@@ -36,7 +41,7 @@ uv run ruff format --check .
 | `app/api/study.py` | Outline, source pages, explanations, feedback and reports |
 | `prompts/<task>/v<N>.md` | Versioned LLM prompts; the version is stored on each generated row |
 | `app/domain/` | Queries: accounts, courses, documents, usage limits |
-| `app/rag/` | Extract (PDF/PPTX), clean, chunk, embed (bge-small), topic outline |
+| `app/rag/` | Extract (PDF/PPTX/photos), OCR (Tesseract), clean, chunk, embed (bge-small), topic outline |
 | `app/worker/ingest.py` | The `ingest_document` job: upload → pages → chunks → outline |
 | `app/worker/explain.py` | The `generate_explanation` job: topic chunks → grounded Markdown with page citations |
 | `app/core/auth.py` | Verifies Supabase access tokens (JWKS, or a legacy HS256 secret) |

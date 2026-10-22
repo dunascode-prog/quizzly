@@ -102,6 +102,12 @@ export default function OutlineScreen() {
             Topics
           </Text>
           {outline.isError ? <Banner message={friendlyError(outline.error)} /> : null}
+          {doc && doc.low_ocr_pages.length > 0 ? (
+            <Banner
+              tone="warning"
+              message={`Some pages were hard to read: p. ${doc.low_ocr_pages.join(', ')}. Check them against your notes.`}
+            />
+          ) : null}
           {outline.isPending
             ? [0, 1, 2].map((i) => <View key={i} style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} />)
             : outline.data?.topics.map((t) => (

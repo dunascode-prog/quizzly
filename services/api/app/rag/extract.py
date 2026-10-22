@@ -1,4 +1,4 @@
-"""Per-page text from PDF and PPTX (ARCHITECTURE §5.1). OCR for scans and photos comes later."""
+"""Per-page text from PDF, PPTX and photo sets (ARCHITECTURE §5.1). OCR itself is in ocr.py."""
 
 import io
 import re
@@ -6,11 +6,16 @@ import zipfile
 from dataclasses import dataclass
 
 import pypdfium2 as pdfium
+from PIL import Image, UnidentifiedImageError
 from pptx import Presentation
 from pptx.exc import PackageNotFoundError
 
 PDF_MIME = "application/pdf"
 PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+# 1–30 photos uploaded as one document; each photo is a page (FR-DOC-01).
+IMAGES_MIME = "application/x-quizzly-images"
+# A PDF page with less text than this is treated as a scan and OCR'd.
+SCANNED_PAGE_CHARS = 20
 
 
 @dataclass
@@ -19,6 +24,9 @@ class Page:
     text: str
     # A slide title or a likely heading; drives the outline when a deck has them (FR-TOP-02).
     heading: str | None = None
+    method: str = "text"  # pages.extraction_method: "text" or "ocr"
+    ocr_confidence: float | None = None
+    low_confidence: bool = False
 
 
 class ExtractionError(Exception):
@@ -39,6 +47,31 @@ def sniff(data: bytes) -> str:
         # Office's container for password-protected (and old .ppt) files.
         raise ExtractionError("encrypted", "OLE container: encrypted or legacy Office file")
     raise ExtractionError("corrupt", "unrecognised file format")
+
+
+def check_image(data: bytes) -> None:
+    """A photo must be a real JPEG or PNG; anything else fails the document as corrupt."""
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            if img.format not in ("JPEG", "PNG", "MPO"):  # MPO: some phones' multi-picture JPEG
+                raise ExtractionError("corrupt", f"unsupported image format {img.format}")
+            img.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ExtractionError("corrupt", repr(exc)) from exc
+
+
+def render_pdf_pages(data: bytes, numbers: list[int], scale: float = 2.5):
+    """Yields (page number, PIL image) for the given 1-based pages, for OCR of scans."""
+    pdf = _open_pdf(data)
+    try:
+        for n in numbers:
+            page = pdf[n - 1]
+            try:
+                yield n, page.render(scale=scale).to_pil()
+            finally:
+                page.close()
+    finally:
+        pdf.close()
 
 
 def page_count(data: bytes, mime: str) -> int:

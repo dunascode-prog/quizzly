@@ -26,6 +26,11 @@ def _jwks_client(url: str) -> jwt.PyJWKClient:
     return _jwks_clients[url]
 
 
+# Supabase's clock and ours (or a phone's) differ by a second or two; without leeway a token
+# used right after sign-in can look issued "in the future" and be rejected.
+CLOCK_LEEWAY_S = 30
+
+
 def decode_token(token: str, settings: Settings) -> dict:
     options = {"require": ["exp", "sub", "aud"]}
     if settings.supabase_jwt_secret:
@@ -36,6 +41,7 @@ def decode_token(token: str, settings: Settings) -> dict:
             audience="authenticated",
             issuer=settings.jwt_issuer,
             options=options,
+            leeway=CLOCK_LEEWAY_S,
         )
     signing_key = _jwks_client(settings.jwks_url).get_signing_key_from_jwt(token)
     return jwt.decode(
@@ -45,6 +51,7 @@ def decode_token(token: str, settings: Settings) -> dict:
         audience="authenticated",
         issuer=settings.jwt_issuer,
         options=options,
+        leeway=CLOCK_LEEWAY_S,
     )
 
 

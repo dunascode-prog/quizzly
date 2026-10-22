@@ -10,7 +10,8 @@ from uuid import UUID
 from psycopg import AsyncConnection
 
 _DOC = """
-select d.id, d.title, d.source_file_id, c.code as course_code, sf.page_count
+select d.id, d.title, d.source_file_id, c.code as course_code, sf.page_count,
+       sf.low_ocr_pages
 from documents d
 join source_files sf on sf.id = d.source_file_id and sf.status = 'ready'
 left join courses c on c.id = d.course_id

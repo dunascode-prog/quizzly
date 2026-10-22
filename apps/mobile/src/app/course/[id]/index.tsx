@@ -31,8 +31,15 @@ function statusLine(doc: Doc, upload: { progress: number; failed: boolean } | un
       return { text: `Getting it ready${doc.progress ? ` · ${doc.progress}%` : ''}` };
     case 'failed':
       return { text: doc.failure_message ?? "Couldn't read this file", color: 'danger' };
-    case 'ready':
-      return { text: [plural(doc.topic_count, 'topic'), doc.page_count ? plural(doc.page_count, 'page') : null].filter(Boolean).join(' · ') };
+    case 'ready': {
+      const summary = [plural(doc.topic_count, 'topic'), doc.page_count ? plural(doc.page_count, 'page') : null];
+      // FR-DOC-07: OCR'd pages that were hard to read are flagged, not hidden.
+      if (doc.low_ocr_page_count > 0) {
+        const hard = `${plural(doc.low_ocr_page_count, 'page')} hard to read`;
+        return { text: [...summary, hard].filter(Boolean).join(' · '), color: 'warning' };
+      }
+      return { text: summary.filter(Boolean).join(' · ') };
+    }
   }
 }
 

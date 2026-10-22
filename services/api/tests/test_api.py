@@ -113,8 +113,15 @@ def test_me_with_valid_hs256_token(client):
     assert body["onboarded"] is False
 
 
+def test_token_issued_a_moment_in_the_future_is_accepted(client):
+    # Supabase's clock can run ahead of ours; a fresh token mustn't fail the first request.
+    now = int(time.time())
+    token = make_token(JWT_SECRET, iat=now + 5, nbf=now + 5)
+    assert client.get("/v1/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+
+
 def test_me_rejects_expired_token(client):
-    token = make_token(JWT_SECRET, exp=int(time.time()) - 10)
+    token = make_token(JWT_SECRET, exp=int(time.time()) - 120)  # beyond the clock leeway
     response = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
 
