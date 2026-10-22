@@ -3,6 +3,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
 from app.core import db
@@ -26,6 +27,15 @@ async def lifespan(_: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Quizzly API", version="0.1.0", lifespan=lifespan)
+
+    # Native apps aren't subject to CORS; this only lets the Expo web preview call a local API.
+    if get_settings().env == "local":
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):
