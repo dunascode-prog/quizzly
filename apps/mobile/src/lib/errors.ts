@@ -4,9 +4,12 @@ import { ApiError } from '@/lib/api';
 
 const OFFLINE = "You're offline. Check your connection and try again.";
 const GENERIC = 'Something went wrong. Try again.';
+const SERVER = "Quizzly couldn't finish that just now. Try again in a few minutes.";
 
 /** Turns any thrown error into one plain sentence for the student (DESIGN.md §11). */
 export function friendlyError(error: unknown): string {
+  // The student sees one plain sentence; the developer terminal gets the real cause.
+  if (__DEV__) console.warn('[friendlyError]', error);
   if (error instanceof AuthError) {
     switch (error.code) {
       case 'otp_expired':
@@ -21,7 +24,8 @@ export function friendlyError(error: unknown): string {
         return "Google sign-in isn't available yet. Use your email instead.";
     }
     if (error.status === 429) return 'Too many tries. Wait a few minutes, then try again.';
-    if (error.name === 'AuthRetryableFetchError') return OFFLINE;
+    // auth-js files both "no network" (status 0) and server errors (5xx) as retryable.
+    if (error.name === 'AuthRetryableFetchError') return error.status ? SERVER : OFFLINE;
     return GENERIC;
   }
   if (error instanceof ApiError) {
