@@ -1,6 +1,8 @@
 # Quizzly mobile app
 
-Expo (SDK 58, React Native, TypeScript) app with Expo Router. Routes live in `src/app/`.
+Expo (SDK 57, React Native, TypeScript) app with Expo Router. Routes live in `src/app/`.
+
+> **Why SDK 57:** the App Store version of Expo Go only runs SDK 57 until Expo ships its SDK 58 update. Upgrade with `npx expo install expo@~58.0.0 && npx expo install --fix` once it does, and change the native tabs import back to `expo-router/native-tabs`.
 
 ## Run it
 
