@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings, get_settings
+from app.core.db import get_conn
 from app.main import create_app
 
 SUPABASE_URL = "https://test-project.supabase.co"
@@ -24,5 +25,7 @@ def client(settings: Settings, monkeypatch):
     monkeypatch.setattr("app.main.get_settings", lambda: settings)
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: settings
+    # Route tests replace app.domain queries with fakes, so the connection is never used.
+    app.dependency_overrides[get_conn] = lambda: None
     with TestClient(app) as c:
         yield c

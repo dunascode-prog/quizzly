@@ -87,4 +87,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # psycopg's async mode can't use Windows' default Proactor loop; Selector works everywhere.
+    asyncio.run(main(), loop_factory=asyncio.SelectorEventLoop)

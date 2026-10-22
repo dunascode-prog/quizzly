@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     database_url: str = ""
     storage_bucket: str = "documents"
+    # Bump when the Terms or Privacy Policy change; stored on the profile at consent (FR-AUTH-03).
+    terms_version: str = "2026-10-22"
 
     models_config_path: Path = SERVICE_ROOT / "config" / "models.yaml"
     embedding_model: str = "BAAI/bge-small-en-v1.5"

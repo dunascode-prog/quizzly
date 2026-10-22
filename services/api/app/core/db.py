@@ -1,3 +1,7 @@
+from collections.abc import AsyncIterator
+
+from fastapi import HTTPException, status
+from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -31,3 +35,11 @@ def get_pool() -> AsyncConnectionPool:
     if _pool is None:
         raise RuntimeError("Database pool is not open")
     return _pool
+
+
+async def get_conn() -> AsyncIterator[AsyncConnection]:
+    """FastAPI dependency: a pooled connection, or 503 when the API runs without a database."""
+    if _pool is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Database is not configured")
+    async with _pool.connection() as conn:
+        yield conn
