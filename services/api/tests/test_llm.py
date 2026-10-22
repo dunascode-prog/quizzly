@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from app.core.config import SERVICE_ROOT
+from app.llm import config as llm_config
 from app.llm.config import ModelsConfig, load_models_config
 from app.llm.gateway import AllProvidersBusy, LLMGateway
 
@@ -12,6 +13,15 @@ def test_repo_models_yaml_is_valid():
     config = load_models_config(SERVICE_ROOT / "config" / "models.yaml")
     for task in ("chat", "marking", "outline", "explanation", "questions"):
         assert config.routes_for(task), task
+
+
+def test_api_keys_fall_back_to_the_dotenv_file(monkeypatch):
+    # uvicorn doesn't export .env, so local runs read keys from the file.
+    monkeypatch.delenv("A_KEY")
+    monkeypatch.setattr(llm_config, "_dotenv", lambda: {"A_KEY": "from-file", "B_KEY": "file-b"})
+    config = make_config()
+    assert config.providers["a"].api_key == "from-file"
+    assert config.providers["b"].api_key == "key-b"  # a real env var wins
 
 
 def make_config() -> ModelsConfig:
