@@ -86,7 +86,7 @@ async def update_course(
 
 
 async def delete_course(
-    conn: AsyncConnection, user_id: UUID, course_id: UUID, delete_documents: bool
+    conn: AsyncConnection, user_id: UUID, course_id: UUID, delete_documents: bool, tz: str
 ) -> list[str] | None:
     """Deletes the course. Returns the upload paths of documents deleted with it (None if missing).
 
@@ -104,11 +104,14 @@ async def delete_course(
         if delete_documents:
             rows = await (
                 await conn.execute(
-                    "delete from documents where course_id = %s and user_id = %s "
-                    "returning upload_path, source_file_id",
-                    (course_id, user_id),
+                    "delete from documents where course_id = %(course)s and user_id = %(user)s "
+                    "returning upload_path, source_file_id, "
+                    "(created_at at time zone %(tz)s)::date = (now() at time zone %(tz)s)::date "
+                    "as uploaded_today",
+                    {"course": course_id, "user": user_id, "tz": tz},
                 )
             ).fetchall()
+            await documents.refund_uploads(conn, user_id, rows, tz)
             paths = await documents.release(conn, rows)
         # documents.course_id is "on delete set null", so the rest become Unfiled.
         await conn.execute(

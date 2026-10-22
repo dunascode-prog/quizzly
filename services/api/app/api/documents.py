@@ -177,9 +177,10 @@ async def update_document(
 
 @router.delete("/v1/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
-    document_id: UUID, user: User, conn: Conn, storage: StorageDep
+    document_id: UUID, user: User, conn: Conn, storage: StorageDep, settings: AppSettings
 ) -> Response:
-    paths = await documents.delete_document(conn, user.id, document_id)
+    """Also gives back today's upload if the document was uploaded today."""
+    paths = await documents.delete_document(conn, user.id, document_id, settings.timezone)
     if paths is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
     await storage.remove(paths)

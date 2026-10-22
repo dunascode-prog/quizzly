@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
-from app.api.deps import Conn, StorageDep, User
+from app.api.deps import AppSettings, Conn, StorageDep, User
 from app.domain import courses
 
 router = APIRouter(prefix="/v1/courses", tags=["courses"])
@@ -82,10 +82,13 @@ async def delete_course(
     user: User,
     conn: Conn,
     storage: StorageDep,
+    settings: AppSettings,
     documents: Annotated[Literal["delete", "unfile"], Query()],
 ) -> Response:
     """FR-CRS-03: the app asks whether to delete the course's documents or move them to Unfiled."""
-    paths = await courses.delete_course(conn, user.id, course_id, documents == "delete")
+    paths = await courses.delete_course(
+        conn, user.id, course_id, documents == "delete", settings.timezone
+    )
     if paths is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
     await storage.remove(paths)

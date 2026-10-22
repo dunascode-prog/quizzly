@@ -6,6 +6,8 @@ from uuid import UUID, uuid4
 
 from psycopg import AsyncConnection
 
+from app.domain import usage
+
 MIME_TYPES = {
     ".pdf": "application/pdf",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -149,19 +151,30 @@ async def release(conn: AsyncConnection, deleted: list[dict]) -> list[str]:
     return sorted(paths - {r["storage_path"] for r in still_used})
 
 
+async def refund_uploads(
+    conn: AsyncConnection, user_id: UUID, deleted: list[dict], tz: str
+) -> None:
+    """Documents uploaded today give their upload back when deleted, so the student can upload
+    again while under the daily limit. Earlier days' uploads were counted on those days."""
+    await usage.give_back(conn, user_id, "upload", sum(r["uploaded_today"] for r in deleted), tz)
+
+
 async def delete_document(
-    conn: AsyncConnection, user_id: UUID, document_id: UUID
+    conn: AsyncConnection, user_id: UUID, document_id: UUID, tz: str
 ) -> list[str] | None:
     """Deletes the document and everything tied to it (cascades). Returns Storage paths to remove,
     or None if there was no such document."""
     async with conn.transaction():
         rows = await (
             await conn.execute(
-                "delete from documents where id = %s and user_id = %s "
-                "returning upload_path, source_file_id",
-                (document_id, user_id),
+                "delete from documents where id = %(id)s and user_id = %(user)s "
+                "returning upload_path, source_file_id, "
+                "(created_at at time zone %(tz)s)::date = (now() at time zone %(tz)s)::date "
+                "as uploaded_today",
+                {"id": document_id, "user": user_id, "tz": tz},
             )
         ).fetchall()
         if not rows:
             return None
+        await refund_uploads(conn, user_id, rows, tz)
         return await release(conn, rows)
