@@ -1,3 +1,4 @@
+import '@/lib/crypto-polyfill';
 import '@/lib/local-storage';
 
 import { createClient } from '@supabase/supabase-js';
