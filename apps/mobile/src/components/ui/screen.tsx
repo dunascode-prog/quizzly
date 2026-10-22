@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -11,16 +11,39 @@ type Props = {
   footer?: ReactNode;
   /** Extra bottom space for screens under the floating tab bar. */
   bottomInset?: number;
+  /**
+   * Size the body to exactly one screen (measured with the keyboard closed), so a flexible
+   * child such as an illustration shrinks and everything shows without scrolling. When the
+   * keyboard opens the body scrolls, and jumps to its end, where the input sits.
+   */
+  fit?: boolean;
 };
 
 /** Ground background, safe areas, 20 px gutters and a scrollable body (DESIGN.md §5). */
-export function Screen({ children, footer, bottomInset = 0 }: Props) {
+export function Screen({ children, footer, bottomInset = 0, fit = false }: Props) {
   const theme = useTheme();
+  const scroll = useRef<ScrollView>(null);
+  // The tallest the scroll area has been is its height with the keyboard closed (portrait only).
+  const [fitHeight, setFitHeight] = useState(0);
+
+  useEffect(() => {
+    if (!fit) return;
+    const sub = Keyboard.addListener('keyboardDidShow', () => scroll.current?.scrollToEnd({ animated: true }));
+    return () => sub.remove();
+  }, [fit]);
+
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: Spacing.five + bottomInset }]}
+          ref={scroll}
+          onLayout={fit ? (e) => setFitHeight((h) => Math.max(h, e.nativeEvent.layout.height)) : undefined}
+          contentContainerStyle={[
+            styles.content,
+            fit
+              ? { minHeight: fitHeight || undefined, paddingBottom: Spacing.two + bottomInset }
+              : { paddingBottom: Spacing.five + bottomInset },
+          ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive">
           {children}
