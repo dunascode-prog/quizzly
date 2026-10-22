@@ -4,6 +4,7 @@ import { ApiError } from '@/lib/api';
 
 const OFFLINE = "You're offline. Check your connection and try again.";
 const GENERIC = 'Something went wrong. Try again.';
+const GOOGLE_OFF = "Google sign-in isn't available yet. Use your email instead.";
 const SERVER = "Quizzly couldn't finish that just now. Try again in a few minutes.";
 
 /** Turns any thrown error into one plain sentence for the student (DESIGN.md §11). */
@@ -17,11 +18,13 @@ export function friendlyError(error: unknown): string {
       case 'over_email_send_rate_limit':
       case 'over_request_rate_limit':
         return 'Too many tries. Wait a few minutes, then try again.';
-      case 'email_address_invalid':
-      case 'validation_failed':
-        return 'Enter a valid email address.';
       case 'provider_disabled':
-        return "Google sign-in isn't available yet. Use your email instead.";
+        return GOOGLE_OFF;
+      case 'email_address_invalid':
+        return 'Enter a valid email address.';
+      case 'validation_failed':
+        // Supabase also uses this code for "Unsupported provider: provider is not enabled".
+        return /provider/i.test(error.message) ? GOOGLE_OFF : 'Enter a valid email address.';
     }
     if (error.status === 429) return 'Too many tries. Wait a few minutes, then try again.';
     // auth-js files both "no network" (status 0) and server errors (5xx) as retryable.
