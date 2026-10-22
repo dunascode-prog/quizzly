@@ -37,7 +37,15 @@ export function Screen({ children, footer, bottomInset = 0, fit = false }: Props
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           ref={scroll}
-          onLayout={fit ? (e) => setFitHeight((h) => Math.max(h, e.nativeEvent.layout.height)) : undefined}
+          onLayout={
+            fit
+              ? (e) => {
+                  // Read now: native recycles the event before a state updater runs.
+                  const { height } = e.nativeEvent.layout;
+                  setFitHeight((h) => Math.max(h, height));
+                }
+              : undefined
+          }
           contentContainerStyle={[
             styles.content,
             fit
