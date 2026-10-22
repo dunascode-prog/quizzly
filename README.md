@@ -17,6 +17,7 @@ Built on open-source models through free hosted tiers, with a retrieval-augmente
 | [Architecture](docs/ARCHITECTURE.md) | Stack, components, RAG pipeline, LLM gateway, cost strategy |
 | [Data models](docs/DATA_MODELS.md) | ER diagram and every table |
 | [Data flows](docs/DATA_FLOWS.md) | Context and level-1 DFDs, a DFD per entity, key sequences |
+| [Design](docs/DESIGN.md) | Look, tokens, components, every MVP screen, logo; screen images in `docs/design/` |
 
 ## Stack
 
