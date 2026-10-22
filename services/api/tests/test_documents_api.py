@@ -176,7 +176,8 @@ def test_daily_upload_limit(client, fake):
     assert over.status_code == 429
     assert over.json()["detail"] == "You've used today's 5 uploads. Resets at 12:00 AM."
     assert client.get("/v1/usage", headers=auth()).json() == {
-        "uploads": {"used": 5, "limit": 5, "remaining": 0}
+        "uploads": {"used": 5, "limit": 5, "remaining": 0},
+        "explanations": {"used": 0, "limit": 30, "remaining": 30},
     }
 
 

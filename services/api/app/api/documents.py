@@ -62,6 +62,7 @@ class Allowance(BaseModel):
 
 class UsageOut(BaseModel):
     uploads: Allowance
+    explanations: Allowance
 
 
 async def _found(conn, user_id: UUID, document_id: UUID) -> dict:
@@ -78,9 +79,16 @@ async def _check_course(conn, user_id: UUID, course_id: UUID | None) -> None:
 
 @router.get("/v1/usage", tags=["account"])
 async def get_usage(user: User, conn: Conn, settings: AppSettings) -> UsageOut:
-    used = (await usage.used_today(conn, user.id, settings.timezone)).get("upload", 0)
-    limit = settings.daily_uploads
-    return UsageOut(uploads=Allowance(used=used, limit=limit, remaining=max(limit - used, 0)))
+    used = await usage.used_today(conn, user.id, settings.timezone)
+
+    def allowance(resource: str, limit: int) -> Allowance:
+        n = used.get(resource, 0)
+        return Allowance(used=n, limit=limit, remaining=max(limit - n, 0))
+
+    return UsageOut(
+        uploads=allowance("upload", settings.daily_uploads),
+        explanations=allowance("explanation", settings.daily_explanations),
+    )
 
 
 @router.get("/v1/documents")

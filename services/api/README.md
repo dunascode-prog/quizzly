@@ -33,9 +33,12 @@ uv run ruff format --check .
 | `app/main.py` | App factory, request-ID middleware, DB pool lifecycle |
 | `app/api/routes.py` | HTTP routes: `/healthz`, `/v1/me` (GET/PATCH), `/v1/institutions` |
 | `app/api/courses.py`, `app/api/documents.py` | Courses, uploads (signed URLs), documents, `/v1/usage` |
+| `app/api/study.py` | Outline, source pages, explanations, feedback and reports |
+| `prompts/<task>/v<N>.md` | Versioned LLM prompts; the version is stored on each generated row |
 | `app/domain/` | Queries: accounts, courses, documents, usage limits |
 | `app/rag/` | Extract (PDF/PPTX), clean, chunk, embed (bge-small), topic outline |
 | `app/worker/ingest.py` | The `ingest_document` job: upload → pages → chunks → outline |
+| `app/worker/explain.py` | The `generate_explanation` job: topic chunks → grounded Markdown with page citations |
 | `app/core/auth.py` | Verifies Supabase access tokens (JWKS, or a legacy HS256 secret) |
 | `app/core/config.py` | Settings from environment variables / `.env` |
 | `app/core/db.py` | Async Postgres connection pool |

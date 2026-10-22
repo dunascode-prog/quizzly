@@ -118,8 +118,15 @@ export default function CourseScreen() {
                 title={d.title}
                 meta={line.text}
                 metaColor={line.color}
-                onPress={() => router.push({ pathname: '/document/[id]/edit', params: { id: d.id } })}
-                accessibilityHint="Rename, move or delete"
+                onPress={() =>
+                  d.status === 'ready'
+                    ? router.push({ pathname: '/document/[id]', params: { id: d.id } })
+                    : router.push({ pathname: '/document/[id]/edit', params: { id: d.id } })
+                }
+                onLongPress={() => router.push({ pathname: '/document/[id]/edit', params: { id: d.id } })}
+                accessibilityHint={
+                  d.status === 'ready' ? 'Opens the outline. Long press to rename, move or delete.' : 'Rename, move or delete'
+                }
                 trailing={line.action ? <Pill label={line.action.label} selected onPress={line.action.onPress} /> : undefined}
               />
             );

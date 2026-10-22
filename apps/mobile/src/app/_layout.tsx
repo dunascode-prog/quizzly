@@ -59,6 +59,10 @@ function RootNavigator() {
         <Stack.Protected guard={signedIn && onboarded}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="course/[id]/index" />
+          <Stack.Screen name="document/[id]/index" />
+          <Stack.Screen name="document/[id]/topic/[topicId]" />
+          <Stack.Screen name="document/[id]/page/[n]" />
+          <Stack.Screen name="report" options={SHEET} />
           <Stack.Screen name="upload" options={SHEET} />
           <Stack.Screen name="course/new" options={SHEET} />
           <Stack.Screen name="course/[id]/edit" options={SHEET} />
