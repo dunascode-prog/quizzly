@@ -23,7 +23,10 @@ const REASONS: { value: Reason; label: string }[] = [
 
 // Report sheet (DESIGN.md §7 "not drawn", FR-MOD-01).
 export default function ReportSheet() {
-  const { targetId } = useLocalSearchParams<{ targetId: string }>();
+  const { targetId, targetType = 'explanation' } = useLocalSearchParams<{
+    targetId: string;
+    targetType?: 'explanation' | 'question';
+  }>();
   const report = useReport();
   const [reason, setReason] = useState<Reason | null>(null);
   const [note, setNote] = useState('');
@@ -36,7 +39,7 @@ export default function ReportSheet() {
     }
     setError(null);
     report.mutate(
-      { target_id: targetId, reason, note: note.trim() || undefined },
+      { target_type: targetType, target_id: targetId, reason, note: note.trim() || undefined },
       { onSuccess: () => router.back(), onError: (e) => setError(friendlyError(e)) },
     );
   };
@@ -44,7 +47,7 @@ export default function ReportSheet() {
   return (
     <Sheet title="Report" onClose={() => router.back()}>
       <Text variant="body" color="textSecondary">
-        Tell us what&apos;s wrong with this explanation. We read every report.
+        Tell us what&apos;s wrong with this {targetType === 'question' ? 'question' : 'explanation'}. We read every report.
       </Text>
       <View style={styles.pills} accessibilityRole="radiogroup" accessibilityLabel="Reason">
         {REASONS.map((r) => (

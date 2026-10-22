@@ -87,6 +87,18 @@ async def can_see_explanation(conn: AsyncConnection, user_id: UUID, explanation_
     return row is not None
 
 
+async def can_see_question(conn: AsyncConnection, user_id: UUID, question_id: UUID) -> bool:
+    row = await (
+        await conn.execute(
+            "select 1 from questions qn join question_sets s on s.id = qn.question_set_id "
+            "join documents d on d.source_file_id = s.source_file_id "
+            "where qn.id = %s and d.user_id = %s and d.deleted_at is null limit 1",
+            (question_id, user_id),
+        )
+    ).fetchone()
+    return row is not None
+
+
 async def rate(
     conn: AsyncConnection, user_id: UUID, target_type: str, target_id: UUID, rating: int
 ) -> None:

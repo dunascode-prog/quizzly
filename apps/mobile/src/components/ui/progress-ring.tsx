@@ -76,7 +76,11 @@ export function ProgressRing({
       </Animated.View>
       {label ? (
         <View style={[StyleSheet.absoluteFill, styles.center]}>
-          <Text variant="caption" color={color} style={{ fontSize: size > 100 ? 40 : 14 }} numberOfLines={1}>
+          <Text
+            variant={size > 100 ? 'display' : 'caption'}
+            color={color}
+            style={size > 100 ? styles.bigLabel : styles.label}
+            numberOfLines={1}>
             {label}
           </Text>
         </View>
@@ -87,4 +91,6 @@ export function ProgressRing({
 
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
+  label: { fontSize: 14, lineHeight: 18 },
+  bigLabel: { fontSize: 44, lineHeight: 52 },
 });

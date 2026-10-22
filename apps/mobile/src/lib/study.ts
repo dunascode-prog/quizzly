@@ -95,7 +95,11 @@ export function useRateExplanation() {
 
 export function useReport() {
   return useMutation({
-    mutationFn: (body: { target_id: string; reason: 'wrong' | 'unclear' | 'inappropriate'; note?: string }) =>
-      apiFetch<void>('/v1/reports', { method: 'POST', body: JSON.stringify({ target_type: 'explanation', ...body }) }),
+    mutationFn: (body: {
+      target_type: 'explanation' | 'question';
+      target_id: string;
+      reason: 'wrong' | 'unclear' | 'inappropriate';
+      note?: string;
+    }) => apiFetch<void>('/v1/reports', { method: 'POST', body: JSON.stringify(body) }),
   });
 }

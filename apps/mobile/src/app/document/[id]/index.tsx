@@ -37,6 +37,7 @@ function TopicRow({ topic, onPress }: { topic: Topic; onPress: () => void }) {
   );
 }
 
+// "Ask your notes" arrives with chat (screen 08).
 function Soon({ label, outlined }: { label: string; outlined?: boolean }) {
   const theme = useTheme();
   return (
@@ -90,7 +91,13 @@ export default function OutlineScreen() {
               : ' '}
           </Text>
           <View style={styles.pills}>
-            <Soon label="Practise" />
+            <Pressable
+              onPress={() => router.push({ pathname: '/quiz/new', params: { documentId: id } })}
+              accessibilityRole="button"
+              accessibilityLabel="Practise with a quiz"
+              style={({ pressed }) => [styles.pill, { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.85 : 1 }]}>
+              <Text variant="label">Practise</Text>
+            </Pressable>
             <Soon label="Ask your notes" outlined />
           </View>
         </View>

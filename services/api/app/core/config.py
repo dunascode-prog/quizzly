@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     max_document_pages: int = 150
     daily_uploads: int = 5
     daily_explanations: int = 30
+    daily_question_sets: int = 15
 
     models_config_path: Path = SERVICE_ROOT / "config" / "models.yaml"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
