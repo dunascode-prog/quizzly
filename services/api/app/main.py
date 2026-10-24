@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -5,21 +6,26 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import courses, documents, quizzes, study
+from app.api import chat, courses, documents, quizzes, study
 from app.api.routes import router
 from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.rag import embed
 
 log = logging.getLogger("quizzly.api")
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(settings.log_level)
     if settings.database_url:
         await db.open_pool()
+        # Load the embedding model now, not on the first chat question (FR-CHAT-04).
+        app.state.warm_embeddings = asyncio.create_task(
+            asyncio.to_thread(embed.load, settings.embedding_model)
+        )
     else:
         log.warning("DATABASE_URL is not set; running without a database")
     yield
@@ -50,6 +56,7 @@ def create_app() -> FastAPI:
     app.include_router(documents.router)
     app.include_router(study.router)
     app.include_router(quizzes.router)
+    app.include_router(chat.router)
     return app
 
 

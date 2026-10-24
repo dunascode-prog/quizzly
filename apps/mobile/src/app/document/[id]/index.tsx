@@ -37,27 +37,6 @@ function TopicRow({ topic, onPress }: { topic: Topic; onPress: () => void }) {
   );
 }
 
-// "Ask your notes" arrives with chat (screen 08).
-function Soon({ label, outlined }: { label: string; outlined?: boolean }) {
-  const theme = useTheme();
-  return (
-    <View
-      accessible
-      accessibilityRole="button"
-      accessibilityState={{ disabled: true }}
-      accessibilityLabel={`${label}, coming soon`}
-      style={[
-        styles.pill,
-        outlined ? { borderWidth: 1.5, borderColor: theme.track } : { backgroundColor: theme.backgroundSelected },
-        { opacity: 0.55 },
-      ]}>
-      <Text variant="label" color={outlined ? 'onInk' : 'text'}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 // Screen 06 (DESIGN.md §7): the document's outline on a dark detail screen (FR-TOP-01).
 export default function OutlineScreen() {
   const theme = useTheme();
@@ -98,7 +77,16 @@ export default function OutlineScreen() {
               style={({ pressed }) => [styles.pill, { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.85 : 1 }]}>
               <Text variant="label">Practise</Text>
             </Pressable>
-            <Soon label="Ask your notes" outlined />
+            <Pressable
+              onPress={() => router.push({ pathname: '/document/[id]/chat', params: { id } })}
+              accessibilityRole="button"
+              accessibilityLabel="Ask your notes"
+              accessibilityHint="Chat about this document; answers cite its pages"
+              style={({ pressed }) => [styles.pill, { borderWidth: 1.5, borderColor: theme.track, opacity: pressed ? 0.7 : 1 }]}>
+              <Text variant="label" color="onInk">
+                Ask your notes
+              </Text>
+            </Pressable>
           </View>
         </View>
       </SafeAreaView>

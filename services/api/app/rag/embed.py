@@ -13,6 +13,11 @@ def _model(name: str) -> TextEmbedding:
     return TextEmbedding(name)
 
 
+def load(name: str) -> None:
+    """Loads the model ahead of first use (blocking)."""
+    _model(name)
+
+
 def embed_passages(texts: list[str], model: str) -> list[list[float]]:
     """Blocking; call from a thread (asyncio.to_thread) inside the worker."""
     return [vec.tolist() for vec in _model(model).embed(texts, batch_size=BATCH_SIZE)]

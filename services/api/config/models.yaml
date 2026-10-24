@@ -13,7 +13,11 @@ providers:
     api_key_env: CLOUDFLARE_API_TOKEN
 
 profiles:
-  fast:      # chat, marking
+  chat:      # streamed answers: thinking off on Groq so the first token comes quickly (FR-CHAT-04)
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none } }
+    - { provider: openrouter, model: "google/gemma-4-26b-a4b-it:free", rpm: 20 }
+    - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct-fp8", rpm: 50 }
+  fast:      # marking
     - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30 }
     - { provider: openrouter, model: "google/gemma-4-26b-a4b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct-fp8", rpm: 50 }
@@ -23,7 +27,7 @@ profiles:
     - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
 
 tasks:
-  chat: fast
+  chat: chat
   marking: fast
   outline: quality
   explanation: quality

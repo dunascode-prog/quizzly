@@ -87,16 +87,21 @@ export function useExplanation(documentId: string, topicId: string, style: Style
 }
 
 export function useRateExplanation() {
+  return useRate('explanation');
+}
+
+/** Thumbs up/down on an explanation or a chat answer (FR-MOD-03). */
+export function useRate(targetType: 'explanation' | 'chat_message') {
   return useMutation({
     mutationFn: (body: { target_id: string; rating: 1 | -1 }) =>
-      apiFetch<void>('/v1/feedback', { method: 'POST', body: JSON.stringify({ target_type: 'explanation', ...body }) }),
+      apiFetch<void>('/v1/feedback', { method: 'POST', body: JSON.stringify({ target_type: targetType, ...body }) }),
   });
 }
 
 export function useReport() {
   return useMutation({
     mutationFn: (body: {
-      target_type: 'explanation' | 'question';
+      target_type: 'explanation' | 'question' | 'chat_message';
       target_id: string;
       reason: 'wrong' | 'unclear' | 'inappropriate';
       note?: string;

@@ -70,6 +70,7 @@ class UsageOut(BaseModel):
     explanations: Allowance
     question_sets: Allowance
     markings: Allowance
+    chat_messages: Allowance
 
 
 async def _found(conn, user_id: UUID, document_id: UUID) -> dict:
@@ -106,6 +107,7 @@ async def get_usage(user: User, conn: Conn, settings: AppSettings) -> UsageOut:
         explanations=allowance("explanation", settings.daily_explanations),
         question_sets=allowance("question_set", settings.daily_question_sets),
         markings=allowance("marking", settings.daily_markings),
+        chat_messages=allowance("chat_message", settings.daily_chat_messages),
     )
 
 

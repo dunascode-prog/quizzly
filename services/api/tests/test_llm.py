@@ -114,3 +114,31 @@ async def test_non_retryable_error_is_raised_immediately():
     with pytest.raises(httpx.HTTPStatusError):
         await gateway.complete("chat", [])
     assert calls == ["a.test"]
+
+
+def sse(*pieces: str) -> bytes:
+    lines = [f"data: {json.dumps({'choices': [{'delta': {'content': p}}]})}\n\n" for p in pieces]
+    return ("".join(lines) + "data: [DONE]\n\n").encode()
+
+
+async def test_streams_tokens_and_falls_back_before_the_first_one():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert json.loads(request.content)["stream"] is True
+        if request.url.host == "a.test":
+            return httpx.Response(503, text="busy")
+        return httpx.Response(200, content=sse("A stack ", "is LIFO", " [p. 2]."))
+
+    gateway = LLMGateway(make_config(), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    deltas = [d async for d in gateway.stream("chat", [{"role": "user", "content": "hi"}])]
+    assert "".join(d.text for d in deltas) == "A stack is LIFO [p. 2]."
+    assert {(d.provider, d.model) for d in deltas} == {("b", "backup")}
+
+
+async def test_stream_raises_busy_when_every_route_fails():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, text="slow down")
+
+    gateway = LLMGateway(make_config(), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    with pytest.raises(AllProvidersBusy):
+        async for _ in gateway.stream("chat", [{"role": "user", "content": "hi"}]):
+            pass
