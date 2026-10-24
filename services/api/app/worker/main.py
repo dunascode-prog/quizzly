@@ -17,17 +17,17 @@ from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.llm.gateway import AllProvidersBusy
-from app.worker import explain, ingest, questions, queue
+from app.worker import explain, ingest, marking, questions, queue
 
 log = logging.getLogger("quizzly.worker")
 
 Handler = Callable[[AsyncConnection, dict], Awaitable[None]]
 
-# Filled in as features land: mark_answers, …
 HANDLERS: dict[str, Handler] = {
     "ingest_document": ingest.ingest_document,
     "generate_explanation": explain.generate_explanation,
     "generate_questions": questions.generate_questions,
+    "mark_answers": marking.mark_answer,
 }
 
 POLL_INTERVAL = 2.0
@@ -37,7 +37,7 @@ BUSY_REQUEUE_DELAY = timedelta(minutes=1)
 
 async def run_one(conn: AsyncConnection, worker_id: str) -> bool:
     """Claim and run a single job. Returns False when the queue is empty."""
-    job = await queue.claim(conn, worker_id)
+    job = await queue.claim(conn, worker_id, list(HANDLERS))
     if job is None:
         return False
     extra = {"job_id": str(job["id"])}

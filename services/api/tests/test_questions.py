@@ -242,7 +242,7 @@ def fake(client, monkeypatch):
     async def enqueue(conn, job_type, payload, *, user_id=None, dedupe_key=None):
         state["jobs"].append(dedupe_key)
 
-    async def create_quiz(conn, user_id, document_id, set_id, title, mode):
+    async def create_quiz(conn, user_id, document_id, set_id, title, mode, time_limit_sec=None):
         qid = uuid.uuid4()
         state["quizzes"][qid] = {
             "id": qid,
@@ -251,6 +251,7 @@ def fake(client, monkeypatch):
             "mode": mode,
             "question_set_id": set_id,
             "progress": None,
+            "time_limit_sec": time_limit_sec,
         }
         return qid
 
@@ -311,7 +312,7 @@ def test_daily_quiz_limit_and_unsupported_types(client, fake):
     r = client.post(URL, headers=auth(), json={})
     assert r.status_code == 429
     assert r.json()["detail"] == "You've used today's 15 quiz generations. Resets at 12:00 AM."
-    assert client.post(URL, headers=auth(), json={"types": ["theory"]}).status_code == 422
+    assert client.post(URL, headers=auth(), json={"types": ["essay"]}).status_code == 422
     assert client.post(URL, headers=auth(), json={"count": 7}).status_code == 422
 
 

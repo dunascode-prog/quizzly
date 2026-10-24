@@ -10,9 +10,11 @@ from dataclasses import dataclass, field
 
 from app.core.config import SERVICE_ROOT
 
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2  # 2: short answer and theory questions
 PROMPT_PATH = SERVICE_ROOT / "prompts" / "questions" / f"v{PROMPT_VERSION}.md"
-OBJECTIVE_TYPES = ("mcq", "true_false", "fill_blank")
+OBJECTIVE_TYPES = ("mcq", "true_false", "fill_blank")  # marked on the device (FR-QUIZ-03)
+OPEN_TYPES = ("short_answer", "theory")  # marked by the LLM against a rubric (FR-QUIZ-04)
+ALL_TYPES = OBJECTIVE_TYPES + OPEN_TYPES
 MAX_TOPIC_SHARE = 0.4  # FR-QGEN-04: no topic gets more than 40% unless it's the only one
 TOPIC_TOKENS = 1800  # most of one topic's pages sent per call
 BATCH_TOKENS = 5000  # notes per LLM call; several small topics share one call
@@ -24,6 +26,8 @@ TYPE_NAMES = {
     "mcq": "multiple choice",
     "true_false": "true or false",
     "fill_blank": "fill in the blank",
+    "short_answer": "short answer",
+    "theory": "theory (essay)",
 }
 _STOPWORDS = set(
     "a an the of to in on for and or but is are was were be been being it its this that these "
@@ -247,6 +251,8 @@ def validate(
     difficulty = difficulty or ("medium" if default_difficulty == "mixed" else default_difficulty)
     options = None
     alternatives: list[str] = []
+    rubric: list[dict] | None = None
+    marks = 1
     if kind == "mcq":
         raw = item.get("options")
         if not isinstance(raw, list) or len(raw) != 4:
@@ -265,6 +271,32 @@ def validate(
         if not isinstance(answer, bool):
             return None
         checked = stem
+    elif kind == "short_answer":
+        answer = _clean(item.get("answer"), 600)
+        points = [_clean(k, 160) for k in item.get("key_points") or [] if _clean(k, 160)]
+        if len(answer) < 10 or not 2 <= len(points) <= 4:
+            return None
+        rubric = [{"criterion": k, "marks": 1} for k in points]
+        marks = len(points)
+        checked = f"{stem} {answer}"
+    elif kind == "theory":
+        answer = _clean(item.get("answer"), 2500)
+        try:
+            marks = int(item.get("marks"))
+            rubric = [
+                {"criterion": _clean(r["criterion"], 160), "marks": int(r["marks"])}
+                for r in item.get("rubric") or []
+            ]
+        except (KeyError, TypeError, ValueError):
+            return None
+        # FR-QGEN-06: the rubric's marks add up to the question's total.
+        if not 4 <= marks <= 10 or not 2 <= len(rubric) <= 5 or len(answer) < 40:
+            return None
+        if any(not r["criterion"] or r["marks"] < 1 for r in rubric):
+            return None
+        if sum(r["marks"] for r in rubric) != marks:
+            return None
+        checked = f"{stem} {answer}"
     else:  # fill_blank
         if stem.count("____") != 1:
             return None
@@ -286,6 +318,8 @@ def validate(
         pages=sorted(cited),
         topic_id=topic.topic_id,
         alternatives=alternatives,
+        rubric={"criteria": rubric} if rubric else None,
+        marks=marks,
     )
 
 
@@ -318,6 +352,8 @@ def shuffle_options(draft: Draft, seed: str) -> Draft:
 def stored_answer(draft: Draft) -> object:
     if draft.type == "fill_blank":
         return {"text": draft.answer, "alternatives": draft.alternatives}
+    if draft.type in OPEN_TYPES:
+        return {"model_answer": draft.answer}
     return draft.answer
 
 

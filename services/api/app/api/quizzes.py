@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -8,11 +8,12 @@ from pydantic import BaseModel, Field
 from app.api.deps import AppSettings, Conn, User
 from app.domain import quizzes, study, usage
 from app.rag import questions as q
+from app.worker import marking as marking_worker
 from app.worker import queue
 
 router = APIRouter(tags=["quizzes"])
 
-QuestionType = Literal["mcq", "true_false", "fill_blank"]
+QuestionType = Literal["mcq", "true_false", "fill_blank", "short_answer", "theory"]
 
 
 class QuizCreate(BaseModel):
@@ -24,6 +25,8 @@ class QuizCreate(BaseModel):
     mode: Literal["practice", "exam"] = "practice"
     # A fresh set instead of the cached one; uses a question set from the allowance.
     new_questions: bool = False
+    # Exam mode only: unanswered questions score zero when time runs out (FR-QUIZ-02).
+    time_limit_min: int | None = Field(default=None, ge=1, le=180)
 
 
 class QuestionOut(BaseModel):
@@ -40,6 +43,8 @@ class QuestionOut(BaseModel):
     topic_id: UUID | None
     topic_title: str | None
     marks: int
+    # Short answer and theory: {"criteria": [{"criterion", "marks"}]} (FR-QGEN-06).
+    rubric: dict | None = None
 
 
 class QuizOut(BaseModel):
@@ -53,6 +58,7 @@ class QuizOut(BaseModel):
     requested_count: int
     generated_count: int
     notice: str | None
+    time_limit_sec: int | None
     questions: list[QuestionOut]
 
 
@@ -64,7 +70,7 @@ class AttemptStart(BaseModel):
 class AnswerIn(BaseModel):
     id: UUID
     question_id: UUID
-    response: int | bool | str
+    response: int | bool | str = Field(union_mode="left_to_right")
 
 
 class AnswersIn(BaseModel):
@@ -83,6 +89,39 @@ class AnswerOut(BaseModel):
     question_id: UUID
     response: object
     is_correct: bool | None
+    # Null while a written answer waits for marking.
+    score: float | None
+    # Written answers: per-criterion marks, a summary and the model answer (FR-QUIZ-04).
+    feedback: dict | None
+
+
+class AttemptSummary(BaseModel):
+    id: UUID
+    quiz_id: UUID
+    title: str
+    document_id: UUID
+    mode: str
+    status: str
+    started_at: datetime
+    submitted_at: datetime | None
+    current_index: int
+    question_count: int
+    score: float | None
+    max_score: float | None
+
+
+class WeakTopic(BaseModel):
+    topic_id: str
+    title: str | None
+    document_id: UUID
+    score: float
+    max: float
+
+
+class PracticeOut(BaseModel):
+    attempts: list[AttemptSummary]
+    # The three weakest topics across recent quizzes (FR-QUIZ-07).
+    weak_topics: list[WeakTopic]
 
 
 class AttemptOut(BaseModel):
@@ -94,6 +133,8 @@ class AttemptOut(BaseModel):
     started_at: datetime
     submitted_at: datetime | None
     current_index: int
+    document_id: UUID
+    time_limit_sec: int | None
     score: float | None
     max_score: float | None
     topics: list[TopicResult]
@@ -122,6 +163,7 @@ async def _quiz_out(conn, row: dict) -> QuizOut:
         requested_count=row["requested_count"],
         generated_count=row["generated_count"],
         notice=_notice(row),
+        time_limit_sec=row["time_limit_sec"],
         questions=[QuestionOut(**x) for x in qs],
     )
 
@@ -144,6 +186,8 @@ async def _attempt_out(conn, row: dict) -> AttemptOut:
                 "started_at",
                 "submitted_at",
                 "current_index",
+                "document_id",
+                "time_limit_sec",
             )
         },
         score=float(row["score"]) if row["score"] is not None else None,
@@ -210,8 +254,9 @@ async def create_quiz(
             dedupe_key=f"questions:{existing['id']}",
         )
     title = chosen[0]["title"] if len(chosen) == 1 and len(all_topics) > 1 else doc["title"]
+    limit_sec = body.time_limit_min * 60 if body.mode == "exam" and body.time_limit_min else None
     quiz_id = await quizzes.create_quiz(
-        conn, user.id, document_id, existing["id"], title, body.mode
+        conn, user.id, document_id, existing["id"], title, body.mode, limit_sec
     )
     return await _quiz_out(conn, await quizzes.get_quiz(conn, user.id, quiz_id))
 
@@ -238,6 +283,48 @@ async def start_attempt(quiz_id: UUID, body: AttemptStart, user: User, conn: Con
     )
 
 
+TIME_GRACE = timedelta(seconds=60)  # network delay after the app's timer hits zero
+
+
+def _time_up(attempt: dict) -> bool:
+    """A timed exam stops accepting answers shortly after its limit (FR-QUIZ-02)."""
+    limit = attempt.get("time_limit_sec")
+    if attempt["mode"] != "exam" or not limit:
+        return False
+    return datetime.now(UTC) > attempt["started_at"] + timedelta(seconds=limit) + TIME_GRACE
+
+
+async def _queue_marking(conn, user_id: UUID, attempt_id: UUID, settings) -> None:
+    """Queues LLM marking for written answers not yet marked. The daily allowance is used only
+    when an answer is newly queued, so resending a save never counts twice (FR-LIM-01)."""
+    for question_id in await quizzes.pending_marking(conn, attempt_id):
+        job_id = await queue.enqueue(
+            conn,
+            "mark_answers",
+            {"attempt_id": str(attempt_id), "question_id": str(question_id)},
+            user_id=user_id,
+            dedupe_key=f"mark:{attempt_id}:{question_id}",
+        )
+        if job_id is None:
+            continue  # already queued or being marked
+        limit = settings.daily_markings
+        if await usage.take(conn, user_id, "marking", limit, settings.timezone) is None:
+            await conn.execute("update jobs set status = 'cancelled' where id = %s", (job_id,))
+            await quizzes.record_marking(
+                conn,
+                attempt_id,
+                question_id,
+                0,
+                None,
+                marking_worker.not_marked(
+                    "limit",
+                    f"You've used today's {limit} answer markings. Resets at 12:00 AM. "
+                    "Compare your answer with the model answer.",
+                ),
+            )
+    await quizzes.finish_if_marked(conn, attempt_id)
+
+
 async def _attempt(conn, user_id: UUID, attempt_id: UUID) -> dict:
     row = await quizzes.get_attempt(conn, user_id, attempt_id)
     if row is None:
@@ -246,26 +333,57 @@ async def _attempt(conn, user_id: UUID, attempt_id: UUID) -> dict:
 
 
 @router.put("/v1/attempts/{attempt_id}/answers")
-async def save_answers(attempt_id: UUID, body: AnswersIn, user: User, conn: Conn) -> AttemptOut:
-    """Saves answers as the student goes (idempotent; safe to resend after a dropped request)."""
+async def save_answers(
+    attempt_id: UUID, body: AnswersIn, user: User, conn: Conn, settings: AppSettings
+) -> AttemptOut:
+    """Saves answers as the student goes (idempotent; safe to resend after a dropped request).
+    In practice mode written answers are marked straight away; in exam mode after submitting."""
     attempt = await _attempt(conn, user.id, attempt_id)
-    if attempt["status"] == "completed":
+    if attempt["status"] != "in_progress":
         raise HTTPException(status.HTTP_409_CONFLICT, "This attempt is already submitted")
+    if _time_up(attempt):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Time is up for this exam")
     await quizzes.save_answers(
         conn, attempt, [a.model_dump() for a in body.answers], body.current_index
     )
+    if attempt["mode"] == "practice":
+        await _queue_marking(conn, user.id, attempt_id, settings)
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))
 
 
 @router.post("/v1/attempts/{attempt_id}/submit")
-async def submit(attempt_id: UUID, body: AnswersIn, user: User, conn: Conn) -> AttemptOut:
-    """Saves any last answers, then scores the attempt; unanswered questions score zero."""
+async def submit(
+    attempt_id: UUID, body: AnswersIn, user: User, conn: Conn, settings: AppSettings
+) -> AttemptOut:
+    """Saves any last answers, then scores the attempt; unanswered questions score zero. With
+    written answers still to mark it stays 'marking' until the worker has marked them."""
     attempt = await _attempt(conn, user.id, attempt_id)
-    if attempt["status"] != "completed":
-        if body.answers:
+    if attempt["status"] == "in_progress":
+        if body.answers and not _time_up(attempt):  # late answers score zero
             await quizzes.save_answers(conn, attempt, [a.model_dump() for a in body.answers], None)
         await quizzes.submit(conn, attempt)
+        await _queue_marking(conn, user.id, attempt_id, settings)
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))
+
+
+@router.get("/v1/practice")
+async def practice(user: User, conn: Conn) -> PracticeOut:
+    """The Practice tab: recent attempts (in-progress ones can be resumed) and weak topics."""
+    attempts = await quizzes.list_attempts(conn, user.id)
+    return PracticeOut(
+        attempts=[
+            AttemptSummary(
+                **{k: v for k, v in a.items() if k not in ("score", "max_score")},
+                score=float(a["score"]) if a["score"] is not None else None,
+                max_score=float(a["max_score"]) if a["max_score"] is not None else None,
+            )
+            for a in attempts
+        ],
+        weak_topics=[
+            WeakTopic(**{**t, "score": float(t["score"]), "max": float(t["max"])})
+            for t in await quizzes.weak_topics(conn, user.id)
+        ],
+    )
 
 
 @router.get("/v1/attempts/{attempt_id}")

@@ -20,7 +20,7 @@ def calls(monkeypatch):
     record: list[tuple] = []
     job = {"id": "job-1", "type": "test_job", "attempts": 1, "max_attempts": 5}
 
-    async def claim(conn, worker_id):
+    async def claim(conn, worker_id, types):
         return dict(job)
 
     async def succeed(conn, job_id):
@@ -72,8 +72,20 @@ async def test_run_one_unknown_type_fails_without_retry(calls):
 
 
 async def test_run_one_empty_queue(monkeypatch):
-    async def claim(conn, worker_id):
+    async def claim(conn, worker_id, types):
         return None
 
     monkeypatch.setattr(queue, "claim", claim)
     assert await worker.run_one(None, "w1") is False
+
+
+async def test_workers_claim_only_job_types_they_handle(monkeypatch):
+    seen = []
+
+    async def claim(conn, worker_id, types):
+        seen.extend(types)
+        return None
+
+    monkeypatch.setattr(queue, "claim", claim)
+    await worker.run_one(None, "w1")
+    assert "mark_answers" in seen and "generate_questions" in seen

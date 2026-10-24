@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     daily_uploads: int = 5
     daily_explanations: int = 30
     daily_question_sets: int = 15
+    daily_markings: int = 20  # theory / short answers marked by the LLM (PRD §9)
 
     models_config_path: Path = SERVICE_ROOT / "config" / "models.yaml"
     embedding_model: str = "BAAI/bge-small-en-v1.5"

@@ -34,6 +34,7 @@ export default function ResultsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const a = attempt.data;
+  const marking = a?.status === 'marking'; // useAttempt polls until the written answers are marked
   const pct = a && a.max_score ? Math.round(((a.score ?? 0) / a.max_score) * 100) : 0;
   const weakest = a?.weakest ?? [];
 
@@ -61,8 +62,16 @@ export default function ResultsScreen() {
       <StatusBar style={scheme === 'dark' ? 'dark' : 'light'} />
       <SafeAreaView edges={['top']} style={styles.inner}>
         <IconButton icon={X} accessibilityLabel="Close results" onPress={() => router.back()} />
-        <View style={styles.hero} accessible accessibilityLabel={a ? `Score ${pct} percent` : 'Loading score'}>
-          <ProgressRing size={168} strokeWidth={10} value={pct / 100} label={a ? `${pct}%` : '…'} />
+        <View
+          style={styles.hero}
+          accessible
+          accessibilityLiveRegion="polite"
+          accessibilityLabel={!a ? 'Loading score' : marking ? 'Marking your written answers' : `Score ${pct} percent`}>
+          {marking ? (
+            <ProgressRing size={168} strokeWidth={10} />
+          ) : (
+            <ProgressRing size={168} strokeWidth={10} value={pct / 100} label={a ? `${pct}%` : '…'} />
+          )}
           <Text variant="title" color="onInk" style={styles.center}>
             {a?.title ?? ' '}
           </Text>
@@ -79,10 +88,21 @@ export default function ResultsScreen() {
       <View style={[styles.sheet, { backgroundColor: theme.background }]}>
         <ScrollView contentContainerStyle={[styles.inner, styles.sheetBody]}>
           {attempt.isError ? <Banner message={friendlyError(attempt.error)} /> : null}
-          <Text variant="title" accessibilityRole="header">
-            {weakest.length ? 'Revise next' : 'Well done'}
-          </Text>
-          {weakest.length === 0 && a ? (
+          {marking ? (
+            <>
+              <Text variant="title" accessibilityRole="header">
+                Marking…
+              </Text>
+              <Text variant="body" color="textSecondary">
+                Your written answers are being marked against the marking scheme. This usually takes a few seconds.
+              </Text>
+            </>
+          ) : (
+            <Text variant="title" accessibilityRole="header">
+              {weakest.length ? 'Revise next' : 'Well done'}
+            </Text>
+          )}
+          {weakest.length === 0 && a && !marking ? (
             <Text variant="body" color="textSecondary">
               You got every question right. Try a harder quiz or a new set of questions.
             </Text>
@@ -106,7 +126,7 @@ export default function ResultsScreen() {
           })}
           {error ? <Banner message={error} /> : null}
           <View style={styles.actions}>
-            {weakest.length ? <ActionPill label="Practise these" icon={RotateCw} onPress={practise} loading={busy} /> : null}
+            {weakest.length && !marking ? <ActionPill label="Practise these" icon={RotateCw} onPress={practise} loading={busy} /> : null}
             <TextButton
               label="Review answers"
               onPress={() => router.push({ pathname: '/quiz/[id]/review', params: { id, attempt: attemptId } })}
