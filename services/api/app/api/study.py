@@ -64,7 +64,7 @@ class FeedbackIn(BaseModel):
 
 
 class ReportIn(BaseModel):
-    target_type: Literal["explanation"]
+    target_type: Literal["explanation", "question"]
     target_id: UUID
     reason: Literal["wrong", "unclear", "inappropriate", "other"]
     note: str | None = Field(default=None, max_length=500)
@@ -173,8 +173,9 @@ async def request_explanation(
     return _out(row)
 
 
-async def _check_target(conn, user_id: UUID, target_id: UUID) -> None:
-    if not await study.can_see_explanation(conn, user_id, target_id):
+async def _check_target(conn, user_id: UUID, target_id: UUID, kind: str = "explanation") -> None:
+    can_see = study.can_see_question if kind == "question" else study.can_see_explanation
+    if not await can_see(conn, user_id, target_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 
 
@@ -189,7 +190,7 @@ async def feedback(body: FeedbackIn, user: User, conn: Conn) -> Response:
 @router.post("/v1/reports", status_code=status.HTTP_204_NO_CONTENT)
 async def report(body: ReportIn, user: User, conn: Conn) -> Response:
     """Wrong / unclear / inappropriate (FR-MOD-01)."""
-    await _check_target(conn, user.id, body.target_id)
+    await _check_target(conn, user.id, body.target_id, body.target_type)
     note = body.note.strip() or None if body.note else None
     await study.report(conn, user.id, body.target_type, body.target_id, body.reason, note)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
