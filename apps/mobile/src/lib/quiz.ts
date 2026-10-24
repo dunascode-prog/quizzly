@@ -4,7 +4,7 @@ import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { queryClient } from '@/lib/query-client';
 
-export type QuestionType = 'mcq' | 'true_false' | 'fill_blank';
+export type QuestionType = 'mcq' | 'true_false' | 'fill_blank' | 'short_answer' | 'theory';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed';
 export type Mode = 'practice' | 'exam';
 
@@ -15,12 +15,14 @@ export type Question = {
   difficulty: string;
   stem: string;
   options: string[] | null;
-  answer: number | boolean | { text: string; alternatives: string[] };
+  answer: number | boolean | { text: string; alternatives: string[] } | { model_answer: string };
   explanation: string;
   source_pages: number[];
   topic_id: string | null;
   topic_title: string | null;
   marks: number;
+  /** Short answer and theory: what the marker looks for (FR-QGEN-06). */
+  rubric: { criteria: { criterion: string; marks: number }[] } | null;
 };
 
 export type Quiz = {
@@ -33,6 +35,7 @@ export type Quiz = {
   requested_count: number;
   generated_count: number;
   notice: string | null;
+  time_limit_sec: number | null;
   questions: Question[];
 };
 
@@ -40,10 +43,30 @@ export type Response = number | boolean | string;
 
 export type TopicResult = { topic_id: string; title: string | null; score: number; max: number };
 
+/** The marker's verdict on a written answer (FR-QUIZ-04). */
+export type Feedback = {
+  status: 'marked' | 'not_marked';
+  reason?: 'limit' | 'error' | 'empty';
+  summary: string;
+  criteria: { criterion: string; awarded: number; marks: number; feedback: string }[];
+  model_answer: string;
+};
+
+export type AttemptAnswer = {
+  question_id: string;
+  response: Response;
+  is_correct: boolean | null;
+  /** Null while a written answer waits for marking. */
+  score: number | null;
+  feedback: Feedback | null;
+};
+
 export type Attempt = {
   id: string;
   quiz_id: string;
   title: string;
+  document_id: string;
+  time_limit_sec: number | null;
   mode: Mode;
   status: 'in_progress' | 'submitted' | 'marking' | 'completed';
   started_at: string;
@@ -53,8 +76,15 @@ export type Attempt = {
   max_score: number | null;
   topics: TopicResult[];
   weakest: TopicResult[];
-  answers: { question_id: string; response: Response; is_correct: boolean | null }[];
+  answers: AttemptAnswer[];
 };
+
+export type AttemptSummary = Pick<
+  Attempt,
+  'id' | 'quiz_id' | 'title' | 'document_id' | 'mode' | 'status' | 'started_at' | 'submitted_at' | 'current_index' | 'score' | 'max_score'
+> & { question_count: number };
+
+export type WeakTopic = TopicResult & { document_id: string };
 
 export type QuizSettings = {
   topic_ids: string[];
@@ -63,6 +93,8 @@ export type QuizSettings = {
   count: 5 | 10 | 20 | 30;
   mode: Mode;
   new_questions?: boolean;
+  /** Exam mode only (FR-QUIZ-02). */
+  time_limit_min?: number;
 };
 
 function useSignedIn() {
@@ -92,8 +124,13 @@ export function useQuiz(quizId: string) {
 
 export function useStartAttempt(quizId: string) {
   return useMutation({
+    // Starting with an existing id returns that attempt, which is how an attempt is resumed (FR-QUIZ-05).
     mutationFn: (body: { id: string; mode: Mode }) =>
       apiFetch<Attempt>(`/v1/quizzes/${quizId}/attempts`, { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: (attempt) => {
+      queryClient.setQueryData(['attempt', attempt.id], attempt);
+      void queryClient.invalidateQueries({ queryKey: ['practice'] });
+    },
   });
 }
 
@@ -103,6 +140,9 @@ export function saveAnswers(attemptId: string, answers: AnswerIn[], currentIndex
   return apiFetch<Attempt>(`/v1/attempts/${attemptId}/answers`, {
     method: 'PUT',
     body: JSON.stringify({ answers, current_index: currentIndex }),
+  }).then((attempt) => {
+    queryClient.setQueryData(['attempt', attempt.id], attempt);
+    return attempt;
   });
 }
 
@@ -112,16 +152,34 @@ export function submitAttempt(attemptId: string, answers: AnswerIn[]) {
     body: JSON.stringify({ answers }),
   }).then((attempt) => {
     queryClient.setQueryData(['attempt', attempt.id], attempt);
+    void queryClient.invalidateQueries({ queryKey: ['practice'] });
     return attempt;
   });
 }
 
-export function useAttempt(attemptId: string) {
+/** Polls every 2 s while a submitted attempt's written answers are marked, or until the answer to
+ * `waitFor` (a question id) has its feedback. */
+export function useAttempt(attemptId: string, { enabled = true, waitFor }: { enabled?: boolean; waitFor?: string } = {}) {
   return useQuery({
     queryKey: ['attempt', attemptId],
     queryFn: () => apiFetch<Attempt>(`/v1/attempts/${attemptId}`),
-    enabled: useSignedIn() && Boolean(attemptId),
+    enabled: useSignedIn() && Boolean(attemptId) && enabled,
     staleTime: Infinity,
+    refetchInterval: (q) => {
+      const data = q.state.data;
+      if (data?.status === 'marking') return 2000;
+      if (waitFor && !data?.answers.find((a) => a.question_id === waitFor)?.feedback) return 2000;
+      return false;
+    },
+  });
+}
+
+/** The Practice tab: recent attempts and the weakest topics (FR-QUIZ-05/07). */
+export function usePractice() {
+  return useQuery({
+    queryKey: ['practice'],
+    queryFn: () => apiFetch<{ attempts: AttemptSummary[]; weak_topics: WeakTopic[] }>('/v1/practice'),
+    enabled: useSignedIn(),
   });
 }
 
@@ -139,11 +197,17 @@ export function normalise(text: string) {
     .join(' ');
 }
 
+/** Short answer and theory are marked by the LLM on the server, not here (FR-QUIZ-04). */
+export function isWritten(question: Pick<Question, 'type'>) {
+  return question.type === 'short_answer' || question.type === 'theory';
+}
+
 export function isCorrect(question: Question, response: Response): boolean {
   const { type, answer } = question;
+  if (isWritten(question)) return false;
   if (type === 'mcq') return typeof response === 'number' && response === answer;
   if (type === 'true_false') return typeof response === 'boolean' && response === answer;
-  if (typeof response !== 'string' || typeof answer !== 'object') return false;
+  if (typeof response !== 'string' || typeof answer !== 'object' || !('text' in answer)) return false;
   const accepted = [answer.text, ...(answer.alternatives ?? [])].map(normalise);
   return accepted.includes(normalise(response));
 }
@@ -152,7 +216,8 @@ export function answerText(question: Question): string {
   const { type, answer, options } = question;
   if (type === 'mcq' && options && typeof answer === 'number') return options[answer];
   if (type === 'true_false') return answer ? 'True' : 'False';
-  return typeof answer === 'object' ? answer.text : String(answer);
+  if (typeof answer === 'object') return 'text' in answer ? answer.text : answer.model_answer;
+  return String(answer);
 }
 
 export function responseText(question: Question, response: Response | undefined): string {
@@ -166,4 +231,11 @@ export const TYPE_LABELS: Record<QuestionType, string> = {
   mcq: 'Multiple choice',
   true_false: 'True or false',
   fill_blank: 'Fill the blank',
+  short_answer: 'Short answer',
+  theory: 'Theory',
 };
+
+/** "4", "1.5": half marks at most. */
+export function marksText(n: number) {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}

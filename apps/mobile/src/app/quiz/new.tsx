@@ -21,6 +21,8 @@ const TYPES: { value: QuestionType; label: string }[] = [
   { value: 'mcq', label: 'Multiple choice' },
   { value: 'true_false', label: 'True/False' },
   { value: 'fill_blank', label: 'Fill the blank' },
+  { value: 'short_answer', label: 'Short answer' },
+  { value: 'theory', label: 'Theory' },
 ];
 const DIFFICULTIES: { value: Difficulty; label: string }[] = [
   { value: 'mixed', label: 'Mixed' },
@@ -29,6 +31,7 @@ const DIFFICULTIES: { value: Difficulty; label: string }[] = [
   { value: 'hard', label: 'Hard' },
 ];
 const COUNTS = [5, 10, 20, 30] as const;
+const TIMERS = [0, 10, 20, 30, 60] as const; // minutes; 0 = no timer
 
 function CountCircle({ n, selected, onPress }: { n: number; selected: boolean; onPress: () => void }) {
   const theme = useTheme();
@@ -47,7 +50,7 @@ function CountCircle({ n, selected, onPress }: { n: number; selected: boolean; o
 }
 
 // Screen 09 (DESIGN.md §7): scope, types, count and mode (FR-QGEN-01; defaults whole document,
-// multiple choice, mixed, 10). Short answer and theory arrive with AI marking.
+// multiple choice, mixed, 10). Short answer and theory are marked by the AI; exams may be timed.
 export default function QuizSetup() {
   const { documentId, topicId } = useLocalSearchParams<{ documentId: string; topicId?: string }>();
   const outline = useOutline(documentId);
@@ -57,6 +60,7 @@ export default function QuizSetup() {
   const [difficulty, setDifficulty] = useState<Difficulty>('mixed');
   const [count, setCount] = useState<(typeof COUNTS)[number]>(topicId ? 5 : 10);
   const [mode, setMode] = useState<Mode>('practice');
+  const [timer, setTimer] = useState<(typeof TIMERS)[number]>(0);
   const [changing, setChanging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +79,14 @@ export default function QuizSetup() {
     setError(null);
     setBusy(true);
     try {
-      const quiz = await createQuiz(documentId, { topic_ids: topicIds, types, difficulty, count, mode });
+      const quiz = await createQuiz(documentId, {
+        topic_ids: topicIds,
+        types,
+        difficulty,
+        count,
+        mode,
+        ...(mode === 'exam' && timer ? { time_limit_min: timer } : {}),
+      });
       router.replace({ pathname: '/quiz/[id]/play', params: { id: quiz.id, mode } });
     } catch (e) {
       setError(friendlyError(e));
@@ -141,9 +152,11 @@ export default function QuizSetup() {
             />
           ))}
         </View>
-        <Text variant="small" color="textSecondary">
-          Short answer and theory questions are coming next.
-        </Text>
+        {types.some((t) => t === 'short_answer' || t === 'theory') ? (
+          <Text variant="small" color="textSecondary">
+            Written answers are marked by AI against a marking scheme from your notes.
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel="Number of questions">
@@ -170,6 +183,17 @@ export default function QuizSetup() {
           {mode === 'practice' ? 'See the answer after each question.' : 'Answers and feedback come at the end.'}
         </Text>
       </View>
+
+      {mode === 'exam' ? (
+        <View style={styles.group}>
+          <Text variant="label">Timer</Text>
+          <View style={styles.pills} accessibilityRole="radiogroup" accessibilityLabel="Timer">
+            {TIMERS.map((m) => (
+              <Pill key={m} label={m ? `${m} min` : 'No timer'} role="radio" selected={timer === m} onPress={() => setTimer(m)} />
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {error ? <Banner message={error} /> : null}
     </Screen>

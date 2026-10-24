@@ -49,8 +49,9 @@ async def enqueue(
     return row["id"] if row else None
 
 
-async def claim(conn: AsyncConnection, worker_id: str) -> dict | None:
-    """Take the oldest runnable job, or one whose lease expired (crashed worker)."""
+async def claim(conn: AsyncConnection, worker_id: str, types: list[str]) -> dict | None:
+    """Take the oldest runnable job of a type this worker handles, or one whose lease expired
+    (crashed worker). An older worker mid-deploy leaves new job types for a newer one."""
     return await (
         await conn.execute(
             """
@@ -58,15 +59,16 @@ async def claim(conn: AsyncConnection, worker_id: str) -> dict | None:
                             attempts = attempts + 1
             where id = (
                 select id from jobs
-                where (status = 'queued' and run_after <= now())
-                   or (status = 'running' and locked_at < now() - %s)
+                where ((status = 'queued' and run_after <= now())
+                       or (status = 'running' and locked_at < now() - %s))
+                  and type::text = any(%s)
                 order by run_after
                 for update skip locked
                 limit 1
             )
             returning *
             """,
-            (worker_id, LEASE),
+            (worker_id, LEASE, types),
         )
     ).fetchone()
 

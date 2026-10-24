@@ -110,7 +110,7 @@ async def generate_questions(conn: AsyncConnection, job: dict) -> None:
                 (qs["topic_ids"],),
             )
         ).fetchall()
-        types = [t for t in qs["types"] if t in q.OBJECTIVE_TYPES]
+        types = [t for t in qs["types"] if t in q.ALL_TYPES]
         pages = await _pages(conn, qs["source_file_id"])
         topic_pages = {
             t["id"]: [
@@ -207,6 +207,7 @@ async def _save(
                 json.dumps(d.options) if d.options else None,
                 json.dumps(q.stored_answer(d)),
                 d.explanation,
+                json.dumps(d.rubric) if d.rubric else None,
                 d.marks,
                 d.chunk_ids,
                 d.pages,
@@ -218,8 +219,9 @@ async def _save(
         async with conn.cursor() as cur:
             await cur.executemany(
                 "insert into questions (question_set_id, topic_id, ordinal, type, difficulty, "
-                "stem, options, answer, explanation, marks, source_chunk_ids, source_pages, "
-                "embedding) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector)",
+                "stem, options, answer, explanation, rubric, marks, source_chunk_ids, "
+                "source_pages, embedding) "
+                "values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector)",
                 rows,
             )
         await conn.execute(
