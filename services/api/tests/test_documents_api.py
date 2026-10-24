@@ -185,6 +185,8 @@ def test_daily_upload_limit(client, fake):
     assert client.get("/v1/usage", headers=auth()).json() == {
         "uploads": {"used": 5, "limit": 5, "remaining": 0},
         "explanations": {"used": 0, "limit": 30, "remaining": 30},
+        "question_sets": {"used": 0, "limit": 15, "remaining": 15},
+        "markings": {"used": 0, "limit": 20, "remaining": 20},
     }
 
 

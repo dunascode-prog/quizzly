@@ -17,15 +17,16 @@ function RubricRow({ c, onSurface }: { c: Criterion; onSurface: boolean }) {
   const missed = c.awarded === 0;
   const full = c.awarded >= c.marks;
   const Icon = missed ? X : Check;
+  const hint = !full && Boolean(c.feedback);
   return (
     <View
-      style={[styles.row, { backgroundColor: missed ? theme.dangerSoft : onSurface ? theme.backgroundSelected : theme.backgroundElement }]}
+      style={[styles.row, hint && styles.rowTop, { backgroundColor: missed ? theme.dangerSoft : onSurface ? theme.backgroundSelected : theme.backgroundElement }]}
       accessible
       accessibilityLabel={`${c.criterion}: ${marksText(c.awarded)} of ${c.marks} marks. ${full ? '' : c.feedback}`}>
       <Icon size={22} strokeWidth={2.4} color={missed ? theme.danger : full ? theme.success : theme.warning} />
       <View style={styles.rowText}>
         <Text variant="label">{c.criterion}</Text>
-        {!full && c.feedback ? (
+        {hint ? (
           <Text variant="small" color={missed ? 'danger' : 'textSecondary'}>
             {c.feedback}
           </Text>
@@ -86,9 +87,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.gutter - 2,
     paddingVertical: Spacing.twoHalf,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Spacing.twoHalf,
   },
+  rowTop: { alignItems: 'flex-start' },
   rowText: { flex: 1, gap: Spacing.half },
   marks: { fontFamily: FontFamily.semibold },
   model: { borderRadius: Radius.option + 2, padding: Spacing.gutter - 2, gap: Spacing.one },

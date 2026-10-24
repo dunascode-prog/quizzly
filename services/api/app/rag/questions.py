@@ -214,6 +214,12 @@ def support(text: str, sources: list[SourcePage]) -> float:
     return len(words & source_words) / len(words)
 
 
+def _marked_content(stem: str, rubric: list[dict]) -> str:
+    """For written questions, what's marked (the stem and the rubric points) must come from the
+    notes; the model answer is longer prose that paraphrases, so it would fail the word check."""
+    return " ".join([stem, *(r["criterion"] for r in rubric)])
+
+
 def _clean(s: object, limit: int) -> str:
     return re.sub(r"\s+", " ", str(s or "")).strip()[:limit]
 
@@ -278,7 +284,7 @@ def validate(
             return None
         rubric = [{"criterion": k, "marks": 1} for k in points]
         marks = len(points)
-        checked = f"{stem} {answer}"
+        checked = _marked_content(stem, rubric)
     elif kind == "theory":
         answer = _clean(item.get("answer"), 2500)
         try:
@@ -296,7 +302,7 @@ def validate(
             return None
         if sum(r["marks"] for r in rubric) != marks:
             return None
-        checked = f"{stem} {answer}"
+        checked = _marked_content(stem, rubric)
     else:  # fill_blank
         if stem.count("____") != 1:
             return None

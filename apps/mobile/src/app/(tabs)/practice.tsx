@@ -5,7 +5,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Banner } from '@/components/ui/banner';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { ListCard } from '@/components/ui/list-card';
-import { Pill } from '@/components/ui/pill';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
@@ -30,6 +29,16 @@ function open(a: AttemptSummary) {
   }
 }
 
+/** Looks like a Pill; the whole card is the button, so this mustn't be one too. */
+function ResumeTag() {
+  const theme = useTheme();
+  return (
+    <View style={[styles.tag, { backgroundColor: theme.backgroundSelected }]}>
+      <Text variant="label">Resume</Text>
+    </View>
+  );
+}
+
 function AttemptCard({ a }: { a: AttemptSummary }) {
   const mode = a.mode === 'exam' ? 'Exam' : 'Practice';
   if (a.status === 'in_progress') {
@@ -39,7 +48,7 @@ function AttemptCard({ a }: { a: AttemptSummary }) {
         meta={`${mode} · question ${Math.min(a.current_index + 1, a.question_count)} of ${a.question_count} · ${day(a.started_at)}`}
         onPress={() => open(a)}
         accessibilityHint="Carries on where you stopped"
-        trailing={<Pill label="Resume" onPress={() => open(a)} />}
+        trailing={<ResumeTag />}
       />
     );
   }
@@ -138,4 +147,5 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   flex: { flex: 1 },
+  tag: { borderRadius: Radius.full, paddingHorizontal: Spacing.gutter, paddingVertical: Spacing.twoHalf },
 });

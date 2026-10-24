@@ -265,3 +265,18 @@ def test_a_timed_exam_refuses_answers_after_the_limit(client, fake, monkeypatch)
     monkeypatch.setattr(quizzes, "save_answers", save_answers)
     r = client.post(f"/v1/attempts/{ATTEMPT}/submit", headers=auth(), json=BODY)
     assert r.status_code == 200 and saved == []  # submitted, but the late answer isn't counted
+
+
+def test_written_questions_are_grounded_on_what_is_marked_not_the_model_answer():
+    wordy = theory(
+        answer="In everyday software, a stack resembles a pile of plates in a cafeteria: whatever "
+        "arrived last leaves first, whereas inspection lets you glance without disturbing anything."
+    )
+    assert q.validate(wordy, TOPICS, ["theory"], "mixed") is not None
+    invented = theory(
+        rubric=[
+            {"criterion": "Binary heaps keep priority order", "marks": 3},
+            {"criterion": "Dijkstra relaxes graph edges", "marks": 3},
+        ]
+    )
+    assert q.validate(invented, TOPICS, ["theory"], "mixed") is None

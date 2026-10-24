@@ -5,7 +5,7 @@ import re
 
 from app.core.config import SERVICE_ROOT
 
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 PROMPT_PATH = SERVICE_ROOT / "prompts" / "marking" / f"v{PROMPT_VERSION}.md"
 MAX_ANSWER_CHARS = 4000  # a long essay is still marked; anything beyond this is cut
 
