@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { ArrowRight, ChevronLeft, Flag, RotateCw, ThumbsDown, ThumbsUp } from '@/components/icons';
+import { ChevronLeft, Flag, RotateCw, SquareCheck, ThumbsDown, ThumbsUp } from '@/components/icons';
 import { Markdown } from '@/components/markdown';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
@@ -10,10 +10,12 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Screen } from '@/components/ui/screen';
 import { SegmentedPill } from '@/components/ui/segmented-pill';
 import { Text } from '@/components/ui/text';
+import { TextButton } from '@/components/ui/text-button';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { useMe } from '@/lib/profile';
+import { createQuiz } from '@/lib/quiz';
 import { type Style, useExplanation, useOutline, useRateExplanation } from '@/lib/study';
 
 const STYLES: { value: Style; label: string }[] = [
@@ -46,6 +48,8 @@ export default function ExplanationScreen() {
   const explanation = useExplanation(id, topicId, style);
   const rate = useRateExplanation();
   const [rated, setRated] = useState<Record<string, 1 | -1>>({});
+  const [quizBusy, setQuizBusy] = useState(false);
+  const [quizError, setQuizError] = useState<string | null>(null);
 
   const topics = outline.data?.topics ?? [];
   const index = topics.findIndex((t) => t.id === topicId);
@@ -61,16 +65,36 @@ export default function ExplanationScreen() {
     rate.mutate({ target_id: ex.id, rating });
   };
 
-  // "Quiz me on this" arrives with quizzes (M3); until then the main action moves on (DESIGN.md §7, 07).
-  const footer = next ? (
-    <ActionPill
-      label="Next topic"
-      icon={ArrowRight}
-      onPress={() => router.replace({ pathname: '/document/[id]/topic/[topicId]', params: { id, topicId: next.id } })}
-      accessibilityHint={next.title}
-    />
-  ) : (
-    <ActionPill label="Back to topics" icon={ChevronLeft} variant="light" onPress={() => router.back()} />
+  // DESIGN.md §7, 07: the main action is a 5-question quiz on this topic.
+  const quizMe = async () => {
+    setQuizBusy(true);
+    setQuizError(null);
+    try {
+      const quiz = await createQuiz(id, {
+        topic_ids: [topicId],
+        types: ['mcq', 'true_false', 'fill_blank'],
+        difficulty: 'mixed',
+        count: 5,
+        mode: 'practice',
+      });
+      router.push({ pathname: '/quiz/[id]/play', params: { id: quiz.id, mode: 'practice' } });
+    } catch (e) {
+      setQuizError(friendlyError(e));
+    } finally {
+      setQuizBusy(false);
+    }
+  };
+
+  const footer = (
+    <>
+      <ActionPill label="Quiz me on this" icon={SquareCheck} onPress={quizMe} loading={quizBusy} />
+      {next ? (
+        <TextButton
+          label="Next topic"
+          onPress={() => router.replace({ pathname: '/document/[id]/topic/[topicId]', params: { id, topicId: next.id } })}
+        />
+      ) : null}
+    </>
   );
 
   return (
@@ -128,6 +152,7 @@ export default function ExplanationScreen() {
       ) : (
         <Writing />
       )}
+      {quizError ? <Banner message={quizError} /> : null}
     </Screen>
   );
 }
