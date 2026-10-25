@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { signOut, useAuth } from '@/lib/auth';
 
 export type Level = '100L' | '200L' | '300L' | '400L' | '500L' | '600L' | '700L' | 'other';
 
@@ -48,6 +48,14 @@ export function useUpdateMe() {
   return useMutation({
     mutationFn: (body: ProfileUpdate) => apiFetch<Me>('/v1/me', { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: (me) => client.setQueryData(['me', userId], me),
+  });
+}
+
+/** Deletes the account and everything only this student owns, then signs out (FR-AUTH-05). */
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: () => apiFetch<void>('/v1/me', { method: 'DELETE' }),
+    onSuccess: () => signOut(),
   });
 }
 

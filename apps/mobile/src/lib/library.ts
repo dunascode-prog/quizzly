@@ -31,7 +31,16 @@ export type Doc = {
   created_at: string;
 };
 
-type Usage = { uploads: { used: number; limit: number; remaining: number } };
+export type Allowance = { used: number; limit: number; remaining: number };
+
+/** Today's allowances (FR-LIM-01); they reset at midnight, Lagos time. */
+export type Usage = {
+  uploads: Allowance;
+  explanations: Allowance;
+  question_sets: Allowance;
+  markings: Allowance;
+  chat_messages: Allowance;
+};
 
 /** Which documents a list shows: a course's, or the ones without a course. */
 export type DocScope = { courseId: string } | 'unfiled';

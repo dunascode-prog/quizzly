@@ -63,6 +63,8 @@ function RootNavigator() {
           <Stack.Screen name="document/[id]/topic/[topicId]" />
           <Stack.Screen name="document/[id]/page/[n]" />
           <Stack.Screen name="document/[id]/chat" />
+          <Stack.Screen name="profile/edit" />
+          <Stack.Screen name="account/delete" />
           <Stack.Screen name="report" options={SHEET} />
           <Stack.Screen name="quiz/new" options={{ presentation: 'modal' }} />
           <Stack.Screen name="quiz/[id]/play" options={{ gestureEnabled: false }} />
@@ -74,6 +76,8 @@ function RootNavigator() {
           <Stack.Screen name="document/[id]/edit" options={SHEET} />
         </Stack.Protected>
         <Stack.Screen name="auth-callback" />
+        {/* Readable before signing in too (sign-in footer, FR-AUTH-03). */}
+        <Stack.Screen name="legal" />
       </Stack>
       {signedIn && me.isError && !me.data ? <ProfileLoadError error={me.error} onRetry={() => me.refetch()} /> : null}
     </>
