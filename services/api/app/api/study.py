@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import AppSettings, Conn, User
-from app.domain import study, usage
+from app.domain import chat, study, usage
 from app.rag.explain import PROMPT_VERSION
 from app.worker import queue
 
@@ -58,13 +58,13 @@ class ExplanationRequest(BaseModel):
 
 
 class FeedbackIn(BaseModel):
-    target_type: Literal["explanation"]
+    target_type: Literal["explanation", "chat_message"]
     target_id: UUID
     rating: Literal[-1, 1]
 
 
 class ReportIn(BaseModel):
-    target_type: Literal["explanation", "question"]
+    target_type: Literal["explanation", "question", "chat_message"]
     target_id: UUID
     reason: Literal["wrong", "unclear", "inappropriate", "other"]
     note: str | None = Field(default=None, max_length=500)
@@ -174,7 +174,10 @@ async def request_explanation(
 
 
 async def _check_target(conn, user_id: UUID, target_id: UUID, kind: str = "explanation") -> None:
-    can_see = study.can_see_question if kind == "question" else study.can_see_explanation
+    can_see = {
+        "question": study.can_see_question,
+        "chat_message": chat.can_see_message,
+    }.get(kind, study.can_see_explanation)
     if not await can_see(conn, user_id, target_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 
@@ -182,7 +185,7 @@ async def _check_target(conn, user_id: UUID, target_id: UUID, kind: str = "expla
 @router.post("/v1/feedback", status_code=status.HTTP_204_NO_CONTENT)
 async def feedback(body: FeedbackIn, user: User, conn: Conn) -> Response:
     """Thumbs up/down (FR-MOD-03)."""
-    await _check_target(conn, user.id, body.target_id)
+    await _check_target(conn, user.id, body.target_id, body.target_type)
     await study.rate(conn, user.id, body.target_type, body.target_id, body.rating)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

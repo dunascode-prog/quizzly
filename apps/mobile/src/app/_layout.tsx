@@ -62,6 +62,7 @@ function RootNavigator() {
           <Stack.Screen name="document/[id]/index" />
           <Stack.Screen name="document/[id]/topic/[topicId]" />
           <Stack.Screen name="document/[id]/page/[n]" />
+          <Stack.Screen name="document/[id]/chat" />
           <Stack.Screen name="report" options={SHEET} />
           <Stack.Screen name="quiz/new" options={{ presentation: 'modal' }} />
           <Stack.Screen name="quiz/[id]/play" options={{ gestureEnabled: false }} />

@@ -15,6 +15,8 @@ import { useReport } from '@/lib/study';
 
 type Reason = 'wrong' | 'unclear' | 'inappropriate';
 
+const TARGET_NAMES = { explanation: 'explanation', question: 'question', chat_message: 'answer' };
+
 const REASONS: { value: Reason; label: string }[] = [
   { value: 'wrong', label: 'Wrong' },
   { value: 'unclear', label: 'Unclear' },
@@ -25,7 +27,7 @@ const REASONS: { value: Reason; label: string }[] = [
 export default function ReportSheet() {
   const { targetId, targetType = 'explanation' } = useLocalSearchParams<{
     targetId: string;
-    targetType?: 'explanation' | 'question';
+    targetType?: 'explanation' | 'question' | 'chat_message';
   }>();
   const report = useReport();
   const [reason, setReason] = useState<Reason | null>(null);
@@ -47,7 +49,7 @@ export default function ReportSheet() {
   return (
     <Sheet title="Report" onClose={() => router.back()}>
       <Text variant="body" color="textSecondary">
-        Tell us what&apos;s wrong with this {targetType === 'question' ? 'question' : 'explanation'}. We read every report.
+        Tell us what&apos;s wrong with this {TARGET_NAMES[targetType]}. We read every report.
       </Text>
       <View style={styles.pills} accessibilityRole="radiogroup" accessibilityLabel="Reason">
         {REASONS.map((r) => (

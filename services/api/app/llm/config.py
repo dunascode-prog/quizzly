@@ -37,6 +37,8 @@ class Route(BaseModel):
     provider: str
     model: str
     rpm: int
+    # Provider-specific request fields, e.g. turning off a reasoning model's thinking for chat.
+    params: dict = {}
 
 
 class ModelsConfig(BaseModel):

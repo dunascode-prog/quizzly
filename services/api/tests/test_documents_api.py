@@ -187,6 +187,7 @@ def test_daily_upload_limit(client, fake):
         "explanations": {"used": 0, "limit": 30, "remaining": 30},
         "question_sets": {"used": 0, "limit": 15, "remaining": 15},
         "markings": {"used": 0, "limit": 20, "remaining": 20},
+        "chat_messages": {"used": 0, "limit": 40, "remaining": 40},
     }
 
 
