@@ -5,6 +5,8 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
+from app.domain import documents
+
 _PROFILE_SQL = """
 select p.full_name, p.institution_id, p.institution_other, p.department, p.level,
        p.explanation_style::text as explanation_style, p.terms_accepted_at,
@@ -74,3 +76,17 @@ async def search_institutions(conn: AsyncConnection, query: str, limit: int) -> 
         {"q": q, "prefix": f"{like}%", "contains": f"%{like}%", "limit": limit},
     )
     return await cur.fetchall()
+
+
+async def delete_account_data(conn: AsyncConnection, user_id: UUID) -> list[str]:
+    """Deletes every document of the student and the processed files no one else uses
+    (FR-AUTH-05). Returns the Storage paths to remove. The rest of their rows go with the
+    auth user (cascade)."""
+    async with conn.transaction():
+        rows = await (
+            await conn.execute(
+                "delete from documents where user_id = %s returning upload_path, source_file_id",
+                (user_id,),
+            )
+        ).fetchall()
+        return await documents.release(conn, rows)

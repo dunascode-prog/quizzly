@@ -1,12 +1,18 @@
+import logging
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+import httpx
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
-from app.api.deps import AppSettings, Conn, User
+from app.api.deps import AppSettings, Conn, StorageDep, User
+from app.core import auth_admin
 from app.core.auth import CurrentUser
 from app.domain import accounts
+from app.worker import queue
+
+log = logging.getLogger("quizzly.api")
 
 router = APIRouter()
 
@@ -105,6 +111,27 @@ async def update_me(
         fields["institution_id"] = None
     terms_version = settings.terms_version if body.accept_terms else None
     return _me(user, await accounts.update_profile(conn, user.id, fields, terms_version))
+
+
+@router.delete("/v1/me", status_code=status.HTTP_204_NO_CONTENT, tags=["account"])
+async def delete_me(user: User, conn: Conn, storage: StorageDep, settings: AppSettings) -> Response:
+    """Deletes the account and everything only this student owns (FR-AUTH-05, NDPA). Files
+    Storage can't remove right now are retried by the worker, well within the 24 h allowed."""
+    paths = await accounts.delete_account_data(conn, user.id)
+    try:
+        await storage.remove(paths)
+    except httpx.HTTPError:
+        log.warning("storage clean-up deferred for a deleted account (%d paths)", len(paths))
+        await queue.enqueue(conn, "delete_account", {"storage_paths": paths})
+    try:
+        await auth_admin.delete_user(settings, user.id)
+    except httpx.HTTPError as exc:
+        log.error("auth user deletion failed: %r", exc)
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "We couldn't finish deleting your account. Try again in a few minutes.",
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/v1/institutions", tags=["account"])
