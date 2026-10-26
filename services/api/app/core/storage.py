@@ -55,3 +55,22 @@ class Storage:
             json={"prefixes": paths},
         )
         r.raise_for_status()
+
+    async def signed_url(self, path: str, expires_in: int = 300) -> str:
+        """A short-lived URL to read one file. Raises httpx.HTTPStatusError if it doesn't exist."""
+        r = await self.client.post(
+            f"{self.base}/object/sign/{self.bucket}/{path}",
+            headers=self.headers,
+            json={"expiresIn": expires_in},
+        )
+        r.raise_for_status()
+        return f"{self.base}{r.json()['signedURL']}"
+
+    async def upload(self, path: str, data: bytes, content_type: str) -> None:
+        """Writes a file the server made (e.g. a rendered page), replacing any earlier copy."""
+        r = await self.client.post(
+            f"{self.base}/object/{self.bucket}/{path}",
+            headers=self.headers | {"content-type": content_type, "x-upsert": "true"},
+            content=data,
+        )
+        r.raise_for_status()

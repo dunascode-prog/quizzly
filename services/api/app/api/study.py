@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import AppSettings, Conn, User
-from app.domain import chat, study, usage
+from app.api.deps import AppSettings, Conn, StorageDep, User
+from app.domain import chat, page_images, study, usage
 from app.rag.explain import PROMPT_VERSION
 from app.worker import queue
 
@@ -42,6 +42,11 @@ class PageOut(BaseModel):
     page_number: int
     page_count: int | None
     text: str
+
+
+class PageImageOut(BaseModel):
+    # A 5-minute signed URL, or null when the file has no page images (slides): show the text.
+    url: str | None
 
 
 class ExplanationOut(BaseModel):
@@ -114,6 +119,20 @@ async def source_page(document_id: UUID, number: int, user: User, conn: Conn) ->
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Page not found")
     return PageOut(page_number=number, page_count=doc["page_count"], text=row["text"])
+
+
+@router.get("/v1/documents/{document_id}/pages/{number}/image")
+async def source_page_image(
+    document_id: UUID, number: int, user: User, conn: Conn, storage: StorageDep
+) -> PageImageOut:
+    """The page as the student uploaded it, for the source viewer (FR-DOC-10)."""
+    doc = await _document(conn, user.id, document_id)
+    if not 1 <= number <= (doc["page_count"] or 0):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Page not found")
+    source = await study.source_file(conn, doc["source_file_id"])
+    if source is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Page not found")
+    return PageImageOut(url=await page_images.image_url(storage, source, number))
 
 
 @router.get("/v1/documents/{document_id}/topics/{topic_id}/explanation")

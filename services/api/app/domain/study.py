@@ -33,6 +33,15 @@ async def topics(conn: AsyncConnection, source_file_id: UUID) -> list[dict[str, 
     ).fetchall()
 
 
+async def source_file(conn: AsyncConnection, source_file_id: UUID) -> dict | None:
+    return await (
+        await conn.execute(
+            "select sha256, mime_type, storage_path from source_files where id = %s",
+            (source_file_id,),
+        )
+    ).fetchone()
+
+
 async def page(conn: AsyncConnection, source_file_id: UUID, number: int) -> dict | None:
     return await (
         await conn.execute(
