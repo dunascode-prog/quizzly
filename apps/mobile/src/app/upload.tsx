@@ -152,7 +152,7 @@ export default function UploadSheet() {
 
       {mode !== 'file' ? (
         <View style={styles.group}>
-          <TextField label="Title" value={title} onChangeText={setTitle} maxLength={120} />
+          <TextField label="Title" value={title} onChangeText={setTitle} maxLength={80} />
           <View style={styles.pagesHeader}>
             <Text variant="label" style={styles.flex}>
               {photos.length ? plural(photos.length, 'page') : 'No pages yet'}
