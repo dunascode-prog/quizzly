@@ -123,3 +123,22 @@ async def report(
         "do update set reason = excluded.reason, note = excluded.note, status = 'open'",
         (user_id, target_type, target_id, reason, note),
     )
+    if target_type == "question":
+        await hide_if_reported(conn, target_id)
+
+
+REPORTS_TO_HIDE = 3  # FR-MOD-02
+
+
+async def hide_if_reported(conn: AsyncConnection, question_id: UUID) -> bool:
+    """A question reported by 3 different students is hidden from quizzes until an admin reviews
+    it (FR-MOD-02). A student counts once however often they report (one row per student)."""
+    row = await (
+        await conn.execute(
+            "update questions set hidden = true where id = %s and not hidden and ("
+            "select count(distinct user_id) from reports where target_type = 'question' "
+            "and target_id = %s and status = 'open') >= %s returning id",
+            (question_id, question_id, REPORTS_TO_HIDE),
+        )
+    ).fetchone()
+    return row is not None
