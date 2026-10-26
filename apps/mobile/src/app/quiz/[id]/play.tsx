@@ -318,7 +318,7 @@ export default function PlayScreen() {
         </Text>
         {feedback && marked?.score !== null && marked?.score !== undefined && feedback.status === 'marked' ? (
           <View style={styles.score} accessible accessibilityLabel={`${marksText(marked.score)} out of ${question.marks} marks`}>
-            <Text variant="hero" color="onInk" style={styles.scoreBig}>
+            <Text variant="number" color="onInk" style={styles.scoreBig}>
               {marksText(marked.score)}
             </Text>
             <Text variant="heading" color="mutedOnInk">
@@ -409,9 +409,9 @@ const styles = StyleSheet.create({
   options: { gap: Spacing.twoHalf },
   essay: { minHeight: 160, textAlignVertical: 'top' },
   score: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
-  scoreBig: { fontSize: 72, lineHeight: 80 },
+  scoreBig: { fontSize: 72, lineHeight: 76 },
   feedback: { gap: Spacing.two },
-  verdict: { fontFamily: FontFamily.semibold },
+  verdict: { fontFamily: FontFamily.bold },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
   writing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three, paddingVertical: Spacing.six },
   center: { textAlign: 'center' },
