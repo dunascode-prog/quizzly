@@ -124,8 +124,8 @@ async def _always_crashes():
                 claims += 1
                 # The worker died mid-job: its lease runs out without succeed/fail.
                 await conn.execute(
-                    "update jobs set locked_at = now() - interval '11 minutes' where id = %s",
-                    (job["id"],),
+                    "update jobs set locked_at = now() - %s - interval '1 minute' where id = %s",
+                    (queue.LEASE, job["id"]),
                 )
                 assert claims <= 3, "reclaimed past max_attempts"
             assert claims == 3
