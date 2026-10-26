@@ -29,6 +29,25 @@ class Storage:
         r.raise_for_status()
         return r.content
 
+    async def info(self, path: str) -> dict | None:
+        """Size and timestamps of a stored object, or None if it doesn't exist."""
+        r = await self.client.get(
+            f"{self.base}/object/info/{self.bucket}/{path}", headers=self.headers
+        )
+        if r.status_code in (400, 404) and "not_found" in r.text.lower():
+            return None
+        r.raise_for_status()
+        return r.json()
+
+    async def head(self, path: str, n: int = 16) -> bytes:
+        """The first n bytes of an object (for checking its real type)."""
+        r = await self.client.get(
+            f"{self.base}/object/{self.bucket}/{path}",
+            headers={**self.headers, "Range": f"bytes=0-{n - 1}"},
+        )
+        r.raise_for_status()
+        return r.content[:n]
+
     async def list_folder(self, folder: str) -> list[str]:
         """Full paths of the files directly inside `folder` (ending in "/"), sorted by name."""
         r = await self.client.post(
