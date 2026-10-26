@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import socket
+import time
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
@@ -17,7 +18,7 @@ from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.llm.gateway import AllProvidersBusy
-from app.worker import accounts, explain, ingest, marking, questions, queue
+from app.worker import accounts, crashed, explain, ingest, marking, questions, queue
 
 log = logging.getLogger("quizzly.worker")
 
@@ -33,6 +34,7 @@ HANDLERS: dict[str, Handler] = {
 
 POLL_INTERVAL = 2.0
 HEARTBEAT_INTERVAL = 60.0
+SWEEP_INTERVAL = 60.0
 BUSY_REQUEUE_DELAY = timedelta(minutes=1)
 
 
@@ -63,6 +65,17 @@ async def run_one(conn: AsyncConnection, worker_id: str) -> bool:
     return True
 
 
+async def sweep(conn: AsyncConnection) -> int:
+    """Fails jobs that crashed a worker on their last attempt, and the work they were doing."""
+    jobs = await queue.sweep_crashed(conn)
+    for job in jobs:
+        log.error(
+            "job %s crashed on its last attempt", job["type"], extra={"job_id": str(job["id"])}
+        )
+        await crashed.handle(conn, job)
+    return len(jobs)
+
+
 async def heartbeat(worker_id: str) -> None:
     while True:
         async with db.get_pool().connection() as conn:
@@ -83,9 +96,13 @@ async def main() -> None:
     pool = await db.open_pool()
     beat = asyncio.create_task(heartbeat(worker_id))
     log.info("worker %s started", worker_id)
+    last_sweep = 0.0
     try:
         while True:
             async with pool.connection() as conn:
+                if time.monotonic() - last_sweep > SWEEP_INTERVAL:
+                    await sweep(conn)
+                    last_sweep = time.monotonic()
                 had_work = await run_one(conn, worker_id)
             if not had_work:
                 await asyncio.sleep(POLL_INTERVAL)
