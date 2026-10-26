@@ -150,11 +150,13 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
     source_file_id: UUID | None = None
     try:
         await conn.execute(
-            "update documents set status = 'processing' where id = %s", (document_id,)
+            "update documents set status = 'processing', "
+            "processing_started_at = coalesce(processing_started_at, now()) where id = %s",
+            (document_id,),
         )
         await queue.set_progress(conn, job["id"], 5)
 
-        files = await _download(doc)
+        files = await _download(doc, settings.max_upload_bytes)
         if files is None:
             await _fail(conn, document_id, "upload_missing")
             return
@@ -227,15 +229,19 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
         raise
 
 
-async def _download(doc: dict) -> list[bytes] | None:
-    """The uploaded file, or a photo set's photos in page order. None if the upload is missing."""
+async def _download(doc: dict, max_bytes: int) -> list[bytes] | None:
+    """The uploaded file, or a photo set's photos in page order. None if the upload is missing.
+    Sizes come from Storage's metadata first, so an oversized upload is never downloaded
+    (FR-SEC-04)."""
     path = doc["upload_path"]
+    folder = path if path.endswith("/") else path.rsplit("/", 1)[0] + "/"
     try:
-        if not path.endswith("/"):
-            return [await storage().download(path)]
-        names = await storage().list_folder(path)
+        sizes = await storage().list_sizes(folder)
+        names = sorted(sizes) if path.endswith("/") else [path] if path in sizes else []
         if not names or len(names) < (doc["image_count"] or 1):
             return None
+        if sum(sizes[n] for n in names) > max_bytes:
+            raise extract.ExtractionError("too_large", "upload over the size limit")
         return list(await asyncio.gather(*(storage().download(n) for n in names)))
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code in (400, 404):

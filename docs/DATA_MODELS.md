@@ -590,4 +590,4 @@ stateDiagram-v2
 | `authenticated` | any table | **no** `insert`, `update`, `delete` (revoked) |
 | `service_role` (API, worker) | all | everything; the API checks ownership on every write |
 
-Migration: `supabase/migrations/0005_client_read_only.sql` revokes writes and replaces every `for all` policy with a `for select` policy; `0006_engagement_sharing.sql` adds sharing, notifications, invites and progress tables and the Realtime publication.
+Migration: `supabase/migrations/0005_client_read_only.sql` revokes writes and replaces every `for all` policy with a `for select` policy; `0006_server_storage_paths.sql` adds the upload path rule (FR-SEC-02); `0007_engagement_sharing.sql` adds sharing, notifications, invites and progress tables and the Realtime publication.

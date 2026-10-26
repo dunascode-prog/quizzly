@@ -17,6 +17,20 @@ from app.llm.config import ModelsConfig, Route
 log = logging.getLogger("quizzly.llm")
 
 RETRYABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
+# In JSON mode Groq answers 400 with this code when the model's output wasn't valid JSON. It's
+# a sampling failure, not a bad request: try the model once more, then the next route.
+JSON_RETRIES = 1
+
+
+def _bad_json(exc: httpx.HTTPStatusError) -> bool:
+    if exc.response.status_code != 400:
+        return False
+    try:
+        body = exc.response.json()
+    except ValueError:
+        return False
+    error = body.get("error") if isinstance(body, dict) else None
+    return isinstance(error, dict) and error.get("code") == "json_validate_failed"
 
 
 class AllProvidersBusy(Exception):
@@ -63,9 +77,17 @@ class LLMGateway:
                 failures.append(f"{route.provider}: no API key")
                 continue
             try:
-                return await self._call(route, messages, json_mode, temperature, max_tokens)
+                for attempt in range(JSON_RETRIES + 1):
+                    try:
+                        return await self._call(route, messages, json_mode, temperature, max_tokens)
+                    except httpx.HTTPStatusError as exc:
+                        if not (json_mode and _bad_json(exc)) or attempt == JSON_RETRIES:
+                            raise
+                        log.info(
+                            "%s/%s returned invalid JSON, retrying", route.provider, route.model
+                        )
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code not in RETRYABLE_STATUS:
+                if exc.response.status_code not in RETRYABLE_STATUS and not _bad_json(exc):
                     raise
                 failures.append(f"{route.provider}/{route.model}: HTTP {exc.response.status_code}")
             except httpx.TransportError as exc:
