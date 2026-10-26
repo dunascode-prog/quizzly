@@ -21,7 +21,14 @@ profiles:
     - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30 }
     - { provider: openrouter, model: "google/gemma-4-26b-a4b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct-fp8", rpm: 50 }
-  quality:   # questions, explanations, outlines
+  questions: # low reasoning effort keeps big sets fast; Groq limits tokens per minute per model, so
+             # two more Groq models take over before the much slower free fallbacks
+    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, params: { reasoning_effort: low } }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none } }
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low } }
+    - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
+    - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
+  quality:   # explanations, outlines
     - { provider: groq, model: openai/gpt-oss-120b, rpm: 30 }
     - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
@@ -31,4 +38,4 @@ tasks:
   marking: fast
   outline: quality
   explanation: quality
-  questions: quality
+  questions: questions
