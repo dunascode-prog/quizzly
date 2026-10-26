@@ -33,6 +33,15 @@ async def topics(conn: AsyncConnection, source_file_id: UUID) -> list[dict[str, 
     ).fetchall()
 
 
+async def source_file(conn: AsyncConnection, source_file_id: UUID) -> dict | None:
+    return await (
+        await conn.execute(
+            "select sha256, mime_type, storage_path from source_files where id = %s",
+            (source_file_id,),
+        )
+    ).fetchone()
+
+
 async def page(conn: AsyncConnection, source_file_id: UUID, number: int) -> dict | None:
     return await (
         await conn.execute(
@@ -47,8 +56,11 @@ async def explanation(
 ) -> dict | None:
     return await (
         await conn.execute(
-            "select id, style::text as style, status::text as status, content_md, citations "
-            "from explanations where topic_id = %s and style = %s and prompt_version = %s",
+            "select e.id, e.style::text as style, e.status::text as status, e.content_md, "
+            "e.citations, coalesce((select j.status = 'queued' and j.error = 'busy' from jobs j "
+            "where j.dedupe_key = 'explain:' || e.id::text order by j.created_at desc limit 1), "
+            "false) as busy "
+            "from explanations e where e.topic_id = %s and e.style = %s and e.prompt_version = %s",
             (topic_id, style, prompt_version),
         )
     ).fetchone()
@@ -123,3 +135,22 @@ async def report(
         "do update set reason = excluded.reason, note = excluded.note, status = 'open'",
         (user_id, target_type, target_id, reason, note),
     )
+    if target_type == "question":
+        await hide_if_reported(conn, target_id)
+
+
+REPORTS_TO_HIDE = 3  # FR-MOD-02
+
+
+async def hide_if_reported(conn: AsyncConnection, question_id: UUID) -> bool:
+    """A question reported by 3 different students is hidden from quizzes until an admin reviews
+    it (FR-MOD-02). A student counts once however often they report (one row per student)."""
+    row = await (
+        await conn.execute(
+            "update questions set hidden = true where id = %s and not hidden and ("
+            "select count(distinct user_id) from reports where target_type = 'question' "
+            "and target_id = %s and status = 'open') >= %s returning id",
+            (question_id, question_id, REPORTS_TO_HIDE),
+        )
+    ).fetchone()
+    return row is not None
