@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.api.deps import AppSettings, Conn, User
 from app.core import db
 from app.domain import chat, study, usage
+from app.llm import usage as llm_usage
 from app.llm.gateway import AllProvidersBusy
 from app.rag import chat as rag
 from app.rag import retrieve
@@ -46,7 +47,7 @@ class ChatOut(BaseModel):
 
 
 class AskIn(BaseModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: str = Field(min_length=1, max_length=2000)  # FR-SEC-10
 
 
 async def _document(conn, user_id: UUID, document_id: UUID) -> dict:
@@ -107,7 +108,10 @@ async def ask(
             await usage.give_back(conn, user.id, "chat_message", 1, settings.timezone)
 
     async def events() -> AsyncIterator[str]:
+        llm_usage.for_user(user.id)  # llm_calls rows for chat carry the student, no job
         think = rag.ThinkFilter()
+        # What the student sees: half-written or invalid markers are held back (FR-SEC-14).
+        clean = rag.CitationStream(rag.allowed_pages(chunks))
         raw, model, first_ms = "", "", None
         try:
             async for delta in ingest.gateway().stream(
@@ -116,10 +120,15 @@ async def ask(
                 model = f"{delta.provider}/{delta.model}"
                 text = think.feed(delta.text)
                 if text:
-                    if first_ms is None:
-                        first_ms = int((time.perf_counter() - started) * 1000)
                     raw += text
-                    yield _event("token", {"text": text})
+                    shown = clean.feed(text)
+                    if shown:
+                        if first_ms is None:
+                            first_ms = int((time.perf_counter() - started) * 1000)
+                        yield _event("token", {"text": shown})
+            rest = clean.flush()
+            if rest:
+                yield _event("token", {"text": rest})
         except AllProvidersBusy:
             await give_back()
             yield _event("error", {"detail": BUSY})

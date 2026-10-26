@@ -15,7 +15,24 @@ import { MaxContentWidth, Radius, Size, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { plural } from '@/lib/format';
-import { createQuiz, useAttempt, useQuiz } from '@/lib/quiz';
+import { type Attempt, createQuiz, type Quiz, type QuestionType, TYPE_LABELS, useAttempt, useQuiz } from '@/lib/quiz';
+
+type Part = { key: string; label: string; score: number; max: number };
+
+const percent = (p: Part) => (p.max ? Math.round((p.score / p.max) * 100) : 0);
+
+/** Marks per question type: each answer's score against the question's marks (FR-QUIZ-06). */
+function byType(quiz: Quiz | undefined, attempt: Attempt): Part[] {
+  const scores = new Map(attempt.answers.map((x) => [x.question_id, x.score ?? 0]));
+  const parts = new Map<QuestionType, Part>();
+  for (const q of quiz?.questions ?? []) {
+    const part = parts.get(q.type) ?? { key: q.type, label: TYPE_LABELS[q.type], score: 0, max: 0 };
+    part.score += scores.get(q.id) ?? 0;
+    part.max += q.marks;
+    parts.set(q.type, part);
+  }
+  return [...parts.values()];
+}
 
 function minutes(start: string, end: string | null) {
   if (!end) return null;
@@ -23,7 +40,36 @@ function minutes(start: string, end: string | null) {
   return plural(m, 'min');
 }
 
-// Screen 12 (DESIGN.md §7): score, time, and the weakest topics to revise (FR-QUIZ-06/07).
+function Group({ title, parts }: { title: string; parts: Part[] }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.group}>
+      <Text variant="small" color="textSecondary">
+        {title}
+      </Text>
+      {parts.map((p) => {
+        const pc = percent(p);
+        return (
+          <View
+            key={p.key}
+            style={[styles.row, { backgroundColor: theme.backgroundSelected }]}
+            accessible
+            accessibilityLabel={`${p.label}: ${pc} percent`}>
+            <Text variant="label" style={styles.flex}>
+              {p.label}
+            </Text>
+            <Text variant="label" color={pc >= 80 ? 'success' : pc >= 50 ? 'warning' : 'danger'}>
+              {pc}%
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// Screen 12 (DESIGN.md §7): score, time, the weakest topics to revise, and the breakdown by topic
+// and question type (FR-QUIZ-06/07).
 export default function ResultsScreen() {
   const theme = useTheme();
   const scheme = useColorScheme();
@@ -37,6 +83,11 @@ export default function ResultsScreen() {
   const marking = a?.status === 'marking'; // useAttempt polls until the written answers are marked
   const pct = a && a.max_score ? Math.round(((a.score ?? 0) / a.max_score) * 100) : 0;
   const weakest = a?.weakest ?? [];
+  // FR-QUIZ-06: every topic (weakest first) and every question type.
+  const topics: Part[] = (a?.topics ?? [])
+    .map((t) => ({ key: t.topic_id, label: t.title ?? 'Topic', score: t.score, max: t.max }))
+    .sort((x, y) => percent(x) - percent(y));
+  const types = a ? byType(quiz.data, a) : [];
 
   const practise = async () => {
     if (!quiz.data || !weakest.length) return;
@@ -124,6 +175,15 @@ export default function ResultsScreen() {
               </View>
             );
           })}
+          {a && !marking && (topics.length > 1 || types.length > 1) ? (
+            <View style={styles.breakdown}>
+              <Text variant="heading" accessibilityRole="header">
+                Breakdown
+              </Text>
+              {topics.length > 1 ? <Group title="By topic" parts={topics} /> : null}
+              {types.length > 1 ? <Group title="By question type" parts={types} /> : null}
+            </View>
+          ) : null}
           {error ? <Banner message={error} /> : null}
           <View style={styles.actions}>
             {weakest.length && !marking ? <ActionPill label="Practise these" icon={RotateCw} onPress={practise} loading={busy} /> : null}
@@ -155,4 +215,6 @@ const styles = StyleSheet.create({
   },
   flex: { flex: 1 },
   actions: { gap: Spacing.two, marginTop: Spacing.three },
+  breakdown: { gap: Spacing.three, marginTop: Spacing.three },
+  group: { gap: Spacing.two },
 });
