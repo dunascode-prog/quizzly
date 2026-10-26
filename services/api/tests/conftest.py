@@ -13,6 +13,7 @@ JWT_SECRET = "test-secret-that-is-long-enough-for-hs256"
 def settings() -> Settings:
     return Settings(
         _env_file=None,
+        env="test",
         supabase_url=SUPABASE_URL,
         supabase_jwt_secret=JWT_SECRET,
         database_url="",

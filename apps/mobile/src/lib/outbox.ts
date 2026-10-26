@@ -92,6 +92,7 @@ async function send(item: OutboxItem) {
       body: JSON.stringify({ answers: item.answers }),
     });
     queryClient.setQueryData(['attempt', attempt.id], attempt);
+    void queryClient.invalidateQueries({ queryKey: ['quiz', attempt.quiz_id] }); // exam answers now
   }
 }
 
