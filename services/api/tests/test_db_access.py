@@ -89,3 +89,10 @@ def test_signed_in_users_can_still_read_their_rows_and_anon_only_schools(conn):
     assert conn.execute("select count(*) from institutions").fetchone()[0] > 0
     with pytest.raises(errors.InsufficientPrivilege):
         conn.execute("select count(*) from documents")
+
+
+@pytest.mark.parametrize("role", ["authenticated", "anon"])
+def test_students_cannot_read_the_admin_cost_view(conn, role):
+    as_role(conn, role, uuid.uuid4())
+    with pytest.raises(errors.InsufficientPrivilege):
+        conn.execute("select * from llm_daily_costs")

@@ -1,14 +1,17 @@
 """One entry point for every LLM call, with ordered fallback across providers (ARCHITECTURE §5.3).
 
 All providers speak the OpenAI chat-completions format, so a single HTTP client covers them.
-Usage logging to `llm_calls` and token-bucket limits are added once the database layer lands.
+An optional observer (app/llm/usage.py) records every attempt in `llm_calls` (FR-LIM-02) and can
+stop new calls when the daily budget is spent (FR-SEC-08); the gateway itself has no database.
 """
 
 import json
 import logging
 import time
 from collections.abc import AsyncIterator
+from contextvars import ContextVar
 from dataclasses import dataclass
+from typing import Protocol
 
 import httpx
 
@@ -21,6 +24,34 @@ RETRYABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
 
 class AllProvidersBusy(Exception):
     """Every route failed with a retryable error; the caller should re-queue the job."""
+
+
+class BudgetReached(AllProvidersBusy):
+    """Today's AI budget is spent (FR-SEC-08). Treated like a provider outage: work waits."""
+
+
+@dataclass(frozen=True)
+class CallRecord:
+    """One attempt at one route, for `llm_calls`."""
+
+    task: str
+    provider: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    latency_ms: int
+    cost_usd: float
+    status: str  # ok, rate_limited, error
+
+
+class Observer(Protocol):
+    async def allow(self) -> bool: ...
+
+    def record(self, call: CallRecord) -> None: ...
+
+
+# The task of the call in progress, so the low-level call functions can record it.
+_TASK: ContextVar[str] = ContextVar("llm_task", default="")
 
 
 @dataclass(frozen=True)
@@ -43,9 +74,37 @@ class Delta:
 
 
 class LLMGateway:
-    def __init__(self, config: ModelsConfig, client: httpx.AsyncClient | None = None):
+    def __init__(
+        self,
+        config: ModelsConfig,
+        client: httpx.AsyncClient | None = None,
+        observer: Observer | None = None,
+    ):
         self.config = config
         self.client = client or httpx.AsyncClient(timeout=60)
+        self.observer = observer
+
+    async def _start(self, task: str) -> None:
+        _TASK.set(task)
+        if self.observer and not await self.observer.allow():
+            raise BudgetReached("today's AI budget is spent")
+
+    def _record(self, route: Route, status: str, started: float, p_tok=0, c_tok=0) -> None:
+        if not self.observer:
+            return
+        cost = (p_tok * route.price_in + c_tok * route.price_out) / 1_000_000
+        self.observer.record(
+            CallRecord(
+                task=_TASK.get(),
+                provider=route.provider,
+                model=route.model,
+                prompt_tokens=p_tok,
+                completion_tokens=c_tok,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                cost_usd=round(cost, 6),
+                status=status,
+            )
+        )
 
     async def complete(
         self,
@@ -56,6 +115,7 @@ class LLMGateway:
         temperature: float = 0.3,
         max_tokens: int = 2048,
     ) -> Completion:
+        await self._start(task)
         failures: list[str] = []
         for route in self.config.routes_for(task):
             provider = self.config.providers[route.provider]
@@ -83,6 +143,7 @@ class LLMGateway:
     ) -> AsyncIterator[Delta]:
         """Streams a reply token by token (FR-CHAT-04). Falls through to the next route only
         before the first token; after that a failure is raised to the caller."""
+        await self._start(task)
         failures: list[str] = []
         for route in self.config.routes_for(task):
             provider = self.config.providers[route.provider]
@@ -116,30 +177,55 @@ class LLMGateway:
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": True,
+            "stream_options": {"include_usage": True},  # a final chunk reports token usage
             **route.params,
         }
-        async with self.client.stream(
-            "POST",
-            f"{provider.base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {provider.api_key}"},
-            json=body,
-        ) as response:
-            if response.is_error:
-                await response.aread()
-                response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    break
-                try:
-                    choices = json.loads(data).get("choices") or []
-                except json.JSONDecodeError:
-                    continue
-                text = (choices[0].get("delta") or {}).get("content") if choices else None
-                if text:
-                    yield text
+        started = time.perf_counter()
+        usage: dict = {}
+        written = 0
+        try:
+            async with self.client.stream(
+                "POST",
+                f"{provider.base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {provider.api_key}"},
+                json=body,
+            ) as response:
+                if response.is_error:
+                    await response.aread()
+                    response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    groq = chunk.get("x_groq") or {}
+                    usage = chunk.get("usage") or groq.get("usage") or usage
+                    choices = chunk.get("choices") or []
+                    text = (choices[0].get("delta") or {}).get("content") if choices else None
+                    if text:
+                        written += len(text)
+                        yield text
+        except httpx.HTTPStatusError as exc:
+            retryable = exc.response.status_code in RETRYABLE_STATUS
+            self._record(route, "rate_limited" if retryable else "error", started)
+            raise
+        except httpx.TransportError:
+            self._record(route, "rate_limited", started)
+            raise
+        # Without a usage chunk, estimate at ~4 characters a token.
+        prompt_chars = sum(len(str(m.get("content", ""))) for m in messages)
+        self._record(
+            route,
+            "ok",
+            started,
+            usage.get("prompt_tokens") or prompt_chars // 4,
+            usage.get("completion_tokens") or written // 4,
+        )
 
     async def _call(
         self,
@@ -161,14 +247,25 @@ class LLMGateway:
             body["response_format"] = {"type": "json_object"}
 
         started = time.perf_counter()
-        response = await self.client.post(
-            f"{provider.base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {provider.api_key}"},
-            json=body,
-        )
-        response.raise_for_status()
+        try:
+            response = await self.client.post(
+                f"{provider.base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {provider.api_key}"},
+                json=body,
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            retryable = exc.response.status_code in RETRYABLE_STATUS
+            self._record(route, "rate_limited" if retryable else "error", started)
+            raise
+        except httpx.TransportError:
+            self._record(route, "rate_limited", started)
+            raise
         data = response.json()
         usage = data.get("usage") or {}
+        self._record(
+            route, "ok", started, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+        )
         return Completion(
             text=data["choices"][0]["message"]["content"],
             provider=route.provider,

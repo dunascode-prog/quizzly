@@ -104,13 +104,16 @@ async def fail(conn: AsyncConnection, job: dict, error: str, *, retry: bool = Tr
         )
 
 
-async def requeue(conn: AsyncConnection, job: dict, delay: timedelta) -> None:
-    """Put a job back without spending an attempt (e.g. every LLM provider is rate-limited)."""
+async def requeue(
+    conn: AsyncConnection, job: dict, delay: timedelta, reason: str | None = None
+) -> None:
+    """Put a job back without spending an attempt (e.g. every LLM provider is rate-limited).
+    `reason` "busy" lets the app say "High demand — your quiz is queued" (FR-LIM-03)."""
     await conn.execute(
         """
         update jobs set status = 'queued', locked_by = null, attempts = attempts - 1,
-                        run_after = now() + %s
+                        run_after = now() + %s, error = %s
         where id = %s
         """,
-        (delay, job["id"]),
+        (delay, reason, job["id"]),
     )

@@ -16,7 +16,8 @@ from psycopg import AsyncConnection
 from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.llm.gateway import AllProvidersBusy
+from app.llm import usage
+from app.llm.gateway import AllProvidersBusy, BudgetReached
 from app.worker import accounts, explain, ingest, marking, questions, queue
 
 log = logging.getLogger("quizzly.worker")
@@ -34,6 +35,8 @@ HANDLERS: dict[str, Handler] = {
 POLL_INTERVAL = 2.0
 HEARTBEAT_INTERVAL = 60.0
 BUSY_REQUEUE_DELAY = timedelta(minutes=1)
+# The daily budget only frees up at midnight: check far less often (FR-SEC-08).
+BUDGET_REQUEUE_DELAY = timedelta(minutes=15)
 
 
 async def run_one(conn: AsyncConnection, worker_id: str) -> bool:
@@ -47,6 +50,7 @@ async def run_one(conn: AsyncConnection, worker_id: str) -> bool:
         await queue.fail(conn, job, f"no handler for {job['type']}", retry=False)
         log.error("no handler for job type %s", job["type"], extra=extra)
         return True
+    usage.for_job(job)  # llm_calls rows are tagged with this job and its student
     try:
         await handler(conn, job)
         await queue.succeed(conn, job["id"])
@@ -54,8 +58,11 @@ async def run_one(conn: AsyncConnection, worker_id: str) -> bool:
     except queue.RetryLater as exc:
         await queue.requeue(conn, job, exc.delay)
         log.info("job %s waiting: %s", job["type"], exc, extra=extra)
+    except BudgetReached as exc:
+        await queue.requeue(conn, job, BUDGET_REQUEUE_DELAY, reason="busy")
+        log.warning("daily AI budget reached, requeued: %s", exc, extra=extra)
     except AllProvidersBusy as exc:
-        await queue.requeue(conn, job, BUSY_REQUEUE_DELAY)
+        await queue.requeue(conn, job, BUSY_REQUEUE_DELAY, reason="busy")
         log.warning("LLM providers busy, requeued: %s", exc, extra=extra)
     except Exception as exc:
         await queue.fail(conn, job, repr(exc))

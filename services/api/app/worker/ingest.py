@@ -39,7 +39,17 @@ def storage() -> Storage:
 def gateway() -> LLMGateway:
     global _gateway
     if _gateway is None:
-        _gateway = LLMGateway(load_models_config(get_settings().models_config_path))
+        from app.llm.usage import UsageLog
+
+        settings = get_settings()
+        _gateway = LLMGateway(
+            load_models_config(settings.models_config_path),
+            observer=UsageLog(
+                settings.daily_llm_token_budget,
+                settings.daily_llm_cost_budget_usd,
+                settings.timezone,
+            ),
+        )
     return _gateway
 
 

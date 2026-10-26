@@ -29,8 +29,8 @@ def calls(monkeypatch):
     async def fail(conn, job, error, retry=True):
         record.append(("fail", retry))
 
-    async def requeue(conn, job, delay):
-        record.append(("requeue", delay))
+    async def requeue(conn, job, delay, reason=None):
+        record.append(("requeue", delay, reason))
 
     monkeypatch.setattr(queue, "claim", claim)
     monkeypatch.setattr(queue, "succeed", succeed)
@@ -63,7 +63,18 @@ async def test_run_one_requeues_when_llm_busy(calls, monkeypatch):
 
     monkeypatch.setitem(worker.HANDLERS, "test_job", handler)
     await worker.run_one(None, "w1")
-    assert calls == [("requeue", worker.BUSY_REQUEUE_DELAY)]
+    assert calls == [("requeue", worker.BUSY_REQUEUE_DELAY, "busy")]
+
+
+async def test_a_spent_daily_budget_waits_longer_and_says_busy(calls, monkeypatch):
+    from app.llm.gateway import BudgetReached
+
+    async def handler(conn, job):
+        raise BudgetReached("today's AI budget is spent")
+
+    monkeypatch.setitem(worker.HANDLERS, "test_job", handler)
+    await worker.run_one(None, "w1")
+    assert calls == [("requeue", worker.BUDGET_REQUEUE_DELAY, "busy")]
 
 
 async def test_run_one_unknown_type_fails_without_retry(calls):
