@@ -80,6 +80,18 @@ async def get_quiz(conn: AsyncConnection, user_id: UUID, quiz_id: UUID) -> dict 
     ).fetchone()
 
 
+async def has_submitted(conn: AsyncConnection, user_id: UUID, quiz_id: UUID) -> bool:
+    """Whether the student has handed in an attempt on this quiz (answers may be shown)."""
+    row = await (
+        await conn.execute(
+            "select 1 from quiz_attempts where quiz_id = %s and user_id = %s "
+            "and status <> 'in_progress' limit 1",
+            (quiz_id, user_id),
+        )
+    ).fetchone()
+    return row is not None
+
+
 async def questions_for(conn: AsyncConnection, set_id: UUID) -> list[dict[str, Any]]:
     return await (
         await conn.execute(

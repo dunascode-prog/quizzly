@@ -15,8 +15,9 @@ export type Question = {
   difficulty: string;
   stem: string;
   options: string[] | null;
-  answer: number | boolean | { text: string; alternatives: string[] } | { model_answer: string };
-  explanation: string;
+  /** Null in an exam quiz until the student has submitted (FR-SEC-12). */
+  answer: number | boolean | { text: string; alternatives: string[] } | { model_answer: string } | null;
+  explanation: string | null;
   source_pages: number[];
   topic_id: string | null;
   topic_title: string | null;
@@ -155,6 +156,8 @@ export function submitAttempt(attemptId: string, answers: AnswerIn[]) {
   }).then((attempt) => {
     queryClient.setQueryData(['attempt', attempt.id], attempt);
     void queryClient.invalidateQueries({ queryKey: ['practice'] });
+    // An exam's answers only come with the quiz once it's submitted (FR-SEC-12).
+    void queryClient.invalidateQueries({ queryKey: ['quiz', attempt.quiz_id] });
     return attempt;
   });
 }
@@ -209,13 +212,14 @@ export function isCorrect(question: Question, response: Response): boolean {
   if (isWritten(question)) return false;
   if (type === 'mcq') return typeof response === 'number' && response === answer;
   if (type === 'true_false') return typeof response === 'boolean' && response === answer;
-  if (typeof response !== 'string' || typeof answer !== 'object' || !('text' in answer)) return false;
+  if (typeof response !== 'string' || !answer || typeof answer !== 'object' || !('text' in answer)) return false;
   const accepted = [answer.text, ...(answer.alternatives ?? [])].map(normalise);
   return accepted.includes(normalise(response));
 }
 
 export function answerText(question: Question): string {
   const { type, answer, options } = question;
+  if (answer === null) return ''; // exam answers arrive after submitting
   if (type === 'mcq' && options && typeof answer === 'number') return options[answer];
   if (type === 'true_false') return answer ? 'True' : 'False';
   if (typeof answer === 'object') return 'text' in answer ? answer.text : answer.model_answer;
