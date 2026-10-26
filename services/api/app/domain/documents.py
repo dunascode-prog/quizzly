@@ -112,7 +112,7 @@ async def create_document(
     await conn.execute(
         "insert into documents (id, user_id, course_id, title, original_filename, upload_path, "
         "image_count) values (%s, %s, %s, %s, %s, %s, %s)",
-        (doc_id, user_id, course_id, title[:200], filename[:255], path, image_count),
+        (doc_id, user_id, course_id, title[:80], filename[:255], path, image_count),
     )
     return await get_document(conn, user_id, doc_id)
 

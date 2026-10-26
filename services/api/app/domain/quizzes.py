@@ -4,7 +4,7 @@ import json
 from typing import Any
 from uuid import UUID
 
-from psycopg import AsyncConnection
+from psycopg import AsyncConnection, errors
 
 from app.rag import questions as q
 
@@ -122,6 +122,10 @@ async def get_attempt(conn: AsyncConnection, user_id: UUID, attempt_id: UUID) ->
     ).fetchone()
 
 
+class IdInUse(Exception):
+    """A client-chosen attempt or answer id already belongs to a different record (FR-SEC-18)."""
+
+
 async def save_answers(
     conn: AsyncConnection, attempt: dict, answers: list[dict], current_index: int | None
 ) -> dict[UUID, bool | None]:
@@ -136,8 +140,24 @@ async def save_answers(
                 continue
             correct = q.is_correct(question["type"], question["answer"], a["response"])
             marks[a["question_id"]] = correct
+            try:
+                await _upsert_answer(conn, attempt, a, question, correct)
+            except errors.UniqueViolation as exc:
+                # The id is another answer's: its (attempt, question) pair didn't match ours.
+                raise IdInUse(str(a["id"])) from exc
+        if current_index is not None:
             await conn.execute(
-                """
+                "update quiz_attempts set current_index = %s where id = %s",
+                (current_index, attempt["id"]),
+            )
+    return marks
+
+
+async def _upsert_answer(
+    conn: AsyncConnection, attempt: dict, a: dict, question: dict, correct: bool | None
+) -> None:
+    await conn.execute(
+        """
                 insert into attempt_answers (id, attempt_id, question_id, response, is_correct,
                                              score, marked_by)
                 values (%s, %s, %s, %s, %s, %s, %s)
@@ -150,25 +170,19 @@ async def save_answers(
                     marked_by = case when {fresh} then excluded.marked_by
                                      else attempt_answers.marked_by end
                 """.format(
-                    fresh="excluded.marked_by = 'server' "
-                    "or attempt_answers.response is distinct from excluded.response"
-                ),
-                (
-                    a["id"],
-                    attempt["id"],
-                    a["question_id"],
-                    json.dumps(a["response"]),
-                    correct,
-                    (question["marks"] if correct else 0) if correct is not None else None,
-                    "server" if correct is not None else None,
-                ),
-            )
-        if current_index is not None:
-            await conn.execute(
-                "update quiz_attempts set current_index = %s where id = %s",
-                (current_index, attempt["id"]),
-            )
-    return marks
+            fresh="excluded.marked_by = 'server' "
+            "or attempt_answers.response is distinct from excluded.response"
+        ),
+        (
+            a["id"],
+            attempt["id"],
+            a["question_id"],
+            json.dumps(a["response"]),
+            correct,
+            (question["marks"] if correct else 0) if correct is not None else None,
+            "server" if correct is not None else None,
+        ),
+    )
 
 
 async def answers_for(conn: AsyncConnection, attempt_id: UUID) -> list[dict]:

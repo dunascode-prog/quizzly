@@ -34,7 +34,7 @@ From the v0.1 code review. Each task needs a regression test.
 - [ ] **A7. Shared canonical copy** (FR-SEC-07). On ready, copy to `shared/{sha256}`, point `source_files.storage_path` there; `cleanup_storage` job retries failed removes. Test: delete uploader A, B's pages still load.
 - [ ] **A8. Budget and throttling** (FR-SEC-08, FR-LIM-02, FR-LIM-03). Write every LLM call to `llm_calls` (currently not written); daily budget in config trips the circuit breaker; "High demand" message; Supabase Auth rate limits configured for OTP.
 - [ ] **A9. Secure token storage** (FR-AUTH-06, FR-SEC-09). Supabase client storage adapter on `expo-secure-store` (chunk values > 2 KB); migrate existing sessions on first launch.
-- [ ] **A10. Input caps and idempotency** (FR-SEC-10, FR-SEC-18). Pydantic `max_length` on answer responses (5,000), chat (2,000), report notes (500), titles (80); duplicate attempt/answer IDs → 409 or existing record.
+- [x] **A10. Input caps and idempotency** (FR-SEC-10, FR-SEC-18). Pydantic `max_length` on answer responses (5,000), chat (2,000), report notes (500), titles (80); duplicate attempt/answer IDs → 409 or existing record.
 - [ ] **A11. Dedupe side channel** (FR-SEC-11, FR-DOC-06). Same response shape; dedupe hits reported ready no sooner than 3 s.
 - [ ] **A12. Exam answers hidden** (FR-SEC-12). Exam-mode `GET /quizzes/{id}` omits answers and explanations until submit.
 - [ ] **A13. Prompt and stream hygiene** (FR-SEC-13, FR-SEC-14). Escape delimiter tags in document text; chat stream holds back partial citation markers.
