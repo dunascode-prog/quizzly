@@ -89,3 +89,52 @@ def test_signed_in_users_can_still_read_their_rows_and_anon_only_schools(conn):
     assert conn.execute("select count(*) from institutions").fetchone()[0] > 0
     with pytest.raises(errors.InsufficientPrivilege):
         conn.execute("select count(*) from documents")
+
+
+# --- FR-SEC-03: a job that crashes the worker every time stops after max_attempts ----------------
+
+
+def test_a_job_that_always_crashes_is_failed_after_max_attempts():
+    import asyncio
+    import selectors
+
+    # psycopg's async mode needs a selector loop (Windows defaults to Proactor).
+    asyncio.run(
+        _always_crashes(),
+        loop_factory=lambda: asyncio.SelectorEventLoop(selectors.SelectSelector()),
+    )
+
+
+async def _always_crashes():
+    from psycopg.rows import dict_row
+
+    from app.worker import queue
+
+    async with await psycopg.AsyncConnection.connect(URL, row_factory=dict_row) as conn:
+        try:
+            job = await (
+                await conn.execute(
+                    "insert into jobs (type, payload, max_attempts) "
+                    "values ('delete_account', '{}', 3) returning id"
+                )
+            ).fetchone()
+            claims = 0
+            while (got := await queue.claim(conn, "test", ["delete_account"])) is not None:
+                assert got["id"] == job["id"]
+                claims += 1
+                # The worker died mid-job: its lease runs out without succeed/fail.
+                await conn.execute(
+                    "update jobs set locked_at = now() - interval '11 minutes' where id = %s",
+                    (job["id"],),
+                )
+                assert claims <= 3, "reclaimed past max_attempts"
+            assert claims == 3
+            swept = await queue.sweep_crashed(conn)
+            assert [j["id"] for j in swept] == [job["id"]]
+            row = await (
+                await conn.execute("select status, error from jobs where id = %s", (job["id"],))
+            ).fetchone()
+            assert (row["status"], row["error"]) == ("failed", "crashed")
+            assert await queue.claim(conn, "test", ["delete_account"]) is None
+        finally:
+            await conn.rollback()

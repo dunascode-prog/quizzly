@@ -32,6 +32,7 @@ FAILURE_MESSAGES = {
     "too_large": "This file is too big. Documents can be up to 25 MB and 150 pages.",
     "upload_missing": "The upload didn't finish. Try adding the file again.",
     "internal": "Something went wrong while reading this file. Try uploading it again.",
+    "crashed": "We couldn't process this file. Try exporting it again as PDF, or split it up.",
 }
 
 _SELECT = """
