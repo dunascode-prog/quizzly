@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
 from app.domain import courses
+from app.worker import cleanup
 
 router = APIRouter(prefix="/v1/courses", tags=["courses"])
 
@@ -34,13 +35,13 @@ class _CourseFields(BaseModel):
 
 
 class CourseCreate(_CourseFields):
-    code: str = Field(max_length=40)
-    title: str | None = Field(default=None, max_length=120)
+    code: str = Field(max_length=40)  # normalised, then 2-12 characters (FR-CRS-01)
+    title: str | None = Field(default=None, max_length=80)  # FR-SEC-10
 
 
 class CourseUpdate(_CourseFields):
     code: str | None = Field(default=None, max_length=40)
-    title: str | None = Field(default=None, max_length=120)
+    title: str | None = Field(default=None, max_length=80)
 
 
 def _duplicate(code: str) -> HTTPException:
@@ -91,5 +92,5 @@ async def delete_course(
     )
     if paths is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
-    await storage.remove(paths)
+    await cleanup.remove_or_queue(conn, storage, paths)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -52,7 +52,7 @@ export default function EditDocumentSheet() {
 
   return (
     <Sheet title="Document" onClose={() => router.back()}>
-      <TextField label="Title" value={title} onChangeText={setTitle} maxLength={200} />
+      <TextField label="Title" value={title} onChangeText={setTitle} maxLength={80} />
       <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel="Course">
         <Text variant="label">Course</Text>
         <View style={styles.pills}>
