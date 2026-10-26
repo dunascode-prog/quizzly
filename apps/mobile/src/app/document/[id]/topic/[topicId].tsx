@@ -24,10 +24,13 @@ const STYLES: { value: Style; label: string }[] = [
   { value: 'exam', label: 'Exam' },
 ];
 
-function Writing() {
+function Writing({ busy }: { busy?: boolean }) {
   const theme = useTheme();
   return (
     <View style={styles.writing} accessibilityLiveRegion="polite" accessibilityLabel="Writing your explanation">
+      {busy ? (
+        <Banner tone="warning" message="High demand — your explanation is queued. We'll keep trying, and you can close the app." />
+      ) : null}
       {[92, 100, 76, 100, 64].map((w, i) => (
         <View key={i} style={[styles.skeletonLine, { width: `${w}%`, backgroundColor: theme.backgroundElement }]} />
       ))}
@@ -150,7 +153,7 @@ export default function ExplanationScreen() {
           </View>
         </>
       ) : (
-        <Writing />
+        <Writing busy={ex?.busy} />
       )}
       {quizError ? <Banner message={quizError} /> : null}
     </Screen>

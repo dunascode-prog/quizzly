@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -12,6 +12,8 @@ from app.worker import marking as marking_worker
 from app.worker import queue
 
 router = APIRouter(tags=["quizzes"])
+
+ID_IN_USE = "That ID is already used by something else. Start again."
 
 QuestionType = Literal["mcq", "true_false", "fill_blank", "short_answer", "theory"]
 
@@ -59,6 +61,8 @@ class QuizOut(BaseModel):
     requested_count: int
     generated_count: int
     notice: str | None
+    # Waiting because every AI provider is busy or the day's budget is spent (FR-LIM-03).
+    busy: bool = False
     time_limit_sec: int | None
     questions: list[QuestionOut]
 
@@ -71,7 +75,10 @@ class AttemptStart(BaseModel):
 class AnswerIn(BaseModel):
     id: UUID
     question_id: UUID
-    response: int | bool | str = Field(union_mode="left_to_right")
+    # Written answers up to 5,000 characters (FR-SEC-10).
+    response: int | bool | Annotated[str, Field(max_length=5000)] = Field(
+        union_mode="left_to_right"
+    )
 
 
 class AnswersIn(BaseModel):
@@ -167,6 +174,7 @@ async def _quiz_out(conn, row: dict, user_id: UUID) -> QuizOut:
         requested_count=row["requested_count"],
         generated_count=row["generated_count"],
         notice=_notice(row),
+        busy=bool(row.get("busy")),
         time_limit_sec=row["time_limit_sec"],
         questions=[QuestionOut(**x) for x in qs],
     )
@@ -282,9 +290,10 @@ async def start_attempt(quiz_id: UUID, body: AttemptStart, user: User, conn: Con
     existing = await quizzes.get_attempt(conn, user.id, body.id)
     if existing is not None and existing["quiz_id"] != quiz_id:
         raise HTTPException(status.HTTP_409_CONFLICT, "That attempt belongs to another quiz")
-    return await _attempt_out(
-        conn, await quizzes.start_attempt(conn, user.id, quiz_id, body.id, body.mode)
-    )
+    started = await quizzes.start_attempt(conn, user.id, quiz_id, body.id, body.mode)
+    if started is None:  # the id is someone else's attempt (FR-SEC-18)
+        raise HTTPException(status.HTTP_409_CONFLICT, ID_IN_USE)
+    return await _attempt_out(conn, started)
 
 
 TIME_GRACE = timedelta(seconds=60)  # network delay after the app's timer hits zero
@@ -347,9 +356,12 @@ async def save_answers(
         raise HTTPException(status.HTTP_409_CONFLICT, "This attempt is already submitted")
     if _time_up(attempt):
         raise HTTPException(status.HTTP_409_CONFLICT, "Time is up for this exam")
-    await quizzes.save_answers(
-        conn, attempt, [a.model_dump() for a in body.answers], body.current_index
-    )
+    try:
+        await quizzes.save_answers(
+            conn, attempt, [a.model_dump() for a in body.answers], body.current_index
+        )
+    except quizzes.IdInUse as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, ID_IN_USE) from exc
     if attempt["mode"] == "practice":
         await _queue_marking(conn, user.id, attempt_id, settings)
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))
@@ -364,7 +376,12 @@ async def submit(
     attempt = await _attempt(conn, user.id, attempt_id)
     if attempt["status"] == "in_progress":
         if body.answers and not _time_up(attempt):  # late answers score zero
-            await quizzes.save_answers(conn, attempt, [a.model_dump() for a in body.answers], None)
+            try:
+                await quizzes.save_answers(
+                    conn, attempt, [a.model_dump() for a in body.answers], None
+                )
+            except quizzes.IdInUse as exc:
+                raise HTTPException(status.HTTP_409_CONFLICT, ID_IN_USE) from exc
         await quizzes.submit(conn, attempt)
         await _queue_marking(conn, user.id, attempt_id, settings)
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))

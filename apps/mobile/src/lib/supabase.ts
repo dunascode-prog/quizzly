@@ -1,12 +1,13 @@
 import '@/lib/crypto-polyfill';
-import '@/lib/local-storage';
 
 import { createClient } from '@supabase/supabase-js';
 
 import { env } from '@/lib/env';
+import { authStorage } from '@/lib/session-storage';
 
-// Undefined during web server-side rendering (Node); there is no session to keep there.
-const storage = typeof localStorage === 'undefined' ? undefined : localStorage;
+// Secure storage on phones (FR-AUTH-06); undefined during web server-side rendering (Node),
+// where there is no session to keep.
+const storage = authStorage;
 
 // Used for sign-in only; all data goes through the Quizzly API (ARCHITECTURE §5.6).
 export const supabase = createClient(env.supabaseUrl || 'http://localhost', env.supabaseAnonKey || 'missing', {

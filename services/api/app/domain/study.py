@@ -47,8 +47,11 @@ async def explanation(
 ) -> dict | None:
     return await (
         await conn.execute(
-            "select id, style::text as style, status::text as status, content_md, citations "
-            "from explanations where topic_id = %s and style = %s and prompt_version = %s",
+            "select e.id, e.style::text as style, e.status::text as status, e.content_md, "
+            "e.citations, coalesce((select j.status = 'queued' and j.error = 'busy' from jobs j "
+            "where j.dedupe_key = 'explain:' || e.id::text order by j.created_at desc limit 1), "
+            "false) as busy "
+            "from explanations e where e.topic_id = %s and e.style = %s and e.prompt_version = %s",
             (topic_id, style, prompt_version),
         )
     ).fetchone()
