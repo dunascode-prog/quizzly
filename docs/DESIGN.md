@@ -1,36 +1,48 @@
-# Quizzly — Design Guidelines (MVP)
+# Quizzly — Design Guidelines
 
 | | |
 |---|---|
-| **Status** | v0.3 |
-| **Date** | 2026-10-22 |
-| **Applies to** | `apps/mobile` (Expo SDK 57, Expo Router) |
-| **Related** | [PRD](PRD.md) · [FRD](FRD.md) · [Architecture](ARCHITECTURE.md) |
-| **Source of truth** | The "Quizzly MVP Design" canvas on claude.ai. Screen images live in `docs/design/` (`01-sign-in.png` … `13-account.png`, plus the UI spec, logo options and build guide boards). |
+| **Status** | v0.4 (replaces v0.3) |
+| **Date** | 2026-10-26 |
+| **Applies to** | `apps/mobile` (Expo SDK in `apps/mobile/package.json`, Expo Router) and the link-service landing page |
+| **Related** | [PRD](PRD.md) · [FRD](FRD.md) · [Architecture](ARCHITECTURE.md) · [Build plan](BUILD_PLAN.md) |
+| **Source of truth** | The "Quizzly MVP Design" canvas on claude.ai. Screen images live in `docs/design/` (`01-sign-in.png` … `24-invite-landing.png`, plus `01b`/`01c` sign-in steps, the UI spec, type options and logo boards). |
 
 This file is written for whoever builds the UI, human or Claude Code. Follow it exactly. Where it is silent, follow the FRD and keep to the look described here.
+
+### What changed from v0.3
+
+1. **Type:** Inter → **Bricolage Grotesque** (headlines, big numbers) + **Manrope** (everything else). §4.
+2. **Accents:** four brand accents (Lagoon, Ankara, Palm, Lavender) join the monochrome base, with strict rules on where they may appear. §3.
+3. **Sign-in is now a welcome screen** that sells the app while staying monochrome: the study illustration with three ink/white feature stickers, an ink hero card "Your notes, exam‑ready." with a short ticked list of what Quizzly does, and a "Get started" pill. Email and code are steps 2 and 3. §7 screen 01.
+4. **Today is the home tab.** Tabs: Today, Library, Practice, Account.
+5. **Eleven new screens (14–24)** for habits, sharing, notifications and invites, and the components they need. §6, §7.
 
 ---
 
 ## 1. The look in one paragraph
 
-Quiet monochrome, clear type. A lavender-grey background, near-black ("ink") cards, white pill buttons and inputs, and large semibold headlines with **one word set on an ink block**. Every screen has one job, one headline, one ink hero card and one main action pill at the bottom. Colour appears only when it means something: green = correct, red = wrong, amber = "not in your notes" or warnings.
+Clean monochrome with confident type, and colour only where it carries meaning. A lavender-grey background, near-black ("ink") cards, white pill buttons and inputs, and big chunky Bricolage headlines with **one word set on an ink block**. Every screen has one job, one headline, one ink hero card and one main action pill at the bottom. Colour appears when it means something (green = correct, red = wrong, amber = "not in your notes" or warnings) or when it marks something that is the student's own: their course's accent ring, their chosen theme and a celebration. The welcome screen is fully monochrome.
 
 ## 2. Principles (with requirement sources)
 
 | # | Principle | Source |
 |---|---|---|
-| 1 | **Light on the phone.** No photos, no shadows, no gradients, no UI kit. The only image is the vector sign-in illustration. Skeleton blocks instead of spinners. | G4, NFR-01/02 |
-| 2 | **Every AI answer shows its page.** Explanations, questions and chat replies carry outlined page chips ("p. 12") that open the source page. | US-10, FR-QGEN-03, FR-CHAT-02, FR-DOC-10 |
+| 1 | **Light on the phone.** No photos, no gradients, no UI kit, no Lottie. The only artwork is the vector study illustration. Skeleton blocks instead of spinners. Only two bundled font families. | G4, NFR-01/02, NFR-15 |
+| 2 | **Every AI answer shows its page.** Explanations, questions and chat replies carry outlined page chips ("p. 12") that open the source page (or the quote view in a shared course). | US-10, FR-QGEN-03, FR-CHAT-02, FR-DOC-10, FR-SHARE-02 |
 | 3 | **Label what isn't from the notes** in a dashed amber frame titled "Not in your notes". Never mix it into grounded text. | FR-EXPL-03, FR-CHAT-03 |
 | 4 | **Offline is normal.** Saved content works; network actions show "Queued" and sync via the SQLite outbox. | G5, FR-OFF-01/02 |
-| 5 | **Upfront about limits.** Remaining daily usage is visible before it is spent (Library header, Account). Errors use the exact FRD §4 copy. | FR-LIM-01/03, PRD §9 |
+| 5 | **Upfront about limits.** Remaining daily usage is visible before it is spent. Errors use the exact FRD §4 copy. | FR-LIM-01/03, PRD §9 |
 | 6 | **Contrast first.** All text pairs ≥ 4.5:1, touch targets ≥ 48 (icon buttons 52), layouts survive 200% font scale, right/wrong always uses an icon *and* a word. | NFR-08 |
-| 7 | **One job per screen.** 20 px side gutters, 24 px between groups. If an element doesn't help the student act now, it moves to a menu, a sheet or further down the scroll. | — |
+| 7 | **One job per screen.** 20 px side gutters, 24 px between groups. If an element doesn't help the student act now, it moves to a menu, a sheet or further down. | — |
+| 8 | **Kind, not pushy.** Celebrate progress, never shame a gap. Weekly goals instead of fragile streaks, one reminder a day at most, quiet hours, every nudge can be switched off. | NFR-14, PRD R10 |
+| 9 | **Private by default in social features.** Other people only ever see a display name ("Ada O."), institution and level. Scores, chats and progress are never shown to anyone else. Sharing always says what is shared and what stays private. | FR-SHARE-02/05, FR-INV-02 |
 
 ## 3. Colour tokens
 
-Defined in `apps/mobile/src/constants/theme.ts`. **Never hard-code hex values in screens.** The existing keys (`text`, `background`, `backgroundElement`, `backgroundSelected`, `textSecondary`) are kept and remapped.
+Defined in `apps/mobile/src/constants/theme.ts`. **Never hard-code hex values in screens.**
+
+### 3.1 Base (unchanged from v0.3)
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
@@ -42,190 +54,294 @@ Defined in `apps/mobile/src/constants/theme.ts`. **Never hard-code hex values in
 | `textSecondary` (muted) | `#4D4E5A` | `#A3A4AE` | Secondary text on ground/surface |
 | `mutedOnInk` | `#A3A4AE` | `#4D4E5A` | Secondary text on ink |
 | `inkRaised` | `#1B1C22` | `#E4E5EC` | Tiles inside ink cards |
-| `line` | `#C5C6D3` | `#33343C` | Dividers, outlines |
+| `inactiveOnInk` | `#C9CAD3` | `#4D4E5A` | Inactive tab icons, unselected segments on ink |
+| `line` | `#C5C6D3` | `#33343C` | Dividers, outlines, empty study-grid cells |
 | `track` | `#3A3B44` | `#C5C6D3` | Ring/bar track on ink |
-| `success` / `successSoft` | `#186A33` / `#D6EEDC` | `#7BD69A` / `#16301F` | Correct, Ready |
-| `danger` / `dangerSoft` | `#B42318` / `#F7DCD9` | `#FF9D94` / `#3A1C1A` | Wrong, Failed, Delete |
+| `scrim` | `rgba(13,13,16,.6)` | `rgba(0,0,0,.7)` | Behind sheets |
+| `success` / `successSoft` | `#186A33` / `#D6EEDC` | `#7BD69A` / `#16301F` | Correct, Ready, "Joined" |
+| `danger` / `dangerSoft` | `#B42318` / `#F7DCD9` | `#FF9D94` / `#3A1C1A` | Wrong, Failed, Delete, Stop sharing |
 | `warning` / `warningSoft` | `#7A5200` / `#F3E6C4` | `#F2C46D` / `#352A12` | Not-in-notes, OCR flag, limits |
 
-In dark theme the roles invert: the ground is black and hero cards become light, so each screen keeps one high-contrast block. `app.json` already has `userInterfaceStyle: "automatic"`.
+### 3.2 Accents (new in v0.4)
 
-Checked contrast (light): muted on ground 6.0:1, muted on surface 6.9:1, mutedOnInk on ink 7.8:1, success on successSoft 5.4:1, danger on dangerSoft 5.1:1, warning on warningSoft 5.7:1.
+`Accent` in `theme.ts`. Same values in light and dark. **Text on an accent is always ink (`#0D0D10`)**; never put white text or muted text on an accent.
+
+| Token | Hex | Ink on it | Unlock (FR-HAB-07) |
+|---|---|---|---|
+| `lagoon` | `#2BB3A8` | 7.6:1 | First mastered topic |
+| `ankara` | `#F28C38` | 7.9:1 | 10 topics mastered |
+| `palm` | `#4CC46A` | 9.0:1 | Weekly goal met 4 weeks running |
+| `lavender` | `#A08CF5` | 7.0:1 | 3 friends join through your invite |
+
+Accents never appear on the welcome/sign-in screen (01) or the invite landing page (24); those stay ink, white and grey like the reference.
+
+**Where accents may appear:**
+
+1. A **course's own accent** (FR-CRS-05): its readiness ring, dot and chip. Never as a card fill.
+2. The student's **chosen theme**: replaces white on ink for rings, the highlighted-word block on Today, unread dots and badges.
+3. **Celebrations** (16), the theme list (18), the invite progress ring (23), the "Personal best" pill, the weekly recap readiness chart (17).
+4. The live/unread dot (Lagoon) in notifications and the toast.
+
+Accents never replace the semantic colours: correct is always `success`, wrong is always `danger`.
+
+Checked contrast (light): muted on ground 6.0:1, muted on surface 6.9:1, mutedOnInk on ink 7.8:1, success on successSoft 5.4:1, danger on dangerSoft 5.1:1, warning on warningSoft 5.7:1, ink on every accent ≥ 7:1.
 
 ## 4. Typography
 
-The reference style is a Helvetica-like neo-grotesk: **semibold headlines, normal tracking, plain sans body.** Closest free match:
+Two families, bundled with `expo-font` (never downloaded at runtime):
 
-- **Headlines:** Inter Display SemiBold (static TTF from the [rsms/inter](https://github.com/rsms/inter) release, placed in `assets/fonts/`).
-- **Body and UI:** Inter (`@expo-google-fonts/inter`: 400, 500, 600).
+```bash
+npx expo install expo-font @expo-google-fonts/bricolage-grotesque @expo-google-fonts/manrope
+```
+
+- **Bricolage Grotesque Bold (700)** for screen headlines, card titles, big numbers (scores, countdowns, stats) and the "Quizzly" wordmark on the landing page. It is the chunky, slightly condensed "cut" grotesque from the reference.
+- **Manrope** (400, 500, 600, 700) for body, labels, buttons, inputs, chips, captions.
 - **Code in explanations:** the platform monospace.
-
-Load with `expo-font` (bundled, about 250 KB, never downloaded at runtime). If the exact reference family is confirmed later (e.g. Neue Montreal), change only the `fontFamily` values in `Type`.
+- Remove Inter (`@expo-google-fonts/inter`, `assets/fonts/InterDisplay-SemiBold.ttf`) once every screen uses the new tokens.
 
 | Token | Family | Size / line height | Tracking | Use |
 |---|---|---|---|---|
-| `hero` | Inter Display SemiBold | 44 / 48 | −1.1 | Sign-in headline |
-| `display` | Inter Display SemiBold | 40 / 44 (min 32 / 38) | −1.0 | Screen headlines |
-| `title` | Inter Display SemiBold | 24–30 / 30–36 | −0.4 | Card titles, results title |
-| `heading` | Inter 600 | 18–22 / 24–28 | 0 | Section headings |
-| `body` | Inter 400 | 15–17 / 23–27 | 0 | Reading text (explanations 17/27) |
-| `label` | Inter 500 | 15–17 / 20 | 0 | Buttons, options, chips |
-| `small` | Inter 400 | 13–14 / 18–20 | 0 | Meta, helper text |
-| `caption` | Inter 500 | 12 / 16 | 0 | Field labels, chips (minimum size) |
+| `hero` | Bricolage Grotesque 700 | 44 / 44–48 | −1.3 | Welcome headline, Today greeting |
+| `display` | Bricolage Grotesque 700 | 40 / 44 (min 32 / 38) | −1.0 | Screen headlines |
+| `number` | Bricolage Grotesque 700 | 48–88 / 1.0 | −1.5 | Countdown "12 days", recap "142", ring values |
+| `title` | Bricolage Grotesque 700 | 24–30 / 30–36 | −0.6 | Card titles, results title |
+| `heading` | Manrope 700 | 18–20 / 24–26 | 0 | Section headings ("Today's plan") |
+| `reading` | Manrope 400 | 17 / 27 | 0 | Explanation text |
+| `body` | Manrope 400 | 15 / 23 | 0 | General text |
+| `label` | Manrope 600 | 15–17 / 20 | 0 | Buttons, options, chips, list titles |
+| `small` | Manrope 400–500 | 13–14 / 18–20 | 0 | Meta, helper text |
+| `caption` | Manrope 600 | 12 / 16 | 0 | Field labels, chips, uppercase section labels (+0.4 tracking) |
 
-**Highlighted word:** each screen headline puts one word on an ink block (`background: ink`, `color: onInk`, horizontal padding 10, radius 12). Example: "Revise your **courses**". Implement as `<HighlightText>`.
+**Highlighted word:** each screen headline puts one word (or a short phrase) on an ink block (`background: ink`, `color: onInk`, horizontal padding 10, radius 12), or on the theme accent with ink text when a theme is chosen. Examples: "Revise your **courses**", "Daily 5 **done**". Implement as `<HighlightText>` (exists).
 
 ## 5. Shape, space, motion
 
-- **Radius:** pills/buttons/chips/tab bar `999`; cards `28`; sheets `32` (top corners); fields, options and tiles `20–24`.
-- **Spacing:** keep existing `Spacing` keys (2, 4, 8, 16, 24, 32, 64) and add `twoHalf: 12`, `gutter: 20`. Screen padding 28 top / 20 sides / 28 bottom. 24 between groups, 10–12 between items in a list.
-- **Depth:** no shadows or blur. Depth comes from ground → surface → field → ink.
-- **Motion:** only the sign-in illustration animates (§9). Screen transitions use the default native stack. Respect reduce-motion everywhere.
+- **Radius:** pills/buttons/chips/tab bar `999`; cards `28`; welcome hero `32`; sheets `32` (top corners); fields, options and tiles `20–24`; small icon squares `14`; study-grid cells `8`.
+- **Spacing:** `Spacing` keys (2, 4, 8, 12, 16, 20, 24, 32, 64). Screen padding 28 top / 20 sides / 28 bottom (welcome screen 24 / 20 / 22). 24 between groups, 8–12 between items.
+- **Depth:** no shadows or blur. Depth comes from ground → surface → field → ink. The welcome stickers get a 1.5 px ink outline instead of a shadow.
+- **Motion** (all with `react-native-reanimated`; all off when `AccessibilityInfo.isReduceMotionEnabled()`):
+
+| Where | Motion |
+|---|---|
+| Welcome illustration | §9 |
+| Welcome stickers | Pop in on mount (scale 0.6 → 1.06 → 1, 500 ms, staggered 0 / 150 / 300 ms), then bob ±6 px every 3.6 s with offset phases, keeping their tilt (−6°, 5°, −4°) |
+| Toast (FR-NOTIF-02) | Slides down from the top 250 ms, auto-hides after 6 s, swipe up to dismiss |
+| Rings and readiness | Animate from the previous value 600 ms ease-out |
+| Celebration (16) | Ring fills, rays fade in, one light haptic (`expo-haptics`). No confetti |
+| Screen transitions | Default native stack |
 
 ## 6. Components (`src/components/ui/`)
 
+### 6.1 Existing (update fonts only unless noted)
+
 | Component | Spec |
 |---|---|
-| `ActionPill` | 64 tall, radius 999. Left: 52 circle with icon. Centre: label (Inter 500 17). Right: `›››` in muted colour (decorative, `accessible={false}`). Variants: `ink` (ink fill, field-coloured circle, white text — the primary action) and `light` (field fill, ink circle). Loading: the circle becomes a progress ring; label stays. One per screen, pinned at the bottom. |
-| `IconButton` | 52 circle. Tones `light` (field) and `ink`. `accessibilityLabel` required. |
+| `ActionPill` | 64 tall, radius 999. Left: 52 circle with icon. Centre: label (Manrope 600–700, 17). Right: `›››` in muted colour (decorative, `accessible={false}`). Variants: `ink` (ink fill, field-coloured circle, white text — the primary action on most screens) and `light` (field fill, ink circle, ink text — used on the welcome steps, like the reference). Loading: the circle becomes a progress ring. One per screen, pinned at the bottom. |
+| `IconButton` | 52 circle. Tones `light` (field) and `ink`. `accessibilityLabel` required. Optional `badge` (v0.4: number on a Lagoon dot, top-right, for the bell). |
 | `Pill` | 44–48 tall chip or small button. Selected = ink fill + white text; unselected = field fill. |
-| `SegmentedPill` | Ink track (padding 5, radius 999); selected segment is a field-coloured pill, others are transparent with `#C9CAD3` text. Used for explanation style and quiz mode. `accessibilityRole="tablist"` / `"tab"`. |
-| `HeroCard` | Ink card, radius 28, padding 20–22. Slots: small muted label, optional `ProgressRing` top-right, title (24–30), optional action pill (field-coloured "RESUME"). |
-| `ListCard` | Surface fill, radius 24, padding 14–18, no border. Optional leading 48 ink circle (course code), title (17/600), meta (13 muted), trailing chevron. |
-| `ProgressRing` | 52–60 (168 on Results). Fill `onInk`, track `track`. Always shows a number inside ("6/10", "45%"). |
-| `TextField` | 64 tall, field fill, radius 20, padding 10×20. Small label (12/500 muted) above the value (16/500). No border; focused = 2 px ink border. |
-| `AnswerOption` | Field row, radius 22, min height 64, 48 letter circle on the left. States: `default`, `selected` (ink fill), `correct` (successSoft + 2 px success border, ✓ circle), `wrong` (dangerSoft + 2 px danger border, ✕ circle). |
-| `CitationChip` | Outlined ink pill, 26–28 tall, "p. 12", hitSlop to 48. Opens `document/[id]/page/[n]`. |
-| `GroundingCallout` | 1.5 px dashed `warning` border, radius 16–20, label "NOT IN YOUR NOTES" (12/600, uppercase, warning colour), body text. |
-| `Banner` | Offline: ink pill with icon. Limit / error / info: soft-tone block, radius 20, FRD §4 copy verbatim. |
-| `FloatingTabBar` | Ink pill, 68 tall, 20 from the sides and 24 from the bottom. Active tab = field-coloured pill with icon + label; inactive = 52 icon-only circles (`#C9CAD3`) with `accessibilityLabel`. Shown on (tabs) screens only. |
-| `Logo` | See §8. |
-| `StudyIllustration` | See §9. |
-| `Skeleton` | Surface blocks shaped like the content; no shimmer. |
+| `SegmentedPill` | Ink track (padding 5, radius 999); selected segment is a field-coloured pill. `accessibilityRole="tablist"` / `"tab"`. |
+| `HeroCard` | Ink card, radius 28, padding 20–22. Slots: small muted label, optional `ProgressRing` top-right, title, optional action pill. |
+| `ListCard` | Surface fill, radius 24, padding 14–18. Optional leading 48 ink circle (course code), title (Manrope 600, 17), meta (13 muted), trailing chevron. **v0.4:** optional `tag` ("Shared by Ada") and accent dot. |
+| `ProgressRing` | 52–68 (168 on Results/Celebrate). Fill `onInk` or the course/theme accent; track `track`. Always shows a number inside. |
+| `TextField` | 64 tall, field fill, radius 20. Small label (12/600 muted) above the value (16/600). Focused = 2 px ink border. |
+| `CodeField` | Six 64-tall cells; current cell has a 2 px ink border. |
+| `AnswerOption`, `CitationChip`, `GroundingCallout`, `Banner`, `Sheet`, `TextButton`, `Skeleton` | As v0.3. |
+| `FloatingTabBar` | Ink pill, 68 tall. **v0.4 tabs: Today (home), Library, Practice, Account.** Active tab = field pill with icon + label; inactive = 52 icon-only circles. |
+| `Logo`, `StudyIllustration` | §8, §9. |
 
-Icons: 24 grid, 2 px stroke, round caps and joins (Lucide-style). Use `lucide-react-native` or inline `react-native-svg` paths. Never emoji.
+### 6.2 New in v0.4
+
+| Component | Spec | Used on |
+|---|---|---|
+| `Sticker` | 34 tall pill with a 1.5 px ink outline, two tones: field fill + ink text with a 24 ink circle and white icon, or ink fill + white text with a field circle and ink icon. Manrope 700 13. Fixed tilt, pop + bob motion (§5). Decorative: `accessibilityElementsHidden`; the illustration area has one label describing the features. | 01 |
+| `FeatureList` | Stacked rows inside an ink card, gap 10, vertically centred: a 26 field-coloured (white) circle with a 14 ink tick, then one line of text (Manrope 15/21, `#E4E5EC`) that starts with a bold white verb ("**Upload** slides or note photos"). Written like a short write-up, not tiles. Same pattern on the landing page (24) and the join screen (20). | 01, 20, 24 |
+| `Toast` | Ink card, radius 24, top of screen under the status bar: avatar (40), bold actor + text, meta, a field "View" pill and a close button. Lagoon dot when live. `accessibilityLiveRegion="polite"`. | 14, global |
+| `WeekStrip` | 7 circles (M–S, 28): studied = ink fill; today = dashed outline; future = field. Caption "3 of 4 study days". | 14, 15 |
+| `PlanRow` | Field row, radius 22, min 64: 44 leading circle (ink play icon when it's the next item, outlined otherwise), title (Manrope 700), meta ("5 questions due · 3 min"), chevron. | 14 |
+| `CountdownCard` | `HeroCard` variant: course code + accent dot, "exam in", big `number` "12 days", "You're 64% ready. Up 18% this week." and a 68 ring. | 14 |
+| `StudyGrid` | 5 × 7 cells (34 tall, radius 8), 4 intensity fills (field, `#A3A4AE`, `#4D4E5A`, ink), today outlined in Lagoon; "Less · · · More" legend. Each cell has an `accessibilityLabel`. | 15 |
+| `StatTile` | `inkRaised` tile inside an ink card: muted label + `number`. | 13, 17 |
+| `ToggleRow` | Field row, radius 22, label + optional helper, 52×32 switch (on = ink track, white knob). `accessibilityRole="switch"`. | 18, 21 |
+| `ThemeRow` | Field row: 40 accent swatch, name + unlock rule, check (selected) or lock icon (locked; disabled, says how to unlock). Selected row has a 2 px ink border. | 18 |
+| `MateChip` | 52 pill: 40 initials circle + first name; selected = ink fill. Multi-select. | 19 |
+| `AvatarStack` | Up to 3 overlapping 32 initials circles + count text. Only shown when the count ≥ 3. | 20 |
+| `NotificationRow` | Field row, radius 22: 48 avatar (initials, or the Logo mark for system events), bold actor + text, time, Lagoon unread dot, optional inline pills ("Add to library" ink, "View" light). | 22 |
+| `FilterPills` | Row of `Pill`s (All / Shared with me / Study). | 22 |
+| `LinkCard` | Ink card: "Your invite link" label, the link (Manrope 700 17, breaks anywhere), helper text, a field "Copy link" pill (turns Lagoon "Copied ✓" for 2 s), and a 112 QR code (`react-native-qrcode-svg`, ink on field). | 19, 23 |
+| `ShareTargets` | Three equal pills: WhatsApp (ink), Status / Story, More (system share sheet). | 17, 23 |
+| `InviteProgress` | 60 ring in Lavender with "2/3" + "1 more friend to go" + reward line, then friend rows (initials, name, "Joined" in success). | 23 |
+| `PrivacyList` | Two groups with uppercase captions: "THEY GET" (ink ticks) and "STAYS PRIVATE" (lock icons). | 19, 20 |
+| `RecapCard` | Ink card designed to be captured as an image (1080×1920 when shared): logo, name/school (optional), big number, stat tiles, readiness donut, footer with the invite link. | 17 |
+
+Icons: 24 grid, 2 px stroke, round caps and joins (Lucide-style, `lucide-react-native` or inline `react-native-svg`). Never emoji.
 
 ## 7. Screens
 
-Routes live in `src/app/`. Move the current `index.tsx` and `practice.tsx` into a `(tabs)` group with the floating tab bar as its layout. A root redirect sends signed-out users to `(auth)` and users without institution/level to `onboarding` (FR-PROF-01).
+Routes live in `src/app/`. A root redirect sends signed-out users to `(auth)`, users without institution/level to `onboarding` (FR-PROF-01), and applies a pending invite/share code after onboarding (FR-AUTH-07).
 
 | # | Route | Screen | Requirements | Data |
 |---|---|---|---|---|
-| 01 | `(auth)/sign-in.tsx` | Sign in (email → code, Google) | FR-AUTH-01/02/03 | Supabase Auth |
+| 01 | `(auth)/sign-in.tsx` | Welcome → email → code | FR-AUTH-01/02/03 | Supabase Auth |
 | 02 | `onboarding.tsx` | Profile setup | FR-PROF-01/02, FR-AUTH-03 | `profiles`, `institutions` |
-| 03 | `(tabs)/index.tsx` | Library | FR-CRS-01/02, FR-LIM-01 | `courses`, `documents`, `usage_counters` |
+| 14 | `(tabs)/index.tsx` | **Today (home)** | FR-HOME-01..06 | `GET /home`, Realtime |
+| 03 | `(tabs)/library.tsx` | Library (image `03-library-home.png`) | FR-CRS-01/02, FR-LIM-01, FR-SHARE-05 | `courses`, `documents`, memberships |
 | 04 | `upload.tsx` (formSheet) | Add notes | FR-DOC-01/02/03 | `POST /documents` → signed PUT → `POST /documents/{id}/uploaded` |
-| 05 | `course/[id].tsx` | Course | FR-CRS-03, FR-DOC-04–09 | `documents`, `jobs.progress` (poll 3 s) |
+| 05 | `course/[id]/index.tsx` | Course | FR-CRS-03/04, FR-DOC-04–09/12 | `documents`, `jobs.progress` |
 | 06 | `document/[id]/index.tsx` | Outline | FR-TOP-01 | `GET /documents/{id}/outline` |
 | 07 | `document/[id]/topic/[topicId].tsx` | Explanation | FR-EXPL-01–05, FR-MOD-01/03 | `explanations` |
-| 08 | `document/[id]/chat.tsx` | Chat | FR-CHAT-01–06 | `POST /chat/{thread_id}/messages` (SSE) |
-| — | `document/[id]/page/[n].tsx` | Source page viewer | FR-DOC-10 | signed download URL |
+| 08 | `document/[id]/chat.tsx` | Chat | FR-CHAT-01–06, FR-SEC-14 | SSE |
+| — | `document/[id]/page/[n].tsx` | Source page viewer (own docs) / quote view (shared) | FR-DOC-10, FR-SHARE-02 | signed URL (5 min) / chunk text |
 | 09 | `quiz/new.tsx` | Quiz setup | FR-QGEN-01/07/08 | `POST /quizzes` |
-| 10–11 | `quiz/[id]/play.tsx` | Question (objective + theory marked) | FR-QUIZ-01–05 | `GET /quizzes/{id}`, outbox |
+| 10–11 | `quiz/[id]/play.tsx` | Question (objective + theory) | FR-QUIZ-01–05, FR-SEC-12 | `GET /quizzes/{id}`, outbox |
 | 12 | `quiz/[id]/results.tsx` | Results | FR-QUIZ-06 | `quiz_attempts` |
+| 15 | `daily5/done.tsx` | Daily 5 done + weekly goal | FR-HAB-01..04 | `GET /home`, `study_days` |
+| — | `daily5/index.tsx` | Daily 5 (uses `play.tsx` UI) | FR-HAB-01 | `GET /daily5` |
+| 16 | `celebrate/[achievementId].tsx` (modal) | Celebration | FR-HAB-05 | `achievements` |
 | — | `(tabs)/practice.tsx` | Practice history | FR-QUIZ-05/07 | `quizzes`, `quiz_attempts` |
 | 13 | `(tabs)/account.tsx` | Account | FR-AUTH-04/05, FR-LIM-01 | `profiles`, `usage_counters` |
+| 17 | `recap/[week].tsx` | Weekly recap | FR-HAB-06 | `GET /recap/{week}` |
+| 18 | `settings/themes.tsx` | Themes and study modes | FR-HAB-07 | `profiles`, `achievements` |
+| 21 | `settings/reminders.tsx` | Reminders | FR-HAB-08 | `notification_settings` |
+| — | `settings/privacy.tsx` | Privacy and blocking | FR-SHARE-09, FR-INV-02 | `profiles`, `user_blocks` |
+| 19 | `course/[id]/share.tsx` (formSheet) | Share a course | FR-SHARE-01/02/07/10 | `POST /courses/{id}/share` |
+| — | `course/[id]/members.tsx` | Members of a shared course | FR-SHARE-07 | `GET /courses/{id}/members` |
+| 20 | `c/[code].tsx` and `share/[memberId].tsx` | Join a shared course | FR-SHARE-03/04, FR-AUTH-07 | `GET /shares/...` |
+| 22 | `notifications.tsx` | Notifications inbox | FR-NOTIF-04 | `notifications` |
+| 23 | `invite.tsx` | Invite friends | FR-INV-01/04/05 | `GET /me/invite` |
+| — | `i/[code].tsx` | Invite deep link (stores code, routes on) | FR-INV-02/03 | — |
+| 24 | web: `INVITE_DOMAIN/i/{code}`, `/c/{code}` | Invite / share landing (mobile web) | FR-INV-02, FR-INV-06 | link service |
 
-### 01 Sign in
-Ground background. Top-left: the logo in a 56 ink circle (no wordmark). Centre (flex): the animated `StudyIllustration`. Then an ink hero card: "Your notes,⏎made clear." (`hero`) + "Explanations and practice questions from your own slides." (muted) + a diagonal ↘ arrow. Then `TextField` "Email", ink `ActionPill` "Continue", and a text button "Continue with Google". Footer: terms + privacy links (12, muted). Code step replaces the field with six 64-tall digit boxes, ink `ActionPill` "Verify", text button "Use a different email".
+Move the current Library from `(tabs)/index.tsx` to `(tabs)/library.tsx`; Today takes `index`.
+
+### 01 Sign in — welcome (redesigned, monochrome)
+Follows the reference: ground background, padding 24/20/22, no accent colours. **Top row:** only the logo in a 52 ink circle (no pill, no wordmark). **Illustration area** (flex, fills the free space): the animated `StudyIllustration` at about 320 wide, with three `Sticker`s around it: "Slides in" (field, up arrow, top-left), "20 exam questions" (ink, tick, top-right), "Cited from page 14" (field, "p.", bottom-right). **Ink hero card** (radius 32, padding 24/22/20): "Your notes,⏎exam‑ready." (`hero` 44) with a diagonal ↗ arrow (up-right) top-right, then a `FeatureList`: ✓ **Upload** slides or note photos · ✓ **Understand** it in plain English · ✓ **Practise** exam-style questions · ✓ **Check** the page every answer cites. **Bottom:** light `ActionPill` "Get started" (ink circle with a book icon), then two text buttons side by side: "Continue with Google" (ink) and "I have an account" (muted). Footer: terms + privacy links (12 muted).
+**Step 2 (email):** the illustration and card stay; the card drops the list. Below: Email `TextField` labelled "Email · we'll send a 6‑digit code", light `ActionPill` "Send my code", text button "Back". **Step 3 (code):** `CodeField`, light `ActionPill` "Verify" (tick), text button "Use a different email · Resend in 0:42" (60 s countdown). Images: `01-sign-in.png`, `01b-sign-in-email.png`, `01c-sign-in-code.png`.
 
 ### 02 Profile setup
-Back `IconButton`. Headline "Where do you **study?**". Fields: Full name, Institution (searchable; "My school isn't listed" appears in the search results), Department. "Level" pills: 100L, 200L, 300L, 400L, 500L, Other (more levels in "Other"). Terms checkbox. Ink `ActionPill` "Start studying".
+Back `IconButton`. Headline "Where do you **study?**". Fields: Full name, Institution (searchable; "My school isn't listed"), Department. "Level" pills: 100L–500L, Other. Terms checkbox. Ink `ActionPill` "Start studying". After this, a pending share/invite code is applied (FR-AUTH-07).
 
 ### 03 Library (tab)
-Header: initials avatar (52 field circle), "Hello, Tolu" + "12 quizzes left today", ink `IconButton` "+" (opens 04). Headline "Revise your **courses**". `HeroCard` "Continue · CSC 225", ring "6/10", title "Stacks and queues", "RESUME" pill. Then `ListCard`s per course (code circle, title, "CSC 225 · 5 documents"). `FloatingTabBar` (Library active). Empty state: "Add your first course" + ink `ActionPill` "Add notes".
+Header: initials avatar, "Hello, Tolu" + "12 quizzes left today", ink `IconButton` "+" (opens 04). Headline "Revise your **courses**". `HeroCard` "Continue · CSC 225" with ring and "RESUME". `ListCard`s per course, with the course accent dot and, for joined courses, the tag "Shared by Ada". Floating tab bar (Library active). Empty: "Add your first course" + "Add notes", and a secondary "Join with a link" text button.
 
-### 04 Add notes (sheet)
-Sheet on a dimmed scrim, radius 32 top. Title "Add notes" + close `IconButton`. Three 120-tall tiles: PDF or slides (selected = ink), Camera, Photos. `TextField` "Course" (select). Ink `ActionPill` "Choose file" + one line "Up to 25 MB or 150 pages · 4 uploads left today". Over-limit files are rejected before upload with a red soft block (FR-DOC-02).
-
-### 05 Course
-Back + options (`…`) `IconButton`s. Headline = course title ("Data Structures") + "CSC 225 · 4 documents". If something is processing: `HeroCard` with 60 ring "45%", file name, "Getting it ready. You can leave." Then document `ListCard`s with one-line status: ready ("7 topics"), OCR flag in warning colour ("2 pages hard to read"), failed in danger colour ("Couldn't read this file") + ink "Replace" pill, paused upload + ink "Retry" pill. Light `ActionPill` "Add notes".
-
-### 06 Outline (dark detail screen)
-Ink background. Field-coloured back + "view original" `IconButton`s. Title "Stacks and queues" (`display`, white) + "CSC 225 · 38 pages · 7 topics" (muted). Two pills: "Practise" (field) and "Ask your notes" (outlined). A ground-coloured sheet rises from the bottom (radius 32) titled "Topics": rows = 48 number circle + title + first page.
-
-### 07 Explanation
-Back + report `IconButton`s, "Topic 2 of 7" centred. Headline = topic title. `SegmentedPill`: Standard / Simple / Exam (FR-EXPL-02, cached per style). Body text 17/27 with inline `CitationChip`s; code in an ink block (radius 24, mono 13/22); `GroundingCallout` last. Thumbs up/down sit at the end of the article (FR-MOD-03). Ink `ActionPill` "Quiz me on this" (5-question quiz on this topic).
-
-### 08 Chat
-Back `IconButton` + "Ask your notes" / document title. User bubbles: ink, radius 24 with 8 bottom-right. Assistant bubbles: field, radius 24 with 8 bottom-left, `CitationChip`s under the text, `GroundingCallout` when needed. Thumbs and report on long-press (FR-MOD-01/03). Above the input: pills "Explain simpler", "Quiz me on this" (FR-CHAT-06). Input: 64 field pill with ink 52 send button. Streaming: text appears token by token (FR-CHAT-04).
-
-### 09 Quiz setup
-Close `IconButton`. Headline "Build a **quiz**" + "All topics · Mixed difficulty" with a "Change" pill (opens a sheet for scope and difficulty). "Question types" pills (multi-select). "Questions" as four 72 circles: 5, 10, 20, 30. "Mode" `SegmentedPill`: Practice / Exam. Ink `ActionPill` "Start 10 questions" (count updates). Defaults per FR-QGEN-01.
-
-### 10 Question (objective)
-Close + report `IconButton`s. `HeroCard`: "Multiple choice" + ring "7/10" + the question (26/32). Four `AnswerOption`s. After answering (practice mode): one line "Correct." / "Not quite." in success/danger + one-sentence explanation + `CitationChip`. Ink `ActionPill` "Next" (disabled until answered). Exam mode: timer in the header, no feedback until submit (FR-QUIZ-02).
-
-### 11 Question (theory, marked)
-`HeroCard`: "Theory · 6 marks", question, big score "4 / 6 marks". Rubric rows: field (or dangerSoft when 0) with ✓/✕ icon, criterion, marks; missed criteria show a one-line hint. Text button "See model answer". Ink `ActionPill` "Next". Offline answers queue and are marked on reconnect (FR-QUIZ-04).
-
-### 12 Results (dark detail screen)
-Ink background. Close button. Centred 168 ring with "70%", title, "10 questions · 12 min". Ground sheet "Revise next" with the weakest topics (score in danger/warning colour). Ink `ActionPill` "Practise these" + text button "Review answers".
+### 04 Add notes (sheet) · 05 Course · 06 Outline · 07 Explanation · 08 Chat · 09 Quiz setup · 10 Question · 11 Theory · 12 Results
+As v0.3 (see images 04–12), with the new type. Additions:
+- **05 Course:** the meta line shows the exam date ("CSC 225 · 4 documents · Exam 7 Nov"); the share `IconButton` opens 19; the `…` menu has Rename, Exam date, Accent colour, Members (if shared), Delete. In a joined course: tag "Shared by Ada", no upload/rename/delete; `…` has "Leave course" and "Report course".
+- **07 Explanation / 08 Chat in a shared course:** citation chips open the quote view (text of the cited passage), not the page image.
+- **10 Question (exam mode):** timer in the header; answers aren't revealed until Submit (FR-SEC-12).
 
 ### 13 Account (tab)
-Avatar (ink circle) + name + "UNILAG · 200L" + "Edit" pill. Headline "Left **today**". Ink card with 2×2 tiles: Uploads 4/5, Quizzes 12/15, Explanations 25/30, Chat 38/40 (reset at 12:00 AM). Rows: "Privacy and terms", "Sign out". Danger text button "Delete account" → confirmation screen (FR-AUTH-05). `FloatingTabBar` (Account active).
+Avatar + name + "UNILAG · 200L" + "Edit". Headline "Left **today**". Ink card with 2×2 `StatTile`s: Uploads, Quizzes, Explanations, Chat (remaining / max). Rows: **Themes and study modes** (→18), **Reminders** (→21), ink row **Invite friends to Quizzly** with "2 joined" (→23). Small pills: **Privacy** (→ privacy and blocking), **Sign out**, danger text **Delete account** (→ confirmation: type DELETE; explains shared courses stop being shared).
+
+### 14 Today (home tab)
+Header: initials avatar, date ("Monday, 26 October"), bell `IconButton` with unread badge (→22). Greeting "Good evening, **Tolu**". `CountdownCard` for the nearest exam with the course accent ring. "This week" `WeekStrip` card with "3 of 4 study days". "Today's plan · About 15 min": `PlanRow`s Daily 5 (5 questions due · 3 min), Fix a weak topic (topic · 5 questions), Learn something new (topic · 6 min read). Floating tab bar (Today active). The live `Toast` slides in at the top for shares ("Ada O. shared CSC 225 with you · Just now · 31 topics, 240 questions · View"). **New user:** countdown card asks "When is your first exam?"; plan shows "Upload your first notes" and "Join a shared course".
+
+### 15 Daily 5 done + weekly goal
+Ink check circle + "Daily 5 **done**" + "5 of 5 correct · 2 min 40 s". Ink card "Weekly goal met · 4 of 4 days" with `WeekStrip` (today in Lagoon) and "3 weeks in a row. Missing a day never resets your week." Surface card "Your study days · 19 in 5 weeks" with `StudyGrid`. Ink `ActionPill` "Next: fix a weak topic" + text button "Done for today".
+
+### 16 Celebration (modal)
+Ink full screen. Close button, Lagoon pill "Personal best" (or the achievement kind). 168 ring "80%" with rays. Title "Topic **mastered**" + "Evaluating expressions · CSC 225". Ground sheet: "Since last Monday" before/after bars (0% → 80%), "CSC 225 readiness 64% → 71%", ink row "New theme unlocked: Lagoon" (→18). `ActionPill` "Back to today". At most one per session (FR-HAB-05).
+
+### 17 Weekly recap (share)
+Close button, "Your week · 19–25 Oct". `RecapCard`: logo, "Tolu · UNILAG 200L", "This week I answered **142** practice questions", tiles Topics mastered 3 · Study days 4/4, readiness 71% +18% with a Lagoon donut, footer "Study smarter with Quizzly · {invite link}". `ShareTargets`: WhatsApp, Story, Save image. A toggle in the `…` menu hides name and school.
+
+### 18 Themes and study modes
+Back. Headline "Make it **yours**". Ink preview card: ring in the selected accent "71%", "Lagoon accent · Rings, highlights and badges use this colour." `ThemeRow`s: Ink (Default), Lagoon (Unlocked: first mastered topic), Ankara (Master 10 topics, locked), Palm (Meet your weekly goal 4 weeks running, locked), Lavender (3 friends join Quizzly, locked). `ToggleRow`s: Night study mode (Dark from 9 PM, calmer animations), Low-data mode (This week: 3.2 MB used).
+
+### 19 Share a course (sheet)
+Title "Share **CSC 225**" + "Coursemates study it without uploading", close button. `PrivacyList` — THEY GET: Outlines and explanations · 31 topics; Practice questions · 240; Notes you add later, automatically. STAYS PRIVATE: Your scores, chats and progress; Original files (they see quoted pages only). "SEND IN QUIZZLY · THEY'RE NOTIFIED INSTANTLY": a search `IconButton` (enter a Quizzly code) + `MateChip`s (wrap). Invite link row "{domain}/c/7KQ2M9XD" + Copy. Ink `ActionPill` "Share to WhatsApp" (or "Send to 2" when chips are selected). Footer: "4 coursemates joined" (→ members) and danger text "Stop sharing" (confirm dialog).
+
+### 20 Join a shared course
+Close button. Sharer row: "Ada O. shared a course with you". Ink card: "CSC 225 · UNILAG · 200L", title "Data Structures", tiles 4 notes · 31 topics · 240 questions, `AvatarStack` "12 coursemates are studying this" (only if ≥ 3). Ticks: "Ready now. No uploading, no waiting." · "Your scores and progress stay private." · "New notes Ada adds appear for you too." `ActionPill` "Add to my library" + text button "Not now" (declines). `…` menu: Block Ada, Report.
+
+### 21 Reminders
+Back. Headline "Nudge me **kindly**". Ink card "Preview on your lock screen" with two sample notifications. `ToggleRow` "Daily study reminder · Only if you haven't studied yet" with an ink time pill "7:30 PM" (opens a time picker). Toggles: Exam countdown, Questions due for review, Weekly recap on Sunday, Coursemate joins and challenges (off by default), Notes ready to study. Footer: "Quiet hours 11 PM – 7 AM · At most 2 reminders a day" (tap to edit quiet hours).
+
+### 22 Notifications (inbox)
+Back + "Mark all read" pill. Headline "Notifications" + ink pill "2 new". `FilterPills` All / Shared with me / Study. `NotificationRow`s, newest first; a pending share shows "Add to library" + "View" inline and becomes "Added to your library" after tapping. Long-press a person's row: Block, Turn off this type. Empty: "You're all caught up."
+
+### 23 Invite friends
+Back. Headline "Study with your **friends**". `LinkCard` with "{domain}/i/TOLU7", "Opens the app, or the download page if they don't have it.", Copy, QR. `ShareTargets` WhatsApp / Status / More. `InviteProgress`: Lavender ring "2/3", "1 more friend to go · 3 friends join → unlock the Lavender theme", friend rows (Kemi B. Joined, Femi E. Joined, "Your next friend · Preview link").
+
+### 24 Invite / share landing (mobile web, link service)
+Same tokens and fonts as the app (web fonts from Google Fonts are fine here). A grey URL pill shows the link (in the canvas only, to explain context). Logo + "Quizzly" wordmark. Inviter card: "**Tolu** (UNILAG, 200L) invited you to study together on Quizzly" (hidden if the inviter turned identity off; for `/c/` links: "Ada shared CSC 225 with you"). Ink card "Your notes, **made clear.**" with three ticks (upload, explanations and questions, share with coursemates). `ActionPill` "Get it on Google Play" (download icon). Footer: "iPhone: coming soon · Join the waitlist" and "Already have Quizzly? Open the app". On desktop: the same card centred with a QR code.
 
 ### Not drawn — build from the components
-- **Practice tab:** list of quizzes/attempts as `ListCard`s (title, score ring, date; "Resume" for in-progress, FR-QUIZ-05).
-- **Source viewer:** full-screen page with the page number in the header.
-- **Report sheet:** Wrong / Unclear / Inappropriate + optional note (FR-MOD-01).
-- **Delete course dialog:** "Delete documents" or "Move to Unfiled" (FR-CRS-03).
-- **New/rename course sheet:** course code (2–12 chars) + optional title (FR-CRS-01).
+- **Practice tab:** quizzes and attempts as `ListCard`s (title, score ring, date; "Resume" for in-progress).
+- **Daily 5 play:** screen 10's UI with "Daily 5 · 3 of 5" in the header.
+- **Source viewer / quote view:** full-screen page image with the page number in the header (own documents); for shared courses, the quoted passage on a field card with "From Ada's notes · p. 14".
+- **Report sheet:** Wrong / Unclear / Inappropriate (+ Copyright for shared courses) + optional note ≤ 500 chars.
+- **Delete course dialog:** "Delete documents" or "Move to Unfiled"; if shared: "Members will lose access."
+- **New / edit course sheet:** Course code (2–12), optional title, **Exam date** (optional date picker, "Add exam date for a countdown"), accent swatches.
+- **Members (shared course):** list of display names with a `…` per row → Remove; "Regenerate link"; "Stop sharing".
+- **Privacy and blocking:** "Who can send me courses" (Coursemates only / Anyone with my code / No one), "Show my name on invite links and recaps" toggle, Blocked people list with Unblock, links to Privacy Policy and Terms.
+- **Delete account confirmation:** explains what is deleted, type DELETE, danger `ActionPill`.
 - **Quiz scope/difficulty sheet** opened by "Change" on 09.
+- **iPhone waitlist form** on the landing page: email + consent checkbox + "Join the waitlist".
 
 ## 8. Logo — "Checked Q"
 
-A ring whose tail is a tick: question in, right answer out. Asset: `apps/mobile/assets/brand/logo.svg`.
+A ring whose tail is a tick: question in, right answer out. Asset: `apps/mobile/assets/brand/logo.svg` (exists; component `src/components/logo.tsx`).
 
-- Geometry (100-unit grid): circle centre (44, 44), r 30, stroke 12; tick path `M60 72 L72 84 L94 60`, stroke 12; round caps and joins; use `viewBox="8 4 92 92"` so it is optically centred.
+- Geometry (100-unit grid): circle centre (44, 44), r 30, stroke 12; tick path `M60 72 L72 84 L94 60`, stroke 12; round caps and joins; `viewBox="8 4 92 92"`.
 - Single colour only: ink on light, white on ink. Never outline, recolour or add effects.
-- In the app: `<Logo size color />` with `react-native-svg`. On sign-in it sits in a 56 ink circle (white mark at ~30). Don't place the mark alone in small circles elsewhere, where it could read as a search button.
-- **App icon / splash:** white mark (about 50% of the canvas) on `#0D0D10`. In `app.json`, set `expo-splash-screen.backgroundColor` and `android.adaptiveIcon.backgroundColor` to `#0D0D10`, and use the mark as `monochromeImage`. Replace the Expo placeholder icons in `assets/images/`.
+- On the welcome screen it sits in a 48 ink circle (white mark ~26). It also appears in 40–48 circles as the avatar for system notifications and on the recap card; don't use it as a generic button icon.
+- App icon / splash: white mark (~50%) on `#0D0D10`.
 
 ## 9. Sign-in illustration
 
-Asset: `apps/mobile/assets/brand/study-illustration.svg` (viewBox 0 0 340 230, about 5 KB). Build `components/StudyIllustration.tsx` from it with `react-native-svg` and animate with `react-native-reanimated`:
+Asset: `apps/mobile/assets/brand/study-illustration.svg` (viewBox 0 0 340 230; component `src/components/study-illustration.tsx` exists). **v0.4:** shown at about 320 × 216 on the ground with three stickers around it; ink lines, `#F5F5FA` fills; the "?" uses Bricolage Grotesque 700.
 
 | Element | Motion |
 |---|---|
-| Notes page, cap, pencil, lightbulb, speech bubble | Float up and down 6–7 px, 3.6–5 s loops, offset phases |
-| Head group | Sways ±2° around the neck (5 s) |
-| Speech bubble | "?" cross-fades to ✓ and back (6 s cycle) |
+| Notes page, cap, pencil, lightbulb, speech bubble | Float 6–7 px, 3.6–5 s loops, offset phases |
+| Head group | Sways ±2° (5 s) |
+| Speech bubble | "?" cross-fades to ✓ and back (6 s) |
 | Mug steam | Two wisps rise and fade (2.8 s, offset) |
 | Sparkles | Twinkle (scale 0.7→1, opacity 0.25→1, 3 s) |
 
-Disable all motion when `AccessibilityInfo.isReduceMotionEnabled()` returns true. Give the SVG `accessibilityLabel="A student studying at a laptop"`.
+All motion off under reduce motion. The hero container has `accessibilityLabel="A student studying at a laptop. Quizzly turns slides into exam questions with page citations."`
 
 ## 10. States every screen handles
 
 | State | Behaviour |
 |---|---|
-| Loading | Skeleton blocks shaped like the content; show cached data first (TanStack Query persisted to SQLite). |
+| Loading | Skeleton blocks shaped like the content; cached data first (TanStack Query persisted to SQLite). |
 | Empty | One sentence + the next action pill. |
 | Error | Soft red block with FRD §4 copy + "Retry". Never a blank screen. |
-| Offline | Ink pill banner "You're offline. Saved notes still work." Network actions show "Queued" and go to the outbox with a UUID idempotency key. |
+| Offline | Ink pill banner "You're offline. Saved notes still work." Network actions show "Queued" and go to the outbox. Share, invite and inbox actions say "Needs internet". |
 | Limit (HTTP 429) | Amber block with count and reset time; disable only that action. |
-| Queued job | Ring with `jobs.progress`; "High demand — we'll notify you when it's ready." when the circuit breaker is open. |
+| Queued job | Ring with `jobs.progress`; "High demand — we'll notify you when it's ready." when the breaker is open. |
+| Realtime | No UI when disconnected; catch up on reconnect (FR-NOTIF-07). |
+| Revoked / taken down | Shared course rows show "No longer shared" with a "Remove" pill; opening shows the FRD §4 message. |
 
 ## 11. Copy
 
-- **Do:** short headlines with one stressed word; plain English; course codes as students write them ("CSC 225"); levels as "200L"; say what happens next; sentence case.
-- **Don't:** mention models, providers or tokens; hint that another student uploaded the same file (FR-DOC-06); use emoji, stock illustrations or exclamation marks in errors.
+- **Do:** short headlines with one stressed word; plain English; course codes as students write them ("CSC 225"); levels as "200L"; say what happens next; sentence case; celebrate effort ("4 of 4 days").
+- **Do (social):** always name what's shared and what stays private; show people as "Ada O.".
+- **Don't:** mention models, providers or tokens; hint that another student uploaded the same file; use emoji, stock images or exclamation marks in errors; use guilt or fear ("You'll lose your streak!", "Your classmates are ahead of you").
 
-## 12. Build order
+## 12. Build order (UI)
 
-1. Foundation: fonts, `theme.ts`, `components/ui/*`, `Logo`, `(auth)` / `(tabs)` layouts, auth guard, offline hook (NetInfo), API error mapping.
-2. M1: 01 Sign in, 02 Profile setup, 03 Library, 04 Add notes, 05 Course.
-3. M2: 06 Outline, 07 Explanation (Markdown + KaTeX WebView only here), 08 Chat (SSE), source viewer.
-4. M3: 09 Quiz setup, 10–11 Question, 12 Results, Practice tab.
-5. M4: 13 Account, report sheet, outbox sync, dark-mode pass, 200% font-scale pass, reduce-motion pass.
+See [BUILD_PLAN.md](BUILD_PLAN.md) for the full sequence including backend work. UI order:
+
+1. Fonts + `theme.ts` (Bricolage/Manrope, `Accent`), update existing components, remove Inter.
+2. 01 Welcome sign-in (monochrome: stickers, ticked feature list in the hero card, three steps).
+3. Tabs: Today becomes `index`, Library moves to `library`; 14 Today with `GET /home`.
+4. Daily 5 + 15, then 16 Celebration.
+5. Notifications: Realtime hook, `Toast`, bell badge, 22 inbox, push registration.
+6. Sharing: 19, 20, members, privacy and blocking, joined-course read-only states in 03/05/07/08.
+7. Invites: 23, deep links `/i` and `/c`, install referrer; link service + 24 landing.
+8. 17 Recap, 18 Themes, 21 Reminders.
+9. Passes: dark mode, 200% font scale, reduce motion, TalkBack.
 
 ## 13. Checklist before any UI PR
 
-- [ ] Only theme tokens; no raw hex in screens.
+- [ ] Only theme tokens; no raw hex in screens. Accents only where §3.2 allows; ink text on accents.
+- [ ] Only Bricolage Grotesque and Manrope via `Type`.
 - [ ] Every touchable has `accessibilityRole` and `accessibilityLabel`; targets ≥ 48.
-- [ ] Works at 200% font scale and in dark mode.
+- [ ] Works at 200% font scale, in dark mode and with reduce motion.
 - [ ] Loading, empty, error, offline and limit states implemented.
 - [ ] AI text has citations or a grounding callout.
+- [ ] Social screens show only display names and say what stays private.
 - [ ] `npx expo lint` and `npx tsc --noEmit` pass.
 - [ ] PR description lists the FR IDs covered.

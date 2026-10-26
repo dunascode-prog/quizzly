@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Draft v0.1 |
-| **Date** | 2026-10-17 |
+| **Status** | Draft v0.2 |
+| **Date** | 2026-10-26 |
 | **Related** | [Architecture](ARCHITECTURE.md) · [Data models](DATA_MODELS.md) |
 
 **Notation used in every diagram:**
@@ -29,7 +29,13 @@ flowchart LR
     L -- "generated text / JSON" --> P0
     P0 -- "push messages" --> E[Expo Push]
     E -- "notifications" --> S
+    S -- "share codes, invite links" --> P0
+    P0 -- "real-time notifications (Realtime websocket)" --> S
+    F[Friend / coursemate] -- "opens invite or share link" --> LS[Link service + Play Store]
+    LS -- "install referrer, deep link" --> P0
 ```
+
+> **v0.2 note:** every write arrow from the Student below goes through the API (FR-SEC-01); the app only reads tables directly.
 
 ## 2. Level 1: main processes
 
@@ -436,6 +442,75 @@ flowchart LR
     DH -. "keeps Supabase project active" .-> SB[Supabase]
 ```
 
+### 3.26 Progress: `topic_mastery`, `readiness_snapshots`, `study_days`, `review_queue`, `achievements` (v0.2)
+
+```mermaid
+flowchart LR
+    S[Student] -- "answers (online or synced outbox)" --> API(Save attempt answers)
+    API -- "enqueue update_mastery" --> J[(jobs)]
+    J --> W(Worker: update progress)
+    W -- "recency-weighted accuracy" --> DTM[(topic_mastery)]
+    W -- "box / due_on" --> DRQ[(review_queue)]
+    W -- "questions, reading time" --> DSD[(study_days)]
+    W -- "nightly per course" --> DRS[(readiness_snapshots)]
+    W -- "first mastery, PB, goal met, unlocks" --> DAC[(achievements)]
+    DTM & DRS & DSD --> T(Today home) --> S
+    DRQ -- "due questions" --> D5(Daily 5 picker) --> S
+    DAC -- "unseen" --> C(Celebration) --> S
+```
+
+- **C/U:** only the worker (`update_mastery` job after each attempt/answer batch, nightly snapshot). Reading time comes from the explanation screen as a batched event.
+- **R:** the student reads their own rows (select-only RLS).
+- **D:** account deletion; leaving a shared course keeps mastery rows (history), revoked courses hide them from Today.
+
+### 3.27 Sharing: `course_shares`, `course_members`, `user_blocks` (v0.2)
+
+```mermaid
+flowchart LR
+    O[Owner] -- "share course / pick coursemates / regenerate / stop" --> SH(Share API)
+    SH -- "check owner, ready docs, limits, blocks, share_permission" --> DCS[(course_shares)]
+    SH -- "pending rows" --> DCM[(course_members)]
+    SH -- "course_shared" --> DN[(notifications)]
+    R[Recipient] -- "Add to library / Not now / Leave" --> SH
+    LK[Link /c/code] -- "resolve (rate-limited)" --> SH
+    DCM -- "is_course_member()" --> RLS(RLS on derived content) --> R
+    R -- "block user" --> DB[(user_blocks)] --> SH
+    A[Admin] -- "take down" --> DCS
+```
+
+- Owners never see members' activity, only names and the count. Members never get file URLs.
+- Adding a document to a shared course enqueues `fan_out_share_update` once it is ready (batched notification, FR-SHARE-06).
+
+### 3.28 `notifications` and `notification_settings` (v0.2)
+
+```mermaid
+flowchart LR
+    EV(Server events: share, ready, recap, reminder, invite credit) -- "insert (dedupe_key)" --> DN[(notifications)]
+    DN -- "Realtime INSERT (user_id = me)" --> APP[App in foreground: toast + badge]
+    DN -- "enqueue send_push if app not active" --> W(Worker: send_push)
+    DNS[(notification_settings)] -- "types, quiet hours" --> W
+    W -- tokens --> DPT[(push_tokens)]
+    W --> E[Expo Push] --> DEV[Device]
+    APP -- "mark read / mark all read (API)" --> DN
+    APP -- "catch-up: unread since last id" --> DN
+```
+
+### 3.29 `referrals` and `waitlist` (v0.2)
+
+```mermaid
+flowchart LR
+    F[Friend] -- "taps /i/CODE" --> LS(Link service)
+    LS -- "app installed" --> APP[App opens with code]
+    LS -- "Android, no app" --> PS[Play Store + referrer]
+    PS -- "install referrer on first launch" --> APP
+    LS -- "iPhone" --> WL(Waitlist form) --> DWL[(waitlist)]
+    APP -- "pending code after sign-up" --> API(Referral API) --> DR[(referrals: pending)]
+    API -- "verified + onboarded + 5 answers" --> J[(jobs: credit_referral)]
+    J --> W(Worker) -- "checks self, device, cap" --> DR
+    W -- "invite_joined" --> DN[(notifications)]
+    W -- "3 credited → Lavender" --> DAC[(achievements)]
+```
+
 ---
 
 ## 4. End-to-end sequences
@@ -517,4 +592,66 @@ sequenceDiagram
     LLM-->>API: tokens
     API-->>App: SSE tokens + final citations
     API->>DB: save both messages
+```
+
+### 4.4 Share a course in Quizzly (real time)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as Owner app
+    participant API
+    participant DB as Postgres
+    participant RT as Realtime
+    participant W as Worker
+    participant R as Recipient app
+    O->>API: POST /courses/{id}/share {recipients:[user_id|code]}
+    API->>DB: owner? ready docs? limits? blocks? share_permission?
+    API->>DB: upsert course_shares (active), insert course_members (pending)
+    API->>DB: insert notifications (course_shared) per recipient
+    DB-->>RT: INSERT event
+    RT-->>R: notification (app open) → toast + badge ≤ 2 s
+    API->>W: enqueue send_push (recipients not active)
+    R->>API: GET /shares/{member_id} (preview, screen 20)
+    R->>API: POST /shares/{member_id}/accept
+    API->>DB: member active, member_count + 1
+    R->>API: GET /courses (now includes "Shared by Ada")
+```
+
+### 4.5 Join with a link after installing
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant F as Friend's phone
+    participant LS as Link service
+    participant PS as Play Store
+    participant App
+    participant API
+    F->>LS: GET /c/7KQ2ABCD (from WhatsApp)
+    alt app installed
+        LS-->>F: Android App Link → app opens /c/7KQ2ABCD
+    else not installed
+        LS-->>F: redirect Play Store ?referrer=share%3D7KQ2ABCD
+        F->>PS: install
+        App->>App: first launch: read Install Referrer once, store pending code
+    end
+    App->>API: sign in + onboarding
+    App->>API: POST /shares/join {code}
+    API-->>App: member (active) → Join screen 20 → Today
+```
+
+### 4.6 Daily reminder
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant W as Worker (every 15 min)
+    participant DB as Postgres
+    participant E as Expo Push
+    W->>DB: users whose local reminder time falls in this window
+    W->>DB: skip if study_days.counted today, quiet hours, or 2 pushes sent today
+    W->>DB: insert notification (reminder_due / reminder_exam)
+    W->>E: send push
+    E-->>W: receipts (remove invalid tokens)
 ```
