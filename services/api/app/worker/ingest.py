@@ -7,7 +7,7 @@ uploaded is reused instead of processed again (FR-DOC-06, ARCHITECTURE §5.1).
 import asyncio
 import hashlib
 import logging
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import httpx
@@ -141,8 +141,13 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
         else:
             mime = extract.sniff(files[0])
             sha = hashlib.sha256(files[0]).hexdigest()
-        source_file_id, ready = await _claim_source_file(conn, doc, sha, mime, size)
+        try:
+            source_file_id, ready = await _claim_source_file(conn, doc, sha, mime, size)
+        except extract.ExtractionError:
+            await _dedupe_floor(conn, job)  # a shared file that failed: same timing as our own
+            raise
         if ready:
+            await _dedupe_floor(conn, job)
             await _link_ready(conn, document_id, source_file_id, doc["upload_path"])
             return
         await queue.set_progress(conn, job["id"], 10)
@@ -247,6 +252,23 @@ async def _ocr_scanned_pages(
         results[n] = await asyncio.to_thread(_render_and_ocr, data, n)
         await queue.set_progress(conn, job["id"], 10 + round(20 * i / len(scanned)))
     return [_ocr_page(p.number, results[p.number]) if p.number in results else p for p in pages]
+
+
+# FR-SEC-11 / FR-DOC-06: a file someone else already uploaded must not be noticeably faster,
+# or its timing tells the student that another student has that exact file.
+DEDUPE_FLOOR = timedelta(seconds=3)
+DEDUPE_STEPS = (10, 30, 70, 90)  # the progress a real run reports along the way
+
+
+async def _dedupe_floor(conn: AsyncConnection, job: dict) -> None:
+    """Holds a dedupe hit until 3 s after the upload, stepping progress like a real run, so the
+    responses, statuses and timing match a fresh upload."""
+    uploaded = job.get("created_at") or datetime.now(UTC)
+    remaining = (uploaded + DEDUPE_FLOOR - datetime.now(UTC)).total_seconds()
+    pause = max(remaining, 0) / len(DEDUPE_STEPS)
+    for step in DEDUPE_STEPS:
+        await asyncio.sleep(pause)
+        await queue.set_progress(conn, job["id"], step)
 
 
 async def _link_ready(
