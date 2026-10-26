@@ -338,3 +338,47 @@ def test_type_plan_deals_types_across_topics_and_reaches_the_prompt():
         q.PROMPT_PATH.read_text(encoding="utf-8"), [src], ["mcq", "true_false"], "easy"
     )
     assert 'types="1 multiple choice, 1 true or false"' in prompt
+
+
+# --- FR-SEC-12: exam quizzes don't send answers until submitted ----------------------------------
+
+QUESTION = {
+    "id": uuid.uuid4(),
+    "ordinal": 0,
+    "type": "mcq",
+    "difficulty": "easy",
+    "stem": "Which end of a stack do items leave from?",
+    "options": ["Top", "Bottom", "Middle", "Either"],
+    "answer": 0,
+    "explanation": "Stacks are LIFO: items leave from the top.",
+    "source_pages": [2],
+    "topic_id": None,
+    "topic_title": None,
+    "marks": 1,
+    "rubric": None,
+}
+
+
+@pytest.mark.parametrize(
+    ("mode", "submitted", "shown"),
+    [("exam", False, False), ("exam", True, True), ("practice", False, True)],
+)
+def test_exam_answers_stay_hidden_until_the_attempt_is_submitted(
+    client, fake, monkeypatch, mode, submitted, shown
+):
+    async def questions_for(conn, set_id):
+        return [dict(QUESTION)]
+
+    async def has_submitted(conn, user_id, quiz_id):
+        return submitted
+
+    monkeypatch.setattr(quizzes, "questions_for", questions_for)
+    monkeypatch.setattr(quizzes, "has_submitted", has_submitted)
+    qid = client.post(URL, headers=auth(), json={"mode": mode}).json()["id"]
+    next(iter(fake["sets"].values())).update(status="ready", generated_count=1)
+    q0 = client.get(f"/v1/quizzes/{qid}", headers=auth()).json()["questions"][0]
+    assert q0["stem"] and q0["options"]  # the question itself is always there
+    if shown:
+        assert (q0["answer"], q0["explanation"]) == (0, QUESTION["explanation"])
+    else:
+        assert (q0["answer"], q0["explanation"], q0["rubric"]) == (None, None, None)

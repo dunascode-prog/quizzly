@@ -56,7 +56,7 @@ export default function NewCourseSheet() {
           onChangeText={setTitle}
           placeholder="Data Structures"
           autoCapitalize="words"
-          maxLength={120}
+          maxLength={80}
           returnKeyType="done"
           onSubmitEditing={save}
         />

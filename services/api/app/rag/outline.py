@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from app.llm.gateway import LLMGateway
 from app.rag.extract import Page
-from app.rag.text import Chunk
+from app.rag.text import Chunk, escape_tags
 
 log = logging.getLogger("quizzly.outline")
 
@@ -89,7 +89,7 @@ def _digest(pages: list[Page]) -> str:
     per_page = max(120, min(600, DIGEST_CHARS // max(len(pages), 1)))
     lines = []
     for p in pages:
-        text = re.sub(r"\s+", " ", p.text).strip()
+        text = escape_tags(re.sub(r"\s+", " ", p.text).strip())
         if text:
             lines.append(f"[p{p.number}] {text[:per_page]}")
     return "\n".join(lines)

@@ -278,7 +278,7 @@ export default function ChatScreen() {
               placeholderTextColor={theme.textSecondary}
               selectionColor={theme.text}
               accessibilityLabel="Your question"
-              maxLength={1000}
+              maxLength={2000}
               multiline
               // Web textareas default to two rows; one keeps the placeholder centred in the pill.
               numberOfLines={Platform.OS === 'web' ? 1 : undefined}
