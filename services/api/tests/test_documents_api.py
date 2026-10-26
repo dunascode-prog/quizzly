@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.api.deps import get_storage
-from app.domain import courses, documents, usage
+from app.domain import courses, documents, uploads, usage
 from app.worker import queue
 from tests.conftest import JWT_SECRET
 from tests.test_api import make_token
@@ -33,13 +33,29 @@ def doc_row(**over) -> dict:
         "topic_count": 0,
         "progress": None,
         "image_count": None,
+        "upload_url_issued_at": None,
     }
     return row | over
 
 
 class FakeStorage:
+    """Uploaded objects are {path: (bytes, created_at)}; tests add them as the app's PUT would."""
+
     def __init__(self):
         self.removed: list[str] = []
+        self.objects: dict[str, tuple[bytes, datetime]] = {}
+
+    def put(self, path, data=b"%PDF-1.7 notes", created=None):
+        self.objects[path] = (data, created or datetime.now(UTC))
+
+    async def info(self, path):
+        if path not in self.objects:
+            return None
+        data, created = self.objects[path]
+        return {"size": len(data), "created_at": created.isoformat()}
+
+    async def head(self, path, n=16):
+        return self.objects[path][0][:n]
 
     async def signed_upload_url(self, path):
         return f"https://storage.test/upload/{path}?token=t"
@@ -83,16 +99,21 @@ def fake(client, monkeypatch):
         return course_id in state["courses"]
 
     async def create_document(conn, user_id, filename, course_id, image_count=None):
-        folder = f"uploads/{user_id}/{uuid.uuid4()}/"
+        doc_id = uuid.uuid4()
+        ext = None if image_count else "." + filename.rsplit(".", 1)[-1].lower()
         d = doc_row(
+            id=doc_id,
             title=filename if image_count else filename.rsplit(".", 1)[0],
             original_filename=filename,
             course_id=course_id,
             image_count=image_count,
-            upload_path=folder if image_count else folder + filename,
+            upload_path=uploads.new_path(user_id, doc_id, ext),
         )
         state["docs"][d["id"]] = d
         return d
+
+    async def upload_url_issued(conn, document_id):
+        state["docs"][document_id]["upload_url_issued_at"] = datetime.now(UTC)
 
     async def get_document(conn, user_id, document_id):
         return state["docs"].get(document_id)
@@ -117,6 +138,7 @@ def fake(client, monkeypatch):
         (documents, "create_document", create_document),
         (documents, "get_document", get_document),
         (documents, "mark_uploaded", mark_uploaded),
+        (documents, "upload_url_issued", upload_url_issued),
         (queue, "enqueue", enqueue),
     ]:
         monkeypatch.setattr(mod, name, fn)
@@ -155,6 +177,8 @@ def test_upload_is_registered_and_gets_a_signed_url(client, fake):
     assert body["document"]["status"] == "awaiting_upload"
 
     doc_id = body["document"]["id"]
+    assert body["upload_urls"][0].endswith(f"/{doc_id}/1.pdf?token=t")  # server-named path
+    fake["storage"].put(f"uploads/{USER}/{doc_id}/1.pdf")
     done = client.post(f"/v1/documents/{doc_id}/uploaded", headers=auth())
     assert done.status_code == 200 and done.json()["status"] == "uploaded"
     assert fake["jobs"] == [("ingest_document", {"document_id": doc_id}, f"ingest:{doc_id}")]
@@ -199,14 +223,15 @@ def test_failed_documents_carry_a_readable_message(client, fake):
     assert body["failure_message"].startswith("We couldn't read this file")
 
 
-async def test_deleting_documents_gives_back_only_todays_uploads(monkeypatch):
+async def test_deleting_gives_back_only_todays_never_processed_uploads(monkeypatch):
     returned = []
 
     async def give_back(conn, user_id, resource, n, tz):
         returned.append((resource, n, tz))
 
     monkeypatch.setattr(usage, "give_back", give_back)
-    deleted = [{"uploaded_today": True}, {"uploaded_today": False}, {"uploaded_today": True}]
+    # refundable = uploaded today and processing never started (FR-SEC-05)
+    deleted = [{"refundable": True}, {"refundable": False}, {"refundable": True}]
     await documents.refund_uploads(None, USER, deleted, "Africa/Lagos")
     assert returned == [("upload", 2, "Africa/Lagos")]
 
@@ -222,9 +247,9 @@ def test_photo_sets_get_one_url_per_page_in_order(client, fake):
     assert body["document"]["title"] == "Thermodynamics notes"
     urls = body["upload_urls"]
     assert [u.split("/")[-1].split("?")[0] for u in urls] == [
-        "page-001.jpg",
-        "page-002.jpg",
-        "page-003.jpg",
+        "001.jpg",
+        "002.jpg",
+        "003.jpg",
     ]
     assert fake["uploads_used"] == 1  # one document, however many photos
 
@@ -237,3 +262,70 @@ def test_photo_sets_are_limited_to_30_and_25_mb(client, fake):
     assert post(size_bytes=1000, image_count=0).status_code == 422
     assert post(size_bytes=26 * 1024 * 1024, image_count=5).status_code == 422
     assert fake["uploads_used"] == 0
+
+
+# --- FR-SEC-02 / FR-SEC-17: what arrives in Storage is checked before processing -----------------
+
+
+def register(client, **body):
+    r = client.post("/v1/documents", headers=auth(), json={"size_bytes": 1000} | body)
+    assert r.status_code == 201
+    return r.json()["document"]["id"]
+
+
+def finish(client, doc_id):
+    return client.post(f"/v1/documents/{doc_id}/uploaded", headers=auth())
+
+
+def test_paths_never_contain_the_clients_filename(client, fake):
+    r = client.post(
+        "/v1/documents",
+        headers=auth(),
+        json={"filename": "../../other-user/evil name.pdf", "size_bytes": 10},
+    )
+    doc = fake["docs"][uuid.UUID(r.json()["document"]["id"])]
+    assert doc["upload_path"] == f"uploads/{USER}/{doc['id']}/1.pdf"
+
+
+def test_a_missing_or_disguised_upload_is_refused_and_can_be_retried(client, fake):
+    doc_id = register(client, filename="notes.pdf")
+    path = f"uploads/{USER}/{doc_id}/1.pdf"
+    r = finish(client, doc_id)
+    assert r.status_code == 422 and r.json()["detail"].startswith("The upload didn't finish.")
+    fake["storage"].put(path, bytes.fromhex("4d5a9000") + b" not a pdf")  # an .exe renamed to .pdf
+    r = finish(client, doc_id)
+    assert r.status_code == 422 and "isn't a readable PDF" in r.json()["detail"]
+    assert fake["storage"].removed == [path]  # cleared so the student can upload again
+    assert fake["jobs"] == []
+    fake["storage"].put(path)
+    assert finish(client, doc_id).status_code == 200
+
+
+def test_an_upload_after_the_10_minutes_is_refused(client, fake):
+    from datetime import timedelta
+
+    doc_id = register(client, filename="slides.pptx")
+    fake["storage"].put(
+        f"uploads/{USER}/{doc_id}/1.pptx",
+        bytes.fromhex("504b0304") + b" zip",
+        datetime.now(UTC) + timedelta(minutes=11),
+    )
+    r = finish(client, doc_id)
+    assert r.status_code == 422 and r.json()["detail"].startswith("The upload took too long.")
+
+
+def test_every_photo_of_a_set_must_be_an_image(client, fake):
+    doc_id = register(client, filename="Board notes", image_count=2)
+    folder = f"uploads/{USER}/{doc_id}/"
+    fake["storage"].put(folder + "001.jpg", bytes.fromhex("ffd8ffe0") + b" jpeg")
+    assert finish(client, doc_id).status_code == 422  # second photo missing
+    fake["storage"].put(folder + "002.jpg", bytes.fromhex("89504e470d0a1a0a") + b" png")
+    assert finish(client, doc_id).status_code == 200
+
+
+def test_a_row_pointing_outside_the_users_folder_gets_no_upload_url(client, fake):
+    doc_id = register(client, filename="notes.pdf")
+    fake["docs"][uuid.UUID(doc_id)]["upload_path"] = f"uploads/{uuid.uuid4()}/x/1.pdf"
+    fake["docs"][uuid.UUID(doc_id)]["status"] = "failed"
+    assert client.post(f"/v1/documents/{doc_id}/upload-url", headers=auth()).status_code == 409
+    assert finish(client, doc_id).status_code == 409

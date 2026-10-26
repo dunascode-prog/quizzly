@@ -47,7 +47,7 @@ export default function EditCourseSheet() {
     <Sheet title="Course" onClose={() => router.back()}>
       <View style={styles.fields}>
         <TextField label="Course code" value={code} onChangeText={setCode} autoCapitalize="characters" autoCorrect={false} maxLength={20} />
-        <TextField label="Title (optional)" value={title} onChangeText={setTitle} autoCapitalize="words" maxLength={120} />
+        <TextField label="Title (optional)" value={title} onChangeText={setTitle} autoCapitalize="words" maxLength={80} />
       </View>
       {error ? <Banner message={error} /> : null}
       <ActionPill label="Save" icon={Check} onPress={save} loading={update.isPending} />
