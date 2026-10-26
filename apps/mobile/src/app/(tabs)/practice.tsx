@@ -11,6 +11,7 @@ import { Text } from '@/components/ui/text';
 import { BottomTabInset, Radius, Size, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
+import { usePendingAttempts } from '@/lib/outbox';
 import { type AttemptSummary, usePractice } from '@/lib/quiz';
 
 function day(iso: string) {
@@ -79,11 +80,22 @@ export default function PracticeScreen() {
   );
   const attempts = practice.data?.attempts ?? [];
   const weak = practice.data?.weak_topics ?? [];
+  const pending = usePendingAttempts();
 
   return (
     <Screen bottomInset={BottomTabInset}>
       <HighlightText highlight="practice">Your practice</HighlightText>
       {practice.isError ? <Banner message={friendlyError(practice.error)} /> : null}
+      {pending ? (
+        <Banner
+          tone="info"
+          message={
+            pending === 1
+              ? "1 quiz is waiting to sync. It'll be sent and marked when you're back online."
+              : `${pending} quizzes are waiting to sync. They'll be sent and marked when you're back online.`
+          }
+        />
+      ) : null}
 
       {practice.data && attempts.length === 0 ? (
         <View style={[styles.empty, { backgroundColor: theme.backgroundElement }]}>

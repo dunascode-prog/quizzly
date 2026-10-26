@@ -22,4 +22,5 @@ export { default as ThumbsDown } from 'lucide-react-native/icons/thumbs-down';
 export { default as ThumbsUp } from 'lucide-react-native/icons/thumbs-up';
 export { default as Trash } from 'lucide-react-native/icons/trash';
 export { default as User } from 'lucide-react-native/icons/user';
+export { default as WifiOff } from 'lucide-react-native/icons/wifi-off';
 export { default as X } from 'lucide-react-native/icons/x';
