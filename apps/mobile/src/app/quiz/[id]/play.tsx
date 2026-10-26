@@ -56,9 +56,12 @@ function clock(seconds: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function Writing({ progress }: { progress: number | null }) {
+function Writing({ progress, busy }: { progress: number | null; busy?: boolean }) {
   return (
     <View style={styles.writing} accessibilityLiveRegion="polite">
+      {busy ? (
+        <Banner tone="warning" message="High demand — your quiz is queued. We'll keep trying, and you can close the app." />
+      ) : null}
       <ProgressRing size={96} strokeWidth={6} value={Math.max(progress ?? 0, 5) / 100} label={`${Math.max(progress ?? 0, 5)}%`} color="text" trackColor="line" />
       <Text variant="title" style={styles.center}>
         Writing your questions
@@ -251,7 +254,7 @@ export default function PlayScreen() {
         ) : data?.status === 'failed' ? (
           <Banner message="We couldn't write questions from these notes. Go back and try again; it won't use up your daily limit." />
         ) : (
-          <Writing progress={data?.progress ?? null} />
+          <Writing progress={data?.progress ?? null} busy={data?.busy} />
         )}
       </Screen>
     );

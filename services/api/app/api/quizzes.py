@@ -60,6 +60,8 @@ class QuizOut(BaseModel):
     requested_count: int
     generated_count: int
     notice: str | None
+    # Waiting because every AI provider is busy or the day's budget is spent (FR-LIM-03).
+    busy: bool = False
     time_limit_sec: int | None
     questions: list[QuestionOut]
 
@@ -168,6 +170,7 @@ async def _quiz_out(conn, row: dict) -> QuizOut:
         requested_count=row["requested_count"],
         generated_count=row["generated_count"],
         notice=_notice(row),
+        busy=bool(row.get("busy")),
         time_limit_sec=row["time_limit_sec"],
         questions=[QuestionOut(**x) for x in qs],
     )

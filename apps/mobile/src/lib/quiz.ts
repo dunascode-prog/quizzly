@@ -35,6 +35,8 @@ export type Quiz = {
   requested_count: number;
   generated_count: number;
   notice: string | null;
+  /** Waiting because every AI provider is busy or today's budget is spent (FR-LIM-03). */
+  busy?: boolean;
   time_limit_sec: number | null;
   questions: Question[];
 };

@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from psycopg import AsyncConnection
 
-from app.domain import usage
+from app.domain import uploads, usage
 
 MIME_TYPES = {
     ".pdf": "application/pdf",
@@ -14,11 +14,6 @@ MIME_TYPES = {
 }
 
 MAX_IMAGES = 30
-
-
-def image_paths(upload_path: str, count: int) -> list[str]:
-    """Where each photo of a photo set goes, in page order (the app sends JPEGs)."""
-    return [f"{upload_path}page-{i:03d}.jpg" for i in range(1, count + 1)]
 
 
 # Shown to the student for documents.failure_reason codes (FRD §4 copy where it exists).
@@ -32,11 +27,13 @@ FAILURE_MESSAGES = {
     "too_large": "This file is too big. Documents can be up to 25 MB and 150 pages.",
     "upload_missing": "The upload didn't finish. Try adding the file again.",
     "internal": "Something went wrong while reading this file. Try uploading it again.",
+    "crashed": "We couldn't process this file. Try exporting it again as PDF, or split it up.",
 }
 
 _SELECT = """
 select d.id, d.title, d.original_filename, d.course_id, d.status::text as status,
        d.failure_reason, d.upload_path, d.source_file_id, d.created_at, d.image_count,
+       d.upload_url_issued_at,
        sf.page_count, coalesce(cardinality(sf.low_ocr_pages), 0) as low_ocr_page_count,
        (select count(*) from topics t
          where t.source_file_id = d.source_file_id and t.parent_id is null) as topic_count,
@@ -60,13 +57,6 @@ def file_kind(filename: str) -> str | None:
     m = re.search(r"\.[A-Za-z0-9]+$", filename)
     ext = m.group(0).lower() if m else ""
     return ext if ext in MIME_TYPES else None
-
-
-def safe_name(filename: str) -> str:
-    """Storage keys allow a narrow character set; keep the extension, drop the rest."""
-    stem, _, ext = filename.rpartition(".")
-    stem = re.sub(r"[^A-Za-z0-9_-]+", "-", stem or filename).strip("-")[:60] or "file"
-    return f"{stem}.{ext.lower()}" if stem and ext else stem
 
 
 async def list_documents(
@@ -102,19 +92,27 @@ async def create_document(
     course_id: UUID | None,
     image_count: int | None = None,
 ) -> dict:
-    """A file upload, or with image_count a photo set (its upload_path is a folder)."""
+    """A file upload, or with image_count a photo set (its upload_path is a folder). The server
+    names the path; nothing from the client goes into it (FR-SEC-02)."""
     doc_id = uuid4()
-    folder = f"uploads/{user_id}/{doc_id}/"
     if image_count:
-        title, path = filename, folder
+        title, path = filename, uploads.new_path(user_id, doc_id, None)
     else:
-        title, path = filename.rpartition(".")[0] or filename, folder + safe_name(filename)
+        title = filename.rpartition(".")[0] or filename
+        path = uploads.new_path(user_id, doc_id, file_kind(filename) or ".pdf")
     await conn.execute(
         "insert into documents (id, user_id, course_id, title, original_filename, upload_path, "
         "image_count) values (%s, %s, %s, %s, %s, %s, %s)",
         (doc_id, user_id, course_id, title[:80], filename[:255], path, image_count),
     )
     return await get_document(conn, user_id, doc_id)
+
+
+async def upload_url_issued(conn: AsyncConnection, document_id: UUID) -> None:
+    """Starts the 10 minutes in which the upload must arrive (FR-SEC-17)."""
+    await conn.execute(
+        "update documents set upload_url_issued_at = now() where id = %s", (document_id,)
+    )
 
 
 async def mark_uploaded(conn: AsyncConnection, user_id: UUID, document_id: UUID) -> bool:
@@ -170,9 +168,10 @@ async def release(conn: AsyncConnection, deleted: list[dict]) -> list[str]:
 async def refund_uploads(
     conn: AsyncConnection, user_id: UUID, deleted: list[dict], tz: str
 ) -> None:
-    """Documents uploaded today give their upload back when deleted, so the student can upload
-    again while under the daily limit. Earlier days' uploads were counted on those days."""
-    await usage.give_back(conn, user_id, "upload", sum(r["uploaded_today"] for r in deleted), tz)
+    """A deleted document gives today's upload back only if it was never processed (FR-SEC-05),
+    e.g. a wrong file deleted before it finished uploading. Once processing has started the
+    upload stays counted, so upload → delete → upload can't get round the daily limit."""
+    await usage.give_back(conn, user_id, "upload", sum(r["refundable"] for r in deleted), tz)
 
 
 async def delete_document(
@@ -185,8 +184,9 @@ async def delete_document(
             await conn.execute(
                 "delete from documents where id = %(id)s and user_id = %(user)s "
                 "returning upload_path, source_file_id, "
+                "processing_started_at is null and "
                 "(created_at at time zone %(tz)s)::date = (now() at time zone %(tz)s)::date "
-                "as uploaded_today",
+                "as refundable",
                 {"id": document_id, "user": user_id, "tz": tz},
             )
         ).fetchall()

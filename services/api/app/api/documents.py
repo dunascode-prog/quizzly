@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import documents, usage
-from app.worker import queue
+from app.domain import documents, uploads, usage
+from app.worker import cleanup, queue
 
 router = APIRouter(tags=["documents"])
 
@@ -85,13 +85,13 @@ async def _check_course(conn, user_id: UUID, course_id: UUID | None) -> None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown course")
 
 
-async def _upload_urls(storage, doc: dict) -> list[str]:
-    paths = (
-        documents.image_paths(doc["upload_path"], doc["image_count"])
-        if doc["image_count"]
-        else [doc["upload_path"]]
-    )
-    return [await storage.signed_upload_url(p) for p in paths]
+async def _upload_urls(conn, storage, doc: dict, user_id: UUID) -> list[str]:
+    """Signed URLs for the document's own server-named paths only (FR-SEC-02), valid for the
+    next 10 minutes (FR-SEC-17)."""
+    if not uploads.owned(doc, user_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "This upload can't be used")
+    await documents.upload_url_issued(conn, doc["id"])
+    return [await storage.signed_upload_url(p) for p in uploads.files(doc)]
 
 
 @router.get("/v1/usage", tags=["account"])
@@ -145,7 +145,8 @@ async def create_document(
     doc = await documents.create_document(
         conn, user.id, body.filename.strip(), body.course_id, body.image_count
     )
-    return UploadOut(document=DocumentOut.of(doc), upload_urls=await _upload_urls(storage, doc))
+    urls = await _upload_urls(conn, storage, doc, user.id)
+    return UploadOut(document=DocumentOut.of(doc), upload_urls=urls)
 
 
 @router.post("/v1/documents/{document_id}/upload-url")
@@ -156,13 +157,26 @@ async def new_upload_url(
     doc = await _found(conn, user.id, document_id)
     if doc["status"] not in ("awaiting_upload", "failed") or doc["source_file_id"]:
         raise HTTPException(status.HTTP_409_CONFLICT, "This document is already uploaded")
-    return UploadOut(document=DocumentOut.of(doc), upload_urls=await _upload_urls(storage, doc))
+    urls = await _upload_urls(conn, storage, doc, user.id)
+    return UploadOut(document=DocumentOut.of(doc), upload_urls=urls)
 
 
 @router.post("/v1/documents/{document_id}/uploaded")
-async def upload_finished(document_id: UUID, user: User, conn: Conn) -> DocumentOut:
-    """The app calls this after its PUT succeeds; processing starts in the background."""
-    await _found(conn, user.id, document_id)
+async def upload_finished(
+    document_id: UUID, user: User, conn: Conn, storage: StorageDep, settings: AppSettings
+) -> DocumentOut:
+    """The app calls this after its PUT succeeds; processing starts in the background. The files
+    must be in the document's own folder, in time, within size and really of their type
+    (FR-SEC-02). Otherwise the document stays waiting so the app can upload again."""
+    doc = await _found(conn, user.id, document_id)
+    if doc["status"] in ("awaiting_upload", "failed") and not doc["source_file_id"]:
+        if not uploads.owned(doc, user.id):
+            raise HTTPException(status.HTTP_409_CONFLICT, "This upload can't be used")
+        problem = await uploads.check(storage, doc, settings.max_upload_bytes)
+        if problem:
+            if problem in ("upload_expired", "wrong_type", "too_large"):
+                await storage.remove(uploads.files(doc))  # so a fresh upload can take its place
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, uploads.MESSAGES[problem])
     if not await documents.mark_uploaded(conn, user.id, document_id):
         raise HTTPException(status.HTTP_409_CONFLICT, "This document is already uploaded")
     await queue.enqueue(
@@ -203,5 +217,5 @@ async def delete_document(
     paths = await documents.delete_document(conn, user.id, document_id, settings.timezone)
     if paths is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
-    await storage.remove(paths)
+    await cleanup.remove_or_queue(conn, storage, paths)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
