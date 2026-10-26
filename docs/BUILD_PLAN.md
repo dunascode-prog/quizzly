@@ -44,7 +44,7 @@ From the v0.1 code review. Each task needs a regression test.
 ## Phase B — New brand type and sign-in (M4, UI)
 
 - [x] **B1. Fonts and tokens** (NFR-15, DESIGN §3–4). `npx expo install @expo-google-fonts/bricolage-grotesque @expo-google-fonts/manrope`; register in `app/_layout.tsx`; apply the provided `theme.ts` (`FontFamily`, `Type.number`, `Accent`, new `Radius`/`Size` keys). Update components that use `FontFamily.semibold` for bold text to `FontFamily.bold` where DESIGN says 700. Remove Inter and `assets/fonts/InterDisplay-SemiBold.ttf`. Check every screen against `docs/design/`.
-- [ ] **B2. Welcome sign-in** (FR-AUTH-01, DESIGN §7 01). Three steps (welcome → email → code), monochrome; `Sticker` and `FeatureList` components; illustration at ~320 wide with stickers; light `ActionPill`s; resend countdown.
+- [x] **B2. Welcome sign-in** (FR-AUTH-01, DESIGN §7 01). Three steps (welcome → email → code), monochrome; `Sticker` and `FeatureList` components; illustration at ~320 wide with stickers; light `ActionPill`s; resend countdown.
 - [ ] **B3. Tabs** (FR-HOME-01). Today becomes `(tabs)/index.tsx`, Library moves to `(tabs)/library.tsx`; tab bar Today / Library / Practice / Account.
 
 ## Phase C — Engagement and sharing backend (M4)

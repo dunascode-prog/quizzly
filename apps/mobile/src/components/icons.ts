@@ -4,6 +4,7 @@ export type { LucideIcon } from 'lucide-react-native';
 export { default as ArrowDownRight } from 'lucide-react-native/icons/arrow-down-right';
 export { default as ArrowRight } from 'lucide-react-native/icons/arrow-right';
 export { default as ArrowUp } from 'lucide-react-native/icons/arrow-up';
+export { default as ArrowUpRight } from 'lucide-react-native/icons/arrow-up-right';
 export { default as BookOpen } from 'lucide-react-native/icons/book-open';
 export { default as Camera } from 'lucide-react-native/icons/camera';
 export { default as Check } from 'lucide-react-native/icons/check';
