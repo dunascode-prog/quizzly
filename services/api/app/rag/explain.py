@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.config import SERVICE_ROOT
+from app.rag.text import escape_tags
 
 PROMPT_VERSION = 1
 PROMPT_PATH = SERVICE_ROOT / "prompts" / "explanation" / f"v{PROMPT_VERSION}.md"
@@ -51,12 +52,12 @@ def build_prompt(
     documents = "\n\n".join(
         f'<document pages="{c.page_start}-{c.page_end}">\n'
         f"[p. {c.page_start}]{'' if c.page_end == c.page_start else f' to [p. {c.page_end}]'}\n"
-        f"{c.content}\n</document>"
+        f"{escape_tags(c.content)}\n</document>"
         for c in chunks
     )
     return template.format(
         style_instructions=STYLES[style],
-        topic_title=title,
+        topic_title=escape_tags(title),
         page_start=page_start,
         page_end=page_end,
         documents=documents,

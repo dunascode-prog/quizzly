@@ -4,6 +4,7 @@ import json
 import re
 
 from app.core.config import SERVICE_ROOT
+from app.rag.text import escape_tags
 
 PROMPT_VERSION = 2
 PROMPT_PATH = SERVICE_ROOT / "prompts" / "marking" / f"v{PROMPT_VERSION}.md"
@@ -13,16 +14,17 @@ MAX_ANSWER_CHARS = 4000  # a long essay is still marked; anything beyond this is
 def build_prompt(template: str, question: dict, notes: str, response: str) -> str:
     criteria = question["rubric"]["criteria"]
     rubric = "\n".join(
-        f"{i}. {c['criterion']} ({c['marks']} mark{'s' if c['marks'] != 1 else ''})"
+        f"{i}. {escape_tags(c['criterion'])} ({c['marks']} mark{'s' if c['marks'] != 1 else ''})"
         for i, c in enumerate(criteria)
     )
+    # The student's answer, the notes and the stored question all go in as data (FR-SEC-13).
     return template.format(
         marks=question["marks"],
-        question=question["stem"],
+        question=escape_tags(question["stem"]),
         rubric=rubric,
-        model_answer=question["answer"].get("model_answer", ""),
-        notes=notes,
-        student_answer=response[:MAX_ANSWER_CHARS],
+        model_answer=escape_tags(question["answer"].get("model_answer", "")),
+        notes=escape_tags(notes),
+        student_answer=escape_tags(response[:MAX_ANSWER_CHARS]),
     )
 
 
