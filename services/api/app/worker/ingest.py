@@ -43,10 +43,28 @@ def gateway() -> LLMGateway:
     return _gateway
 
 
+# Reasons that are about the file itself, so they hold for every upload of it (FR-SEC-06).
+# Anything else (provider or network errors, `internal`) is transient: it fails this document
+# only, and the next upload of the same file is processed afresh.
+PERMANENT_REASONS = {"encrypted", "corrupt", "no_text", "too_large", "blocked", "crashed"}
+
+
+async def _release_source_file(conn: AsyncConnection, source_file_id: UUID) -> None:
+    """Drops a half-processed shared file after a transient failure, so it doesn't block or
+    poison later uploads of the same file. A ready file is never touched."""
+    await conn.execute(
+        "delete from source_files where id = %s and status <> 'ready'", (source_file_id,)
+    )
+
+
 async def _fail(
     conn: AsyncConnection, document_id: UUID, reason: str, source_file_id: UUID | None = None
 ) -> None:
-    """A file we can't use: readable reason on the document, and on the shared source file."""
+    """A file we can't use: readable reason on the document. Only a permanent reason is also
+    recorded on the shared source file (FR-SEC-06)."""
+    if source_file_id and reason not in PERMANENT_REASONS:
+        await _release_source_file(conn, source_file_id)
+        source_file_id = None
     if source_file_id:
         await conn.execute(
             "update source_files set status = 'failed', failure_reason = %s where id = %s",
@@ -93,7 +111,21 @@ async def _claim_source_file(
     if sf["status"] == "ready":
         return sf["id"], True
     if sf["status"] == "failed":
-        raise extract.ExtractionError(sf["failure_reason"] or "internal")
+        if sf["failure_reason"] in PERMANENT_REASONS:
+            raise extract.ExtractionError(sf["failure_reason"])
+        # Failed for a transient reason (e.g. rows marked `internal` before FR-SEC-06): take it
+        # over and process it again from this upload.
+        await conn.execute(
+            "update source_files set status = 'processing', failure_reason = null, "
+            "storage_path = %s where id = %s",
+            (doc["upload_path"], sf["id"]),
+        )
+        await conn.execute(
+            "update documents set source_file_id = %s where id = %s", (sf["id"], doc["id"])
+        )
+        for table in ("chunks", "topics", "pages"):
+            await conn.execute(f"delete from {table} where source_file_id = %s", (sf["id"],))
+        return sf["id"], False
     if doc["source_file_id"] != sf["id"]:
         raise queue.RetryLater(timedelta(seconds=15), "same file is processing for someone else")
     # Ours, left half-done by a crash or an LLM outage: start its derived data again.
@@ -118,11 +150,13 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
     source_file_id: UUID | None = None
     try:
         await conn.execute(
-            "update documents set status = 'processing' where id = %s", (document_id,)
+            "update documents set status = 'processing', "
+            "processing_started_at = coalesce(processing_started_at, now()) where id = %s",
+            (document_id,),
         )
         await queue.set_progress(conn, job["id"], 5)
 
-        files = await _download(doc)
+        files = await _download(doc, settings.max_upload_bytes)
         if files is None:
             await _fail(conn, document_id, "upload_missing")
             return
@@ -207,15 +241,19 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
         raise
 
 
-async def _download(doc: dict) -> list[bytes] | None:
-    """The uploaded file, or a photo set's photos in page order. None if the upload is missing."""
+async def _download(doc: dict, max_bytes: int) -> list[bytes] | None:
+    """The uploaded file, or a photo set's photos in page order. None if the upload is missing.
+    Sizes come from Storage's metadata first, so an oversized upload is never downloaded
+    (FR-SEC-04)."""
     path = doc["upload_path"]
+    folder = path if path.endswith("/") else path.rsplit("/", 1)[0] + "/"
     try:
-        if not path.endswith("/"):
-            return [await storage().download(path)]
-        names = await storage().list_folder(path)
+        sizes = await storage().list_sizes(folder)
+        names = sorted(sizes) if path.endswith("/") else [path] if path in sizes else []
         if not names or len(names) < (doc["image_count"] or 1):
             return None
+        if sum(sizes[n] for n in names) > max_bytes:
+            raise extract.ExtractionError("too_large", "upload over the size limit")
         return list(await asyncio.gather(*(storage().download(n) for n in names)))
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code in (400, 404):

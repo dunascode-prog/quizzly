@@ -151,3 +151,43 @@ def test_question_writing_tries_every_groq_model_before_slow_fallbacks():
     providers = [r.provider for r in routes]
     assert providers[:3] == ["groq", "groq", "groq"]
     assert "groq" not in providers[3:]
+
+
+BAD_JSON = {"error": {"code": "json_validate_failed", "message": "Failed to generate JSON."}}
+
+
+async def test_invalid_json_from_a_model_is_retried_then_falls_through():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if request.url.host == "a.test" and calls.count("a.test") == 1:
+            return httpx.Response(400, json=BAD_JSON)  # a sampling hiccup: works the second time
+        return httpx.Response(200, json=ok_body('{"ok": true}'))
+
+    gateway = LLMGateway(make_config(), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    result = await gateway.complete("chat", [{"role": "user", "content": "hi"}], json_mode=True)
+    assert result.provider == "a" and calls == ["a.test", "a.test"]
+
+    calls.clear()
+
+    def always_bad_on_a(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if request.url.host == "a.test":
+            return httpx.Response(400, json=BAD_JSON)
+        return httpx.Response(200, json=ok_body('{"ok": true}'))
+
+    gateway = LLMGateway(
+        make_config(), httpx.AsyncClient(transport=httpx.MockTransport(always_bad_on_a))
+    )
+    result = await gateway.complete("chat", [{"role": "user", "content": "hi"}], json_mode=True)
+    assert result.provider == "b" and calls == ["a.test", "a.test", "b.test"]
+
+
+async def test_other_bad_requests_still_fail_at_once():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"code": "invalid_request", "message": "no"}})
+
+    gateway = LLMGateway(make_config(), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    with pytest.raises(httpx.HTTPStatusError):
+        await gateway.complete("chat", [{"role": "user", "content": "hi"}], json_mode=True)

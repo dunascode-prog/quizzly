@@ -9,7 +9,9 @@ from psycopg import AsyncConnection
 
 BASE_BACKOFF = timedelta(seconds=15)
 MAX_BACKOFF = timedelta(minutes=30)
-LEASE = timedelta(minutes=10)
+# Longer than the 10-minute job time limit (FR-SEC-04), so a job still inside it isn't taken
+# by another worker.
+LEASE = timedelta(minutes=15)
 
 
 class RetryLater(Exception):
@@ -51,7 +53,8 @@ async def enqueue(
 
 async def claim(conn: AsyncConnection, worker_id: str, types: list[str]) -> dict | None:
     """Take the oldest runnable job of a type this worker handles, or one whose lease expired
-    (crashed worker). An older worker mid-deploy leaves new job types for a newer one."""
+    (crashed worker) while it still has attempts left (FR-SEC-03). An older worker mid-deploy
+    leaves new job types for a newer one."""
     return await (
         await conn.execute(
             """
@@ -60,7 +63,8 @@ async def claim(conn: AsyncConnection, worker_id: str, types: list[str]) -> dict
             where id = (
                 select id from jobs
                 where ((status = 'queued' and run_after <= now())
-                       or (status = 'running' and locked_at < now() - %s))
+                       or (status = 'running' and locked_at < now() - %s
+                           and attempts < max_attempts))
                   and type::text = any(%s)
                 order by run_after
                 for update skip locked
@@ -71,6 +75,22 @@ async def claim(conn: AsyncConnection, worker_id: str, types: list[str]) -> dict
             (worker_id, LEASE, types),
         )
     ).fetchone()
+
+
+async def sweep_crashed(conn: AsyncConnection) -> list[dict]:
+    """Jobs that crashed the worker on their last attempt (lease expired, no attempts left) are
+    marked failed with reason `crashed` and returned, so their work can be failed too
+    (FR-SEC-03). Without this a file that kills the worker every time is retried forever."""
+    return await (
+        await conn.execute(
+            """
+            update jobs set status = 'failed', locked_by = null, error = 'crashed'
+            where status = 'running' and locked_at < now() - %s and attempts >= max_attempts
+            returning *
+            """,
+            (LEASE,),
+        )
+    ).fetchall()
 
 
 async def set_progress(conn: AsyncConnection, job_id: UUID, progress: int) -> None:

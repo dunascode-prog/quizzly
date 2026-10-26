@@ -89,3 +89,96 @@ async def test_workers_claim_only_job_types_they_handle(monkeypatch):
     monkeypatch.setattr(queue, "claim", claim)
     await worker.run_one(None, "w1")
     assert "mark_answers" in seen and "generate_questions" in seen
+
+
+# --- FR-SEC-03: crashed jobs fail the work they were doing ----------------------------------------
+
+
+async def test_a_crashed_ingest_fails_the_document_and_its_file(monkeypatch):
+    import uuid
+
+    from app.worker import crashed
+
+    doc, src = uuid.uuid4(), uuid.uuid4()
+    failed = []
+
+    async def _fail(conn, document_id, reason, source_file_id=None):
+        failed.append((document_id, reason, source_file_id))
+
+    class Conn:
+        async def execute(self, sql, params=None):
+            class Cur:
+                async def fetchone(self):
+                    return {"source_file_id": src, "file_status": "processing"}
+
+            return Cur()
+
+    monkeypatch.setattr(crashed.ingest, "_fail", _fail)
+    await crashed.handle(
+        Conn(), {"id": 1, "type": "ingest_document", "payload": {"document_id": str(doc)}}
+    )
+    assert failed == [(doc, "crashed", src)]
+
+
+async def test_crashed_question_sets_and_explanations_are_marked_failed():
+    import uuid
+
+    from app.worker import crashed
+
+    seen = []
+
+    class Conn:
+        async def execute(self, sql, params=None):
+            seen.append((sql.split(" set ")[0], params))
+
+    sid, eid = uuid.uuid4(), uuid.uuid4()
+    await crashed.handle(
+        Conn(), {"id": 1, "type": "generate_questions", "payload": {"question_set_id": str(sid)}}
+    )
+    await crashed.handle(
+        Conn(), {"id": 2, "type": "generate_explanation", "payload": {"explanation_id": str(eid)}}
+    )
+    await crashed.handle(
+        Conn(), {"id": 3, "type": "delete_account", "payload": {}}
+    )  # nothing to fail
+    assert seen == [("update question_sets", (sid,)), ("update explanations", (eid,))]
+
+
+async def test_the_worker_sweep_hands_crashed_jobs_to_their_handlers(monkeypatch):
+    from app.worker import crashed
+
+    handled = []
+
+    async def sweep_crashed(conn):
+        return [{"id": 9, "type": "generate_questions", "payload": {}}]
+
+    async def handle(conn, job):
+        handled.append(job["id"])
+
+    monkeypatch.setattr(queue, "sweep_crashed", sweep_crashed)
+    monkeypatch.setattr(crashed, "handle", handle)
+    assert await worker.sweep(None) == 1 and handled == [9]
+
+
+async def test_a_crash_never_fails_a_shared_file_other_students_already_use(monkeypatch):
+    import uuid
+
+    from app.worker import crashed
+
+    failed = []
+
+    async def _fail(conn, document_id, reason, source_file_id=None):
+        failed.append(source_file_id)
+
+    class Conn:
+        async def execute(self, sql, params=None):
+            class Cur:
+                async def fetchone(self):
+                    return {"source_file_id": uuid.uuid4(), "file_status": "ready"}
+
+            return Cur()
+
+    monkeypatch.setattr(crashed.ingest, "_fail", _fail)
+    job = {"id": 1, "type": "ingest_document", "payload": {"document_id": str(uuid.uuid4())}}
+    await crashed.handle(Conn(), job)
+    assert failed == [None]  # only this document is failed
