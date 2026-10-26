@@ -1,5 +1,5 @@
-"""What to mark failed when a job crashed the worker on its last attempt (FR-SEC-03), so the
-student sees a failure instead of waiting forever."""
+"""What to mark failed when a job crashed the worker on its last attempt (FR-SEC-03) or ran past
+the job time limit (FR-SEC-04), so the student sees a failure instead of waiting forever."""
 
 import logging
 from collections.abc import Awaitable, Callable
@@ -13,7 +13,7 @@ from app.worker import ingest, marking
 log = logging.getLogger("quizzly.worker")
 
 
-async def _document(conn: AsyncConnection, payload: dict) -> None:
+async def _document(conn: AsyncConnection, payload: dict, reason: str) -> None:
     document_id = UUID(payload["document_id"])
     row = await (
         await conn.execute(
@@ -26,24 +26,24 @@ async def _document(conn: AsyncConnection, payload: dict) -> None:
     # shared file is already ready for other students: then only this document fails.
     shared_ok = row and row["file_status"] == "ready"
     source_file_id = row["source_file_id"] if row and not shared_ok else None
-    await ingest._fail(conn, document_id, "crashed", source_file_id)
+    await ingest._fail(conn, document_id, reason, source_file_id)
 
 
-async def _question_set(conn: AsyncConnection, payload: dict) -> None:
+async def _question_set(conn: AsyncConnection, payload: dict, reason: str) -> None:
     await conn.execute(
         "update question_sets set status = 'failed' where id = %s and status <> 'ready'",
         (UUID(payload["question_set_id"]),),
     )
 
 
-async def _explanation(conn: AsyncConnection, payload: dict) -> None:
+async def _explanation(conn: AsyncConnection, payload: dict, reason: str) -> None:
     await conn.execute(
         "update explanations set status = 'failed' where id = %s and status <> 'ready'",
         (UUID(payload["explanation_id"]),),
     )
 
 
-async def _marking(conn: AsyncConnection, payload: dict) -> None:
+async def _marking(conn: AsyncConnection, payload: dict, reason: str) -> None:
     attempt_id, question_id = UUID(payload["attempt_id"]), UUID(payload["question_id"])
     await quizzes.record_marking(
         conn,
@@ -58,7 +58,7 @@ async def _marking(conn: AsyncConnection, payload: dict) -> None:
     await quizzes.finish_if_marked(conn, attempt_id)
 
 
-ON_CRASH: dict[str, Callable[[AsyncConnection, dict], Awaitable[None]]] = {
+ON_CRASH: dict[str, Callable[[AsyncConnection, dict, str], Awaitable[None]]] = {
     "ingest_document": _document,
     "generate_questions": _question_set,
     "generate_explanation": _explanation,
@@ -66,11 +66,12 @@ ON_CRASH: dict[str, Callable[[AsyncConnection, dict], Awaitable[None]]] = {
 }
 
 
-async def handle(conn: AsyncConnection, job: dict) -> None:
+async def handle(conn: AsyncConnection, job: dict, reason: str = "crashed") -> None:
+    """`reason` is the document failure reason: `crashed`, or `too_large` for a time-out."""
     handler = ON_CRASH.get(job["type"])
     if handler is None:
         return
     try:
-        await handler(conn, job["payload"])
+        await handler(conn, job["payload"], reason)
     except Exception:
         log.exception("couldn't fail the work of crashed job %s", job["id"])
