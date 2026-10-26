@@ -33,6 +33,8 @@ export type Explanation = {
   status: 'pending' | 'generating' | 'ready' | 'failed';
   content_md: string | null;
   citations: number[];
+  /** Waiting because every AI provider is busy or today's budget is spent (FR-LIM-03). */
+  busy?: boolean;
 };
 
 type Page = { page_number: number; page_count: number | null; text: string };
@@ -56,6 +58,21 @@ export function usePage(documentId: string, page: number) {
     queryFn: () => apiFetch<Page>(`/v1/documents/${documentId}/pages/${page}`),
     enabled: useSignedIn() && page > 0,
     staleTime: Infinity,
+  });
+}
+
+/**
+ * The page as uploaded (FR-DOC-10): a signed URL that lasts 5 minutes, so it's refetched after 4
+ * and never persisted. `url` is null for slides, which show their text instead.
+ */
+export function usePageImage(documentId: string, page: number) {
+  return useQuery({
+    queryKey: ['page-image', documentId, page],
+    queryFn: () => apiFetch<{ url: string | null }>(`/v1/documents/${documentId}/pages/${page}/image`),
+    enabled: useSignedIn() && page > 0,
+    staleTime: 4 * 60_000,
+    gcTime: 4 * 60_000,
+    retry: 1,
   });
 }
 

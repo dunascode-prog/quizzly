@@ -116,3 +116,21 @@ def chunk_pages(
         if start + size >= len(words):
             break
     return chunks
+
+
+# The tags our prompts use to fence off untrusted text (prompts/*). Text from notes or students
+# that contains one could otherwise close the fence and speak as the prompt (FR-SEC-13).
+_DELIMITERS = re.compile(
+    r"<(\s*/?\s*)(document|topic|page|notes|model_answer|student_answer|think)\b", re.I
+)
+
+
+def escape_tags(text: str) -> str:
+    """Neutralises our delimiter tags inside untrusted text: `</document>` becomes `‹/document>`,
+    which reads the same but isn't a tag. Other angle brackets (a < b, HTML in notes) stay."""
+    return _DELIMITERS.sub(lambda m: "‹" + m.group(1) + m.group(2), text)
+
+
+def escape_attr(text: str) -> str:
+    """For untrusted text placed inside a tag attribute, e.g. a topic title."""
+    return escape_tags(text).replace('"', "'")

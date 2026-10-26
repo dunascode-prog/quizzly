@@ -9,6 +9,7 @@ import unicodedata
 from dataclasses import dataclass, field
 
 from app.core.config import SERVICE_ROOT
+from app.rag.text import escape_attr, escape_tags
 
 PROMPT_VERSION = 2  # 2: short answer and theory questions
 PROMPT_PATH = SERVICE_ROOT / "prompts" / "questions" / f"v{PROMPT_VERSION}.md"
@@ -186,8 +187,10 @@ def build_prompt(
     blocks = []
     for src in batch:
         want = src.count + (max(1, math.ceil(src.count * over_ask)) if over_ask else 0)
-        pages = "\n".join(f'<page n="{pg.number}">\n{pg.text}\n</page>' for pg in src.pages)
-        title = src.title.replace('"', "'")
+        pages = "\n".join(
+            f'<page n="{pg.number}">\n{escape_tags(pg.text)}\n</page>' for pg in src.pages
+        )
+        title = escape_attr(src.title)
         mix = ", ".join(f"{n} {TYPE_NAMES[t]}" for t, n in src.types.items())
         types_attr = f' types="{mix}"' if mix else ""
         blocks.append(

@@ -2,6 +2,7 @@
 
 import io
 import re
+import warnings
 import zipfile
 from dataclasses import dataclass
 
@@ -16,6 +17,16 @@ PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presen
 IMAGES_MIME = "application/x-quizzly-images"
 # A PDF page with less text than this is treated as a scan and OCR'd.
 SCANNED_PAGE_CHARS = 20
+
+# FR-SEC-04: limits that stop one hostile file from exhausting the worker.
+MAX_PIXELS = 40_000_000  # per photo or rendered page
+MAX_ZIP_UNCOMPRESSED = 200 * 1024 * 1024
+MAX_ZIP_RATIO = 100
+MAX_ZIP_ENTRIES = 10_000
+
+# Pillow's own decompression-bomb guard at the same limit, wherever images are opened (OCR
+# too): it warns above it and refuses images over twice it.
+Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
 
 @dataclass
@@ -50,14 +61,33 @@ def sniff(data: bytes) -> str:
 
 
 def check_image(data: bytes) -> None:
-    """A photo must be a real JPEG or PNG; anything else fails the document as corrupt."""
+    """A photo must be a real JPEG or PNG of at most 40 megapixels. The size comes from the
+    header, before anything is decoded, so a decompression bomb never reaches memory."""
     try:
-        with Image.open(io.BytesIO(data)) as img:
+        with warnings.catch_warnings():
+            # Sizes between the limit and twice it only warn in Pillow; we refuse them below.
+            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+            img = Image.open(io.BytesIO(data))
+        with img:
             if img.format not in ("JPEG", "PNG", "MPO"):  # MPO: some phones' multi-picture JPEG
                 raise ExtractionError("corrupt", f"unsupported image format {img.format}")
+            w, h = img.size
+            if w * h > MAX_PIXELS:
+                raise ExtractionError("too_large", f"image is {w}x{h}")
             img.verify()
+    except Image.DecompressionBombError as exc:
+        raise ExtractionError("too_large", repr(exc)) from exc
     except (UnidentifiedImageError, OSError, SyntaxError) as exc:
         raise ExtractionError("corrupt", repr(exc)) from exc
+
+
+def render_scale(width_pt: float, height_pt: float, wanted: float = 2.5) -> float:
+    """The render scale for a page: as wanted, but never above 40 megapixels. A page too big
+    even at 72 dpi (scale 1) fails as too_large."""
+    if width_pt * height_pt > MAX_PIXELS:
+        raise ExtractionError("too_large", f"page is {width_pt:.0f}x{height_pt:.0f} pt")
+    fit = (MAX_PIXELS / (width_pt * height_pt)) ** 0.5 if width_pt and height_pt else wanted
+    return min(wanted, fit)
 
 
 def render_pdf_pages(data: bytes, numbers: list[int], scale: float = 2.5):
@@ -67,7 +97,8 @@ def render_pdf_pages(data: bytes, numbers: list[int], scale: float = 2.5):
         for n in numbers:
             page = pdf[n - 1]
             try:
-                yield n, page.render(scale=scale).to_pil()
+                w, h = page.get_size()
+                yield n, page.render(scale=render_scale(w, h, scale)).to_pil()
             finally:
                 page.close()
     finally:
@@ -114,7 +145,30 @@ def _extract_pdf(data: bytes) -> list[Page]:
         pdf.close()
 
 
+def check_zip(data: bytes) -> None:
+    """A PPTX is a zip: refuse zip bombs from the directory alone, before unpacking anything."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            infos = z.infolist()
+    except zipfile.BadZipFile as exc:
+        raise ExtractionError("corrupt", repr(exc)) from exc
+    if len(infos) > MAX_ZIP_ENTRIES:
+        raise ExtractionError("too_large", f"{len(infos)} zip entries")
+    total = sum(i.file_size for i in infos)
+    packed = sum(i.compress_size for i in infos) or 1
+    if total > MAX_ZIP_UNCOMPRESSED:
+        raise ExtractionError("too_large", f"{total} bytes uncompressed")
+    if total / packed > MAX_ZIP_RATIO or any(
+        i.compress_size
+        and i.file_size / i.compress_size > MAX_ZIP_RATIO
+        and i.file_size > 1024 * 1024
+        for i in infos
+    ):
+        raise ExtractionError("too_large", "compression ratio over 100")
+
+
 def _open_pptx(data: bytes):
+    check_zip(data)
     try:
         return Presentation(io.BytesIO(data))
     except (zipfile.BadZipFile, PackageNotFoundError, KeyError, ValueError) as exc:
