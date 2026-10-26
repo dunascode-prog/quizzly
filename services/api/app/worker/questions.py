@@ -150,6 +150,7 @@ async def generate_questions(conn: AsyncConnection, job: dict) -> None:
 
         drafts: list[q.Draft] = []
         vectors: list[list[float]] = []
+        await queue.set_progress(conn, job["id"], 10)
         for round_ in range(1 + TOP_UPS):
             have = {tid: sum(d.topic_id == tid for d in drafts) for tid in alloc}
             missing = {tid: n - have[tid] for tid, n in alloc.items() if n > have[tid]}
@@ -162,12 +163,19 @@ async def generate_questions(conn: AsyncConnection, job: dict) -> None:
             ]
             if not sources:
                 break
-            for batch in q.batches(sources):  # one call at a time: free tiers rate-limit bursts
+            groups = q.batches(sources)
+            for i, batch in enumerate(
+                groups, start=1
+            ):  # one call at a time: free tiers limit bursts
                 drafts += await _ask(batch, types, qs["difficulty"], template)
+                # The first round is most of the work (10–80%); top-ups are short (85%, 95%).
+                if round_ == 0:
+                    await queue.set_progress(conn, job["id"], 10 + round(70 * i / len(groups)))
             drafts, vectors = await asyncio.to_thread(
                 _drop_duplicates, drafts, settings.embedding_model
             )
-            await queue.set_progress(conn, job["id"], 20 + 25 * (round_ + 1))
+            if round_ > 0:
+                await queue.set_progress(conn, job["id"], 75 + 10 * round_)
 
         if not drafts:
             raise ValueError("no question passed validation")

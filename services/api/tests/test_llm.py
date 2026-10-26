@@ -142,3 +142,12 @@ async def test_stream_raises_busy_when_every_route_fails():
     with pytest.raises(AllProvidersBusy):
         async for _ in gateway.stream("chat", [{"role": "user", "content": "hi"}]):
             pass
+
+
+def test_question_writing_tries_every_groq_model_before_slow_fallbacks():
+    # Groq limits tokens per minute per model; a 30-question set needs more than one model's
+    # minute, and the free fallbacks take 35-50 s a call.
+    routes = load_models_config(SERVICE_ROOT / "config" / "models.yaml").routes_for("questions")
+    providers = [r.provider for r in routes]
+    assert providers[:3] == ["groq", "groq", "groq"]
+    assert "groq" not in providers[3:]
