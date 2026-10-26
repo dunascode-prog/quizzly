@@ -20,7 +20,8 @@ import { type Doc, type DocScope, retryUpload, useCourses, useDocuments, useUplo
 type Line = { text: string; color?: ThemeColor; action?: { label: string; onPress: () => void } };
 
 /** One-line status under each document (DESIGN.md §7, 05). */
-function statusLine(doc: Doc, upload: { progress: number; failed: boolean } | undefined): Line {
+function statusLine(doc: Doc, upload: { progress: number; failed: boolean; problem?: string } | undefined): Line {
+  if (upload?.problem) return { text: upload.problem, color: 'danger', action: { label: 'Retry', onPress: () => retryUpload(doc.id) } };
   if (upload?.failed) return { text: 'Upload paused', color: 'warning', action: { label: 'Retry', onPress: () => retryUpload(doc.id) } };
   if (upload) return { text: `Uploading · ${Math.round(upload.progress * 100)}%` };
   switch (doc.status) {

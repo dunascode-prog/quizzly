@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { File } from 'expo-file-system';
 import { create } from 'zustand';
 
-import { apiFetch } from '@/lib/api';
+import { ApiError, apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { queryClient } from '@/lib/query-client';
 
@@ -145,7 +145,8 @@ export function useDeleteDocument(docId: string) {
 // retried without picking them again (FR-DOC-04).
 
 type LocalFile = { uri: string; mimeType?: string; size: number };
-type UploadState = { files: LocalFile[]; progress: number; failed: boolean };
+/** `problem` is the server's reason when it refused the file itself (wrong type, too big). */
+type UploadState = { files: LocalFile[]; progress: number; failed: boolean; problem?: string };
 
 type UploadsStore = {
   byDoc: Record<string, UploadState>;
@@ -172,7 +173,7 @@ async function sendFiles(docId: string, urls: string[]) {
   const store = useUploads.getState();
   const entry = store.byDoc[docId];
   if (!entry || entry.files.length !== urls.length) return;
-  store.set(docId, { failed: false, progress: 0 });
+  store.set(docId, { failed: false, progress: 0, problem: undefined });
   const total = entry.files.reduce((n, f) => n + f.size, 0) || 1;
   let done = 0;
   try {
@@ -189,7 +190,9 @@ async function sendFiles(docId: string, urls: string[]) {
     useUploads.getState().forget(docId);
   } catch (e) {
     if (__DEV__) console.warn('[upload]', e);
-    useUploads.getState().set(docId, { failed: true });
+    // A 422 is the server refusing what arrived (FR-SEC-02); show its reason with the retry.
+    const problem = e instanceof ApiError && e.status === 422 ? e.message : undefined;
+    useUploads.getState().set(docId, { failed: true, problem });
   } finally {
     invalidateLibrary();
   }
