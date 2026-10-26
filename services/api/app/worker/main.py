@@ -35,6 +35,8 @@ HANDLERS: dict[str, Handler] = {
 POLL_INTERVAL = 2.0
 HEARTBEAT_INTERVAL = 60.0
 SWEEP_INTERVAL = 60.0
+# FR-SEC-04: no job may run longer than this; a file that takes longer fails as too_large.
+JOB_TIMEOUT = timedelta(minutes=10)
 BUSY_REQUEUE_DELAY = timedelta(minutes=1)
 
 
@@ -50,9 +52,15 @@ async def run_one(conn: AsyncConnection, worker_id: str) -> bool:
         log.error("no handler for job type %s", job["type"], extra=extra)
         return True
     try:
-        await handler(conn, job)
+        async with asyncio.timeout(JOB_TIMEOUT.total_seconds()):
+            await handler(conn, job)
         await queue.succeed(conn, job["id"])
         log.info("job %s succeeded", job["type"], extra=extra)
+    except TimeoutError:
+        # Retrying would only take as long again: fail it, and the work with it.
+        await queue.fail(conn, job, "timeout", retry=False)
+        await crashed.handle(conn, job, reason="too_large")
+        log.error("job %s ran past %s", job["type"], JOB_TIMEOUT, extra=extra)
     except queue.RetryLater as exc:
         await queue.requeue(conn, job, exc.delay)
         log.info("job %s waiting: %s", job["type"], exc, extra=extra)

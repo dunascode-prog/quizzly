@@ -9,7 +9,9 @@ from psycopg import AsyncConnection
 
 BASE_BACKOFF = timedelta(seconds=15)
 MAX_BACKOFF = timedelta(minutes=30)
-LEASE = timedelta(minutes=10)
+# Longer than the 10-minute job time limit (FR-SEC-04), so a job still inside it isn't taken
+# by another worker.
+LEASE = timedelta(minutes=15)
 
 
 class RetryLater(Exception):

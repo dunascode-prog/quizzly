@@ -55,3 +55,18 @@ class Storage:
             json={"prefixes": paths},
         )
         r.raise_for_status()
+
+    async def list_sizes(self, folder: str) -> dict[str, int]:
+        """{full path: size in bytes} for the files directly inside `folder`, from Storage's
+        metadata, so sizes can be checked before downloading anything (FR-SEC-04)."""
+        r = await self.client.post(
+            f"{self.base}/object/list/{self.bucket}",
+            headers=self.headers,
+            json={"prefix": folder, "limit": 1000, "sortBy": {"column": "name", "order": "asc"}},
+        )
+        r.raise_for_status()
+        return {
+            folder + o["name"]: int((o.get("metadata") or {}).get("size") or 0)
+            for o in r.json()
+            if o.get("id")
+        }
