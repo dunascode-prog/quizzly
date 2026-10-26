@@ -106,8 +106,9 @@ async def delete_course(
                 await conn.execute(
                     "delete from documents where course_id = %(course)s and user_id = %(user)s "
                     "returning upload_path, source_file_id, "
+                    "processing_started_at is null and "
                     "(created_at at time zone %(tz)s)::date = (now() at time zone %(tz)s)::date "
-                    "as uploaded_today",
+                    "as refundable",
                     {"course": course_id, "user": user_id, "tz": tz},
                 )
             ).fetchall()

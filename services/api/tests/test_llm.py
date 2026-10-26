@@ -151,3 +151,124 @@ def test_question_writing_tries_every_groq_model_before_slow_fallbacks():
     providers = [r.provider for r in routes]
     assert providers[:3] == ["groq", "groq", "groq"]
     assert "groq" not in providers[3:]
+
+
+# --- FR-LIM-02 / FR-SEC-08: every call is recorded; a spent budget stops new calls ----------------
+
+
+class FakeObserver:
+    def __init__(self, allowed=True):
+        self.allowed = allowed
+        self.calls = []
+
+    async def allow(self):
+        return self.allowed
+
+    def record(self, call):
+        self.calls.append(call)
+
+
+async def test_every_attempt_is_recorded_with_tokens_and_status():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "a.test":
+            return httpx.Response(429, json={"error": "slow down"})
+        return httpx.Response(200, json=ok_body("hi"))
+
+    obs = FakeObserver()
+    gateway = LLMGateway(
+        make_config(), httpx.AsyncClient(transport=httpx.MockTransport(handler)), observer=obs
+    )
+    await gateway.complete("chat", [{"role": "user", "content": "hello"}])
+    assert [(c.task, c.provider, c.status) for c in obs.calls] == [
+        ("chat", "a", "rate_limited"),
+        ("chat", "b", "ok"),
+    ]
+    assert (obs.calls[1].prompt_tokens, obs.calls[1].completion_tokens) == (12, 3)
+
+
+async def test_streamed_replies_record_their_usage():
+    body = (
+        sse("Hi")[: -len(b"data: [DONE]\n\n")]
+        + b'data: {"choices": [], "usage": {"prompt_tokens": 40, "completion_tokens": 2}}\n\n'
+        + b"data: [DONE]\n\n"
+    )
+    obs = FakeObserver()
+    gateway = LLMGateway(
+        make_config(),
+        httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body))
+        ),
+        observer=obs,
+    )
+    assert [d.text async for d in gateway.stream("chat", [{"role": "user", "content": "x"}])] == [
+        "Hi"
+    ]
+    assert [(c.status, c.prompt_tokens, c.completion_tokens) for c in obs.calls] == [("ok", 40, 2)]
+
+
+async def test_a_spent_budget_stops_calls_before_any_provider_is_contacted():
+    from app.llm.gateway import BudgetReached
+
+    def handler(request):
+        raise AssertionError("no provider should be called")
+
+    gateway = LLMGateway(
+        make_config(),
+        httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        observer=FakeObserver(allowed=False),
+    )
+    with pytest.raises(BudgetReached):
+        await gateway.complete("chat", [{"role": "user", "content": "hi"}])
+    with pytest.raises(AllProvidersBusy):  # budget counts as busy, so jobs re-queue
+        async for _ in gateway.stream("chat", [{"role": "user", "content": "hi"}]):
+            pass
+
+
+async def test_usage_log_refuses_once_todays_totals_reach_the_budget():
+    from app.llm.gateway import CallRecord
+    from app.llm.usage import UsageLog
+
+    log = UsageLog(token_budget=100, cost_budget_usd=1.0, timezone="Africa/Lagos")
+    assert await log.allow()  # no database in tests: nothing used yet
+    log.record(CallRecord("chat", "groq", "m", 80, 30, 5, 0.0, "ok"))
+    assert not await log.allow()
+
+
+BAD_JSON = {"error": {"code": "json_validate_failed", "message": "Failed to generate JSON."}}
+
+
+async def test_invalid_json_from_a_model_is_retried_then_falls_through():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if request.url.host == "a.test" and calls.count("a.test") == 1:
+            return httpx.Response(400, json=BAD_JSON)  # a sampling hiccup: works the second time
+        return httpx.Response(200, json=ok_body('{"ok": true}'))
+
+    gateway = LLMGateway(make_config(), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    result = await gateway.complete("chat", [{"role": "user", "content": "hi"}], json_mode=True)
+    assert result.provider == "a" and calls == ["a.test", "a.test"]
+
+    calls.clear()
+
+    def always_bad_on_a(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if request.url.host == "a.test":
+            return httpx.Response(400, json=BAD_JSON)
+        return httpx.Response(200, json=ok_body('{"ok": true}'))
+
+    gateway = LLMGateway(
+        make_config(), httpx.AsyncClient(transport=httpx.MockTransport(always_bad_on_a))
+    )
+    result = await gateway.complete("chat", [{"role": "user", "content": "hi"}], json_mode=True)
+    assert result.provider == "b" and calls == ["a.test", "a.test", "b.test"]
+
+
+async def test_other_bad_requests_still_fail_at_once():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"code": "invalid_request", "message": "no"}})
+
+    gateway = LLMGateway(make_config(), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    with pytest.raises(httpx.HTTPStatusError):
+        await gateway.complete("chat", [{"role": "user", "content": "hi"}], json_mode=True)
