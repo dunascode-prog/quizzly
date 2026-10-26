@@ -17,7 +17,7 @@ from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.llm.gateway import AllProvidersBusy
-from app.worker import accounts, explain, ingest, marking, questions, queue
+from app.worker import accounts, cleanup, explain, ingest, marking, questions, queue
 
 log = logging.getLogger("quizzly.worker")
 
@@ -29,6 +29,7 @@ HANDLERS: dict[str, Handler] = {
     "generate_questions": questions.generate_questions,
     "mark_answers": marking.mark_answer,
     "delete_account": accounts.delete_account,
+    "cleanup_storage": cleanup.cleanup_storage,
 }
 
 POLL_INTERVAL = 2.0

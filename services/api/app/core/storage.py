@@ -55,3 +55,15 @@ class Storage:
             json={"prefixes": paths},
         )
         r.raise_for_status()
+
+    async def copy(self, source: str, destination: str) -> None:
+        """Server-side copy inside the bucket. An existing destination counts as done (the shared
+        copy of a file is written once; a retry or a re-processed file finds it there)."""
+        r = await self.client.post(
+            f"{self.base}/object/copy",
+            headers=self.headers,
+            json={"bucketId": self.bucket, "sourceKey": source, "destinationKey": destination},
+        )
+        if r.status_code in (400, 409) and "alreadyexists" in r.text.lower().replace("_", ""):
+            return
+        r.raise_for_status()

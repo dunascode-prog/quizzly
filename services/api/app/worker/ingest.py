@@ -177,7 +177,19 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
         )
         await queue.set_progress(conn, job["id"], 90)
 
-        await _save(conn, source_file_id, pages, chunks, vectors, drafts, settings.embedding_model)
+        # FR-SEC-07: the processed file lives in a service-owned copy, not the uploader's folder.
+        shared_path = await _share(doc, sha)
+        await _save(
+            conn,
+            source_file_id,
+            pages,
+            chunks,
+            vectors,
+            drafts,
+            settings.embedding_model,
+            shared_path,
+        )
+        await _drop_upload(conn, doc)
         log.info(
             "document %s ready: %d pages, %d chunks, %d topics",
             document_id,
@@ -266,6 +278,32 @@ async def _link_ready(
     log.info("document %s reused processed file %s", document_id, source_file_id)
 
 
+def shared_path_for(sha: str, photos: bool) -> str:
+    """Where the service-owned copy of a processed file lives (FR-SEC-07)."""
+    return f"shared/{sha}/" if photos else f"shared/{sha}"
+
+
+async def _share(doc: dict, sha: str) -> str:
+    """Copies the upload (or each photo of a set) to its shared path and returns that path."""
+    upload = doc["upload_path"]
+    if not upload.endswith("/"):
+        target = shared_path_for(sha, photos=False)
+        await storage().copy(upload, target)
+        return target
+    target = shared_path_for(sha, photos=True)
+    for name in await storage().list_folder(upload):
+        await storage().copy(name, target + name.rsplit("/", 1)[-1])
+    return target
+
+
+async def _drop_upload(conn: AsyncConnection, doc: dict) -> None:
+    """The uploader's own copy isn't needed once the shared copy exists; a Storage hiccup leaves
+    it to the cleanup_storage job."""
+    from app.worker.cleanup import remove_or_queue  # cleanup imports this module
+
+    await remove_or_queue(conn, storage(), [doc["upload_path"]])
+
+
 async def _save(
     conn: AsyncConnection,
     source_file_id: UUID,
@@ -274,6 +312,7 @@ async def _save(
     vectors: list[list[float]],
     drafts: list[outline.TopicDraft],
     embedding_model: str,
+    storage_path: str,
 ) -> None:
     owners = outline.assign_chunks(drafts, chunks)
     tokens = [0] * len(drafts)
@@ -326,12 +365,14 @@ async def _save(
             )
         await conn.execute(
             "update source_files set status = 'ready', page_count = %s, embedding_model = %s, "
-            "pipeline_version = %s, low_ocr_pages = %s, processed_at = now() where id = %s",
+            "pipeline_version = %s, low_ocr_pages = %s, processed_at = now(), storage_path = %s "
+            "where id = %s",
             (
                 len(pages),
                 embedding_model,
                 PIPELINE_VERSION,
                 [p.number for p in pages if p.low_confidence],
+                storage_path,
                 source_file_id,
             ),
         )
