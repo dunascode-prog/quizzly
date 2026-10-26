@@ -33,6 +33,8 @@ export type Explanation = {
   status: 'pending' | 'generating' | 'ready' | 'failed';
   content_md: string | null;
   citations: number[];
+  /** Waiting because every AI provider is busy or today's budget is spent (FR-LIM-03). */
+  busy?: boolean;
 };
 
 type Page = { page_number: number; page_count: number | null; text: string };

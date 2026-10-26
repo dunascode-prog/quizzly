@@ -56,6 +56,8 @@ class ExplanationOut(BaseModel):
     status: str
     content_md: str | None
     citations: list[int]
+    # Waiting because every AI provider is busy or the day's budget is spent (FR-LIM-03).
+    busy: bool = False
 
 
 class ExplanationRequest(BaseModel):
@@ -98,6 +100,7 @@ def _out(row: dict) -> ExplanationOut:
         status=row["status"],
         content_md=row["content_md"] if row["status"] == "ready" else None,
         citations=row["citations"] or [],
+        busy=bool(row.get("busy")),
     )
 
 
