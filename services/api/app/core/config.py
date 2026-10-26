@@ -6,10 +6,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
 
 
+ENVIRONMENTS = ("local", "test", "staging", "production")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=SERVICE_ROOT / ".env", extra="ignore")
 
-    env: str = "local"
+    # Must be set explicitly (FR-SEC-15): local, test, staging or production. The API and the
+    # worker refuse to start without it, so a missing value can't silently mean "development".
+    env: str = ""
+    # Websites allowed to call the API from a browser (CORS). Native apps aren't subject to CORS.
+    cors_origins: list[str] = []
     log_level: str = "info"
     timezone: str = "Africa/Lagos"
 
@@ -35,6 +42,17 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     sentry_dsn: str = ""
+
+    @property
+    def production(self) -> bool:
+        return self.env == "production"
+
+    def require_env(self) -> None:
+        if self.env not in ENVIRONMENTS:
+            raise RuntimeError(
+                f"Set ENV to one of {', '.join(ENVIRONMENTS)} (got {self.env!r}). "
+                "Quizzly won't start without knowing where it runs."
+            )
 
     @property
     def jwt_issuer(self) -> str:
