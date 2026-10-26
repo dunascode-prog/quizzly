@@ -1,5 +1,5 @@
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -7,12 +7,15 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { OfflineBanner } from '@/components/offline-banner';
 import { ProfileLoadError } from '@/components/profile-load-error';
 import { FontFamily } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { startAuthListener, useAuth } from '@/lib/auth';
+import { startNetworkListener } from '@/lib/network';
+import { flush, startOutbox } from '@/lib/outbox';
 import { useMe } from '@/lib/profile';
-import { queryClient } from '@/lib/query-client';
+import { persistOptions, queryClient } from '@/lib/query-client';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,6 +27,8 @@ const SHEET = {
   sheetGrabberVisible: true,
 } as const;
 startAuthListener();
+startNetworkListener();
+startOutbox();
 
 function RootNavigator() {
   const theme = useTheme();
@@ -43,6 +48,11 @@ function RootNavigator() {
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync();
   }, [loading]);
+
+  // Quiz work saved offline is sent as soon as we know who is signed in (FR-OFF-02).
+  useEffect(() => {
+    if (signedIn) void flush();
+  }, [signedIn]);
 
   if (loading) return null;
 
@@ -80,6 +90,7 @@ function RootNavigator() {
         <Stack.Screen name="legal" />
       </Stack>
       {signedIn && me.isError && !me.data ? <ProfileLoadError error={me.error} onRetry={() => me.refetch()} /> : null}
+      <OfflineBanner />
     </>
   );
 }
@@ -87,11 +98,11 @@ function RootNavigator() {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <StatusBar style="auto" />
         <RootNavigator />
       </ThemeProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }

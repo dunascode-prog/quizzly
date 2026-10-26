@@ -16,7 +16,9 @@ import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { TextField } from '@/components/ui/text-field';
 import { FontFamily, Spacing } from '@/constants/theme';
+import { ApiError } from '@/lib/api';
 import { friendlyError } from '@/lib/errors';
+import { enqueue, flush, isPending } from '@/lib/outbox';
 import {
   type AnswerIn,
   answerText,
@@ -27,8 +29,6 @@ import {
   type Mode,
   type Question,
   type Response,
-  saveAnswers,
-  submitAttempt,
   TYPE_LABELS,
   useAttempt,
   useQuiz,
@@ -84,7 +84,9 @@ export default function PlayScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const unsaved = useRef<AnswerIn[]>([]);
+  // Set when the attempt began without a connection; its start waits in the outbox (FR-OFF-02).
+  const [offlineStart, setOfflineStart] = useState<number | null>(null);
+  const [queued, setQueued] = useState(false);
   const finishing = useRef(false);
   const finishRef = useRef<() => Promise<void>>(async () => {});
 
@@ -100,7 +102,8 @@ export default function PlayScreen() {
   const written = question ? isWritten(question) : false;
 
   // A written answer in practice is marked on the server; poll until its feedback arrives.
-  const attempt = useAttempt(attemptId, { enabled: start.isSuccess, waitFor: revealed && written ? question?.id : undefined });
+  const begun = start.isSuccess || offlineStart !== null;
+  const attempt = useAttempt(attemptId, { enabled: begun, waitFor: revealed && written ? question?.id : undefined });
   const marked = question ? attempt.data?.answers.find((a) => a.question_id === question.id) : undefined;
   const waiting = revealed && written && !marked?.feedback;
 
@@ -129,13 +132,30 @@ export default function PlayScreen() {
   // Start the attempt once the questions exist. The id is ours, so a retry can't duplicate it, and
   // a resumed attempt comes back with its answers.
   useEffect(() => {
-    if (ready && start.isIdle) start.mutate({ id: attemptId, mode }, { onSuccess: restore });
+    if (!ready || !start.isIdle) return;
+    start.mutate(
+      { id: attemptId, mode },
+      {
+        onSuccess: (a) => {
+          restore(a);
+          void flush(); // anything queued for this attempt can go now
+        },
+        onError: (e) => {
+          // No connection: play from the saved quiz and send the start later. A resume needs the
+          // server's copy of the answers, so it waits for a connection instead.
+          if (e instanceof ApiError || resumeId) return;
+          setOfflineStart(Date.now());
+          void enqueue({ kind: 'start', attemptId, quizId: id, mode });
+        },
+      },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, start, attemptId, mode]);
 
-  // Exam timer (FR-QUIZ-02): counts down from the server's start time.
-  const limit = started?.time_limit_sec ?? null;
-  const deadline = limit && started ? new Date(started.started_at).getTime() + limit * 1000 : null;
+  // Exam timer (FR-QUIZ-02): counts down from the server's start time (or this phone's, offline).
+  const limit = started?.time_limit_sec ?? (offlineStart !== null ? (data?.time_limit_sec ?? null) : null);
+  const startedAt = started ? new Date(started.started_at).getTime() : offlineStart;
+  const deadline = limit && startedAt !== null ? startedAt + limit * 1000 : null;
   const left = deadline ? Math.max(0, Math.ceil((deadline - now) / 1000)) : null;
   useEffect(() => {
     if (!deadline) return;
@@ -146,30 +166,18 @@ export default function PlayScreen() {
     return () => clearInterval(timer);
   }, [deadline]);
 
-  const flush = (nextIndex: number) => {
-    const batch = unsaved.current;
-    unsaved.current = [];
-    if (!start.isSuccess) {
-      unsaved.current = batch; // not started yet: keep for later
-      return;
-    }
-    saveAnswers(attemptId, batch, nextIndex).catch(() => {
-      unsaved.current = [...batch, ...unsaved.current]; // offline: resend with the next save
-    });
-  };
-
-  // Answers given before the attempt existed on the server go as soon as it does.
-  useEffect(() => {
-    if (start.isSuccess && unsaved.current.length) flush(index);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start.isSuccess]);
-
   const record = (response: Response) => {
     if (!question) return;
     const answer: Given = { id: given[question.id]?.id ?? randomUUID(), question_id: question.id, response, correct: isCorrect(question, response) };
     setGiven((g) => ({ ...g, [question.id]: answer }));
-    unsaved.current = [...unsaved.current.filter((a) => a.question_id !== question.id), answer];
-    flush(index);
+    // Saved on the phone first, then sent; offline it waits for the connection (FR-OFF-02).
+    const saved = enqueue({
+      kind: 'answers',
+      attemptId,
+      answers: [{ id: answer.id, question_id: answer.question_id, response }],
+      currentIndex: index,
+    });
+    if (begun) void saved.then(flush);
   };
 
   const choose = (response: Response) => {
@@ -188,17 +196,15 @@ export default function PlayScreen() {
     if (mode === 'exam' && question && draft !== undefined && draft !== '') {
       all[question.id] = { id: given[question.id]?.id ?? randomUUID(), question_id: question.id, response: draft, correct: false };
     }
-    try {
-      await submitAttempt(
-        attemptId,
-        Object.values(all).map(({ id: aid, question_id, response }) => ({ id: aid, question_id, response })),
-      );
-      router.replace({ pathname: '/quiz/[id]/results', params: { id, attempt: attemptId } });
-    } catch (e) {
-      setError(friendlyError(e));
+    const answers: AnswerIn[] = Object.values(all).map(({ id: aid, question_id, response }) => ({ id: aid, question_id, response }));
+    await enqueue({ kind: 'submit', attemptId, answers });
+    await flush();
+    if (isPending(attemptId)) {
+      setQueued(true); // offline: marked when the phone reconnects
       setSubmitting(false);
-      finishing.current = false;
+      return;
     }
+    router.replace({ pathname: '/quiz/[id]/results', params: { id, attempt: attemptId } });
   };
 
   useEffect(() => {
@@ -215,6 +221,26 @@ export default function PlayScreen() {
     setDraft(undefined); // questions only move forward, so each starts unanswered
     setText('');
   };
+
+  if (queued) {
+    return (
+      <Screen
+        footer={
+          <ActionPill label="Back to Practice" icon={ArrowRight} onPress={() => router.replace('/(tabs)/practice')} />
+        }>
+        <IconButton icon={X} accessibilityLabel="Close" onPress={() => router.back()} />
+        <HeroCard>
+          <Text variant="title" color="onInk" accessibilityRole="header">
+            Your answers are saved
+          </Text>
+          <Text variant="body" color="mutedOnInk">
+            You&apos;re offline, so they&apos;re waiting on this phone. They&apos;ll be sent and marked as soon as
+            you&apos;re back online, and your score will show in Practice.
+          </Text>
+        </HeroCard>
+      </Screen>
+    );
+  }
 
   if (!data || !ready) {
     return (

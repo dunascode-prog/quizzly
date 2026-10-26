@@ -124,6 +124,8 @@ export function useQuiz(quizId: string) {
 
 export function useStartAttempt(quizId: string) {
   return useMutation({
+    // Fail at once when offline (the play screen then queues the start) instead of pausing.
+    networkMode: 'always',
     // Starting with an existing id returns that attempt, which is how an attempt is resumed (FR-QUIZ-05).
     mutationFn: (body: { id: string; mode: Mode }) =>
       apiFetch<Attempt>(`/v1/quizzes/${quizId}/attempts`, { method: 'POST', body: JSON.stringify(body) }),
