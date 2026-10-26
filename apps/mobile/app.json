@@ -47,7 +47,8 @@
           "cameraPermission": "Quizzly uses the camera so you can photograph your lecture notes.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

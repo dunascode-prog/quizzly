@@ -91,11 +91,46 @@ def test_healthz(client):
     assert response.headers["x-request-id"]
 
 
-def test_cors_allows_local_web_preview_only(client):
-    ok = client.get("/healthz", headers={"Origin": "http://localhost:8082"})
-    assert ok.headers["access-control-allow-origin"] == "http://localhost:8082"
-    evil = client.get("/healthz", headers={"Origin": "https://evil.example.com"})
-    assert "access-control-allow-origin" not in evil.headers
+def app_for(monkeypatch, **settings):
+    """A fresh app built under the given settings (no database)."""
+    from fastapi.testclient import TestClient
+
+    from app.core.config import Settings
+    from app.main import create_app
+
+    s = Settings(_env_file=None, database_url="", **settings)
+    monkeypatch.setattr("app.main.get_settings", lambda: s)
+    return TestClient(create_app())
+
+
+def test_cors_allows_the_local_web_preview_only_when_local(monkeypatch):
+    with app_for(monkeypatch, env="local") as c:
+        ok = c.get("/healthz", headers={"Origin": "http://localhost:8082"})
+        assert ok.headers["access-control-allow-origin"] == "http://localhost:8082"
+        evil = c.get("/healthz", headers={"Origin": "https://evil.example.com"})
+        assert "access-control-allow-origin" not in evil.headers
+
+
+def test_production_allows_only_its_allowlist_and_hides_the_docs(monkeypatch):
+    with app_for(monkeypatch, env="production", cors_origins=["https://quizzly.app"]) as c:
+        ok = c.get("/healthz", headers={"Origin": "https://quizzly.app"})
+        assert ok.headers["access-control-allow-origin"] == "https://quizzly.app"
+        local = c.get("/healthz", headers={"Origin": "http://localhost:8082"})
+        assert "access-control-allow-origin" not in local.headers
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            assert c.get(path).status_code == 404, path
+
+
+def test_docs_are_there_when_local(monkeypatch):
+    with app_for(monkeypatch, env="local") as c:
+        assert c.get("/openapi.json").status_code == 200
+
+
+@pytest.mark.parametrize("env", ["", "prod", "development"])
+def test_the_api_refuses_to_start_without_an_explicit_env(monkeypatch, env):
+    with pytest.raises(RuntimeError, match="Set ENV"):
+        with app_for(monkeypatch, env=env):
+            pass
 
 
 def test_me_requires_token(client):

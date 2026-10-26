@@ -39,6 +39,9 @@ class Route(BaseModel):
     rpm: int
     # Provider-specific request fields, e.g. turning off a reasoning model's thinking for chat.
     params: dict = {}
+    # USD per million tokens, for the estimated cost in llm_calls (FR-LIM-02). 0 on free tiers.
+    price_in: float = 0.0
+    price_out: float = 0.0
 
 
 class ModelsConfig(BaseModel):
