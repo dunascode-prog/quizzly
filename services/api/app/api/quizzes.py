@@ -38,9 +38,10 @@ class QuestionOut(BaseModel):
     difficulty: str
     stem: str
     options: list[str] | None
-    # Sent with the question so the app can mark instantly and offline (FR-QUIZ-03).
-    answer: object
-    explanation: str
+    # Sent with the question so the app can mark instantly and offline (FR-QUIZ-03). Exam quizzes
+    # leave these (and the rubric) out until the student has submitted an attempt (FR-SEC-12).
+    answer: object | None
+    explanation: str | None
     source_pages: list[int]
     topic_id: UUID | None
     topic_title: str | None
@@ -159,12 +160,15 @@ def _notice(row: dict) -> str | None:
     return None
 
 
-async def _quiz_out(conn, row: dict) -> QuizOut:
+async def _quiz_out(conn, row: dict, user_id: UUID) -> QuizOut:
     qs = (
         await quizzes.questions_for(conn, row["question_set_id"])
         if row["status"] == "ready"
         else []
     )
+    hidden = row["mode"] == "exam" and not await quizzes.has_submitted(conn, user_id, row["id"])
+    if hidden:
+        qs = [x | {"answer": None, "explanation": None, "rubric": None} for x in qs]
     return QuizOut(
         **{k: row[k] for k in ("id", "title", "document_id", "mode", "status", "progress")},
         requested_count=row["requested_count"],
@@ -266,7 +270,7 @@ async def create_quiz(
     quiz_id = await quizzes.create_quiz(
         conn, user.id, document_id, existing["id"], title, body.mode, limit_sec
     )
-    return await _quiz_out(conn, await quizzes.get_quiz(conn, user.id, quiz_id))
+    return await _quiz_out(conn, await quizzes.get_quiz(conn, user.id, quiz_id), user.id)
 
 
 @router.get("/v1/quizzes/{quiz_id}")
@@ -275,7 +279,7 @@ async def get_quiz(quiz_id: UUID, user: User, conn: Conn) -> QuizOut:
     row = await quizzes.get_quiz(conn, user.id, quiz_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Quiz not found")
-    return await _quiz_out(conn, row)
+    return await _quiz_out(conn, row, user.id)
 
 
 @router.post("/v1/quizzes/{quiz_id}/attempts", status_code=status.HTTP_201_CREATED)

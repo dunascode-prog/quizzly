@@ -36,8 +36,8 @@ From the v0.1 code review. Each task needs a regression test.
 - [x] **A9. Secure token storage** (FR-AUTH-06, FR-SEC-09). Supabase client storage adapter on `expo-secure-store` (chunk values > 2 KB); migrate existing sessions on first launch.
 - [x] **A10. Input caps and idempotency** (FR-SEC-10, FR-SEC-18). Pydantic `max_length` on answer responses (5,000), chat (2,000), report notes (500), titles (80); duplicate attempt/answer IDs → 409 or existing record.
 - [x] **A11. Dedupe side channel** (FR-SEC-11, FR-DOC-06). Same response shape; dedupe hits reported ready no sooner than 3 s.
-- [ ] **A12. Exam answers hidden** (FR-SEC-12). Exam-mode `GET /quizzes/{id}` omits answers and explanations until submit.
-- [ ] **A13. Prompt and stream hygiene** (FR-SEC-13, FR-SEC-14). Escape delimiter tags in document text; chat stream holds back partial citation markers.
+- [x] **A12. Exam answers hidden** (FR-SEC-12). Exam-mode `GET /quizzes/{id}` omits answers and explanations until submit.
+- [x] **A13. Prompt and stream hygiene** (FR-SEC-13, FR-SEC-14). Escape delimiter tags in document text; chat stream holds back partial citation markers.
 - [ ] **A14. Production config** (FR-SEC-15, FR-SEC-16). Explicit `ENV` required, `/docs` off in production, CORS allowlist; bundle KaTeX locally, restrict WebView origins.
 - [ ] **A15. Missing v0.1 P0s.** FR-MOD-02 (auto-hide a question after 3 distinct reporters), FR-DOC-10 (source page viewer route works end to end), FR-OFF-01/02 (review and merge branch `claude/offline-sync`, resolve conflicts with A1 — outbox posts to the API), FR-QUIZ-06 (topic and type breakdown on Results), FR-AUTH-05 (24 h deletion job covers storage and all tables). Review and merge or close `claude/faster-questions` and `claude/ui-foundation`.
 

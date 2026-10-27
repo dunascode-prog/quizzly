@@ -110,6 +110,8 @@ async def ask(
     async def events() -> AsyncIterator[str]:
         llm_usage.for_user(user.id)  # llm_calls rows for chat carry the student, no job
         think = rag.ThinkFilter()
+        # What the student sees: half-written or invalid markers are held back (FR-SEC-14).
+        clean = rag.CitationStream(rag.allowed_pages(chunks))
         raw, model, first_ms = "", "", None
         try:
             async for delta in ingest.gateway().stream(
@@ -118,10 +120,15 @@ async def ask(
                 model = f"{delta.provider}/{delta.model}"
                 text = think.feed(delta.text)
                 if text:
-                    if first_ms is None:
-                        first_ms = int((time.perf_counter() - started) * 1000)
                     raw += text
-                    yield _event("token", {"text": text})
+                    shown = clean.feed(text)
+                    if shown:
+                        if first_ms is None:
+                            first_ms = int((time.perf_counter() - started) * 1000)
+                        yield _event("token", {"text": shown})
+            rest = clean.flush()
+            if rest:
+                yield _event("token", {"text": rest})
         except AllProvidersBusy:
             await give_back()
             yield _event("error", {"detail": BUSY})
