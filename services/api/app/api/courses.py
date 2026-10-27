@@ -35,13 +35,13 @@ class _CourseFields(BaseModel):
 
 
 class CourseCreate(_CourseFields):
-    code: str = Field(max_length=40)
-    title: str | None = Field(default=None, max_length=120)
+    code: str = Field(max_length=40)  # normalised, then 2-12 characters (FR-CRS-01)
+    title: str | None = Field(default=None, max_length=80)  # FR-SEC-10
 
 
 class CourseUpdate(_CourseFields):
     code: str | None = Field(default=None, max_length=40)
-    title: str | None = Field(default=None, max_length=120)
+    title: str | None = Field(default=None, max_length=80)
 
 
 def _duplicate(code: str) -> HTTPException:

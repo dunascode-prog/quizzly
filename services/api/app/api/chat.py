@@ -47,7 +47,7 @@ class ChatOut(BaseModel):
 
 
 class AskIn(BaseModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: str = Field(min_length=1, max_length=2000)  # FR-SEC-10
 
 
 async def _document(conn, user_id: UUID, document_id: UUID) -> dict:

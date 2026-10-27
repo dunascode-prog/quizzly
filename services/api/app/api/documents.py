@@ -54,7 +54,7 @@ class DocumentCreate(BaseModel):
 
 
 class DocumentUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=200)
+    title: str | None = Field(default=None, min_length=1, max_length=80)  # FR-SEC-10
     # Explicit null moves the document to Unfiled.
     course_id: UUID | None = None
 

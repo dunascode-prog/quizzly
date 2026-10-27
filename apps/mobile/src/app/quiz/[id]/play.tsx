@@ -348,6 +348,7 @@ export default function PlayScreen() {
             autoCapitalize={written ? 'sentences' : 'none'}
             autoCorrect={written}
             multiline={written}
+            maxLength={written ? 5000 : 200}
             style={written ? styles.essay : undefined}
             returnKeyType={written ? 'default' : 'done'}
             onSubmitEditing={written ? undefined : () => mode === 'practice' && text.trim() && record(text.trim())}
