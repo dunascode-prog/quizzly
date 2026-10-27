@@ -1,5 +1,6 @@
-"""Course queries (FR-CRS-01..03). Every query is scoped to the signed-in student."""
+"""Course queries (FR-CRS-01..05). Every query is scoped to the signed-in student."""
 
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -8,12 +9,16 @@ from psycopg import AsyncConnection
 from app.domain import documents
 
 _LIST_SQL = """
-select c.id, c.code, c.title, c.created_at,
+select c.id, c.code, c.title, c.created_at, c.accent::text as accent,
+       -- FR-CRS-04: a past exam date stops showing the day after the exam.
+       case when c.exam_date >= (now() at time zone p.timezone)::date then c.exam_date end
+         as exam_date,
        count(d.id) filter (where d.deleted_at is null) as document_count
 from courses c
+join profiles p on p.id = c.user_id
 left join documents d on d.course_id = c.id
 where c.user_id = %s
-group by c.id
+group by c.id, p.timezone
 order by c.code
 """
 
@@ -41,6 +46,17 @@ async def get_course(conn: AsyncConnection, user_id: UUID, course_id: UUID) -> d
     return rows[0] if rows else None
 
 
+async def today(conn: AsyncConnection, user_id: UUID) -> date:
+    """Today's date where the student is (profiles.timezone)."""
+    row = await (
+        await conn.execute(
+            "select (now() at time zone timezone)::date as today from profiles where id = %s",
+            (user_id,),
+        )
+    ).fetchone()
+    return row["today"]
+
+
 async def _code_taken(
     conn: AsyncConnection, user_id: UUID, code: str, except_id: UUID | None = None
 ) -> bool:
@@ -55,15 +71,22 @@ async def _code_taken(
 
 
 async def create_course(
-    conn: AsyncConnection, user_id: UUID, code: str, title: str | None
+    conn: AsyncConnection,
+    user_id: UUID,
+    code: str,
+    title: str | None,
+    exam_date: date | None = None,
+    accent: str | None = None,
 ) -> dict[str, Any]:
+    """No accent means the next one in the rotation (a trigger picks it, FR-CRS-05)."""
     code = normalize_code(code)
     if await _code_taken(conn, user_id, code):
         raise DuplicateCourse(code)
     row = await (
         await conn.execute(
-            "insert into courses (user_id, code, title) values (%s, %s, %s) returning id",
-            (user_id, code, title),
+            "insert into courses (user_id, code, title, exam_date, accent) "
+            "values (%s, %s, %s, %s, %s) returning id",
+            (user_id, code, title, exam_date, accent),
         )
     ).fetchone()
     return await get_course(conn, user_id, row["id"])

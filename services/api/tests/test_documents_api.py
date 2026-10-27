@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -11,6 +11,7 @@ from tests.test_api import make_token
 
 USER = uuid.uuid4()
 NOW = datetime.now(UTC)
+TODAY = date(2026, 10, 27)
 
 
 def auth() -> dict:
@@ -73,13 +74,30 @@ def fake(client, monkeypatch):
     async def list_courses(conn, user_id):
         return list(state["courses"].values())
 
-    async def create_course(conn, user_id, code, title):
+    async def create_course(conn, user_id, code, title, exam_date=None, accent=None):
         code = courses.normalize_code(code)
         if any(c["code"] == code for c in state["courses"].values()):
             raise courses.DuplicateCourse(code)
-        c = {"id": uuid.uuid4(), "code": code, "title": title, "document_count": 0}
+        accent = accent or ["lagoon", "ankara", "palm", "lavender"][len(state["courses"]) % 4]
+        c = {
+            "id": uuid.uuid4(),
+            "code": code,
+            "title": title,
+            "document_count": 0,
+            "exam_date": exam_date,
+            "accent": accent,
+        }
         state["courses"][c["id"]] = c | {"created_at": NOW}
         return state["courses"][c["id"]]
+
+    async def update_course(conn, user_id, course_id, fields):
+        if course_id not in state["courses"]:
+            return None
+        state["courses"][course_id] |= fields
+        return state["courses"][course_id]
+
+    async def today(conn, user_id):
+        return TODAY
 
     async def delete_course(conn, user_id, course_id, delete_documents, tz):
         if state["courses"].pop(course_id, None) is None:
@@ -131,6 +149,8 @@ def fake(client, monkeypatch):
     for mod, name, fn in [
         (courses, "list_courses", list_courses),
         (courses, "create_course", create_course),
+        (courses, "update_course", update_course),
+        (courses, "today", today),
         (courses, "delete_course", delete_course),
         (usage, "take", take),
         (usage, "used_today", used_today),
@@ -155,6 +175,30 @@ def test_course_codes_are_normalised_validated_and_unique(client, fake):
     for bad in ("C", "ABCDEFGHIJKLM"):
         assert client.post("/v1/courses", headers=auth(), json={"code": bad}).status_code == 422
     assert [c["code"] for c in client.get("/v1/courses", headers=auth()).json()] == ["CSC 225"]
+
+
+def test_exam_date_must_be_today_or_later_and_accents_rotate(client, fake):
+    """FR-CRS-04/05."""
+    past = client.post(
+        "/v1/courses", headers=auth(), json={"code": "CSC 201", "exam_date": "2026-10-26"}
+    )
+    assert past.status_code == 422
+    assert past.json()["detail"] == "Pick today or a later date for the exam."
+    a = client.post(
+        "/v1/courses", headers=auth(), json={"code": "CSC 201", "exam_date": "2026-10-27"}
+    ).json()
+    b = client.post("/v1/courses", headers=auth(), json={"code": "CSC 202", "accent": "palm"})
+    assert (a["exam_date"], a["accent"]) == ("2026-10-27", "lagoon")
+    assert (b.json()["exam_date"], b.json()["accent"]) == (None, "palm")
+    ink = client.post("/v1/courses", headers=auth(), json={"code": "CSC 203", "accent": "ink"})
+    assert ink.status_code == 422  # ink isn't a course accent
+
+    r = client.patch(
+        f"/v1/courses/{a['id']}", headers=auth(), json={"exam_date": None, "accent": "ankara"}
+    )
+    assert (r.json()["exam_date"], r.json()["accent"]) == (None, "ankara")
+    r = client.patch(f"/v1/courses/{a['id']}", headers=auth(), json={"exam_date": "2026-01-01"})
+    assert r.status_code == 422
 
 
 def test_deleting_a_course_must_say_what_happens_to_its_documents(client, fake):

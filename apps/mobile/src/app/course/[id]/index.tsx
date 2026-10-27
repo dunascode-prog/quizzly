@@ -14,7 +14,7 @@ import { Text } from '@/components/ui/text';
 import { Radius, Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
-import { plural } from '@/lib/format';
+import { formatDay, plural } from '@/lib/format';
 import { type Doc, type DocScope, retryUpload, useCourses, useDocuments, useUploads } from '@/lib/library';
 
 type Line = { text: string; color?: ThemeColor; action?: { label: string; onPress: () => void } };
@@ -84,7 +84,7 @@ export default function CourseScreen() {
           {title}
         </Text>
         <Text variant="body" color="textSecondary">
-          {[id === 'unfiled' ? 'Not in a course' : course?.code, docs.data ? plural(docs.data.length, 'document') : null]
+          {[id === 'unfiled' ? 'Not in a course' : course?.code, docs.data ? plural(docs.data.length, 'document') : null, course?.exam_date ? `Exam ${formatDay(course.exam_date)}` : null]
             .filter(Boolean)
             .join(' · ')}
         </Text>
