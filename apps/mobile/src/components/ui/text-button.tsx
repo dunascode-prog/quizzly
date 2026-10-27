@@ -9,18 +9,20 @@ type Props = {
   onPress: () => void;
   color?: ThemeColor;
   disabled?: boolean;
+  /** Smaller, for two buttons side by side. */
+  compact?: boolean;
 };
 
 /** Plain text action ("Continue with Google", "Use a different email"). */
-export function TextButton({ label, onPress, color = 'text', disabled }: Props) {
+export function TextButton({ label, onPress, color = 'text', disabled, compact }: Props) {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [styles.button, { opacity: disabled ? 0.45 : pressed ? 0.6 : 1 }]}>
-      <Text variant="label" color={color} style={styles.label}>
+      style={({ pressed }) => [styles.button, compact && styles.compact, { opacity: disabled ? 0.45 : pressed ? 0.6 : 1 }]}>
+      <Text variant="label" color={color} style={[styles.label, compact && styles.compactLabel]}>
         {label}
       </Text>
     </Pressable>
@@ -39,4 +41,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     textAlign: 'center',
   },
+  compact: { paddingHorizontal: Spacing.two },
+  compactLabel: { fontSize: 15 },
 });
