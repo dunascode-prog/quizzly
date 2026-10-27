@@ -19,7 +19,17 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.llm import usage
 from app.llm.gateway import AllProvidersBusy, BudgetReached
-from app.worker import accounts, cleanup, crashed, explain, ingest, marking, questions, queue
+from app.worker import (
+    accounts,
+    cleanup,
+    crashed,
+    explain,
+    ingest,
+    marking,
+    progress,
+    questions,
+    queue,
+)
 
 log = logging.getLogger("quizzly.worker")
 
@@ -32,11 +42,13 @@ HANDLERS: dict[str, Handler] = {
     "mark_answers": marking.mark_answer,
     "delete_account": accounts.delete_account,
     "cleanup_storage": cleanup.cleanup_storage,
+    "update_mastery": progress.update_mastery,
 }
 
 POLL_INTERVAL = 2.0
 HEARTBEAT_INTERVAL = 60.0
 SWEEP_INTERVAL = 60.0
+SNAPSHOT_INTERVAL = 3600.0  # daily readiness rows; each day's row is written once
 # FR-SEC-04: no job may run longer than this; a file that takes longer fails as too_large.
 JOB_TIMEOUT = timedelta(minutes=10)
 BUSY_REQUEUE_DELAY = timedelta(minutes=1)
@@ -113,13 +125,17 @@ async def main() -> None:
     pool = await db.open_pool()
     beat = asyncio.create_task(heartbeat(worker_id))
     log.info("worker %s started", worker_id)
-    last_sweep = 0.0
+    last_sweep = last_snapshot = 0.0
     try:
         while True:
             async with pool.connection() as conn:
                 if time.monotonic() - last_sweep > SWEEP_INTERVAL:
                     await sweep(conn)
                     last_sweep = time.monotonic()
+                if time.monotonic() - last_snapshot > SNAPSHOT_INTERVAL:
+                    written = await progress.snapshot_all(conn)
+                    log.info("readiness snapshots written: %d", written)
+                    last_snapshot = time.monotonic()
                 had_work = await run_one(conn, worker_id)
             if not had_work:
                 await asyncio.sleep(POLL_INTERVAL)
