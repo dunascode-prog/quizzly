@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 from app.api.deps import AppSettings, Conn, User
 from app.domain import quizzes, study, usage
@@ -76,7 +76,9 @@ class AnswerIn(BaseModel):
     id: UUID
     question_id: UUID
     # Written answers up to 5,000 characters (FR-SEC-10).
-    response: int | bool | Annotated[str, Field(max_length=5000)] = Field(
+    # Strict types: a true/false answer must stay a bool and an option index an int; a lax
+    # union turned `true` into 1, which never matches a true/false key.
+    response: StrictBool | StrictInt | Annotated[str, Field(max_length=5000)] = Field(
         union_mode="left_to_right"
     )
 
