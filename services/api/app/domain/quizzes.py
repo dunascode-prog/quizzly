@@ -7,6 +7,7 @@ from uuid import UUID
 from psycopg import AsyncConnection, errors
 
 from app.rag import questions as q
+from app.worker import queue
 
 
 async def find_set(conn: AsyncConnection, key: str) -> dict | None:
@@ -126,7 +127,8 @@ async def get_attempt(conn: AsyncConnection, user_id: UUID, attempt_id: UUID) ->
     return await (
         await conn.execute(
             """
-            select a.id, a.quiz_id, a.mode::text as mode, a.status::text as status, a.started_at,
+            select a.id, a.user_id, a.quiz_id, a.mode::text as mode, a.status::text as status,
+                   a.started_at,
                    a.submitted_at, a.current_index, a.score, a.max_score, a.topic_breakdown,
                    z.question_set_id, z.title, z.document_id, z.time_limit_sec
             from quiz_attempts a join quizzes z on z.id = a.quiz_id
@@ -300,14 +302,29 @@ async def submit(conn: AsyncConnection, attempt: dict) -> str:
         "score = %s, max_score = %s, topic_breakdown = %s where id = %s",
         (status, score, max_score, json.dumps(topics), attempt["id"]),
     )
+    if status == "completed":
+        await progress_changed(conn, attempt["user_id"], attempt["id"])
     return status
+
+
+async def progress_changed(conn: AsyncConnection, user_id: UUID, attempt_id: UUID) -> None:
+    """A finished attempt updates mastery, the review queue, study days and achievements
+    (ARCHITECTURE §5.8). One job per attempt; the job is idempotent."""
+    await queue.enqueue(
+        conn,
+        "update_mastery",
+        {"user_id": str(user_id), "attempt_id": str(attempt_id)},
+        user_id=user_id,
+        dedupe_key=f"mastery:{attempt_id}",
+    )
 
 
 async def finish_if_marked(conn: AsyncConnection, attempt_id: UUID) -> None:
     """Called after each marking: completes a submitted attempt once nothing is left to mark."""
     attempt = await (
         await conn.execute(
-            "select a.id, a.status::text as status, z.question_set_id from quiz_attempts a "
+            "select a.id, a.user_id, a.status::text as status, z.question_set_id "
+            "from quiz_attempts a "
             "join quizzes z on z.id = a.quiz_id where a.id = %s",
             (attempt_id,),
         )
@@ -320,6 +337,7 @@ async def finish_if_marked(conn: AsyncConnection, attempt_id: UUID) -> None:
         "topic_breakdown = %s where id = %s and status = 'marking'",
         (score, max_score, json.dumps(topics), attempt_id),
     )
+    await progress_changed(conn, attempt["user_id"], attempt_id)
 
 
 async def list_attempts(conn: AsyncConnection, user_id: UUID, limit: int = 30) -> list[dict]:
