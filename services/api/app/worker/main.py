@@ -107,6 +107,7 @@ async def heartbeat(worker_id: str) -> None:
 
 async def main() -> None:
     settings = get_settings()
+    settings.require_env()  # FR-SEC-15
     configure_logging(settings.log_level)
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
     pool = await db.open_pool()

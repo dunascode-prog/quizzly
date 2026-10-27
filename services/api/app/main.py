@@ -22,6 +22,7 @@ log = logging.getLogger("quizzly.api")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    settings.require_env()  # FR-SEC-15: no silent defaults about where we run
     configure_logging(settings.log_level)
     if settings.database_url:
         await db.open_pool()
@@ -36,13 +37,26 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Quizzly API", version="0.1.0", lifespan=lifespan)
+    settings = get_settings()
+    # FR-SEC-15: the interactive docs and schema only where it's explicitly not production.
+    docs = settings.env in ("local", "test", "staging")
+    app = FastAPI(
+        title="Quizzly API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
+    )
 
-    # Native apps aren't subject to CORS; this only lets the Expo web preview call a local API.
-    if get_settings().env == "local":
+    # Native apps aren't subject to CORS. Browsers may call only from the allowlist, plus the
+    # Expo web preview on localhost when running locally.
+    local = settings.env == "local"
+    if settings.cors_origins or local:
         app.add_middleware(
             CORSMiddleware,
-            allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+            allow_origins=settings.cors_origins,
+            allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?" if local else None,
             allow_methods=["*"],
             allow_headers=["*"],
         )
