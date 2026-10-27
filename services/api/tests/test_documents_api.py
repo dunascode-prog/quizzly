@@ -223,14 +223,15 @@ def test_failed_documents_carry_a_readable_message(client, fake):
     assert body["failure_message"].startswith("We couldn't read this file")
 
 
-async def test_deleting_documents_gives_back_only_todays_uploads(monkeypatch):
+async def test_deleting_gives_back_only_todays_never_processed_uploads(monkeypatch):
     returned = []
 
     async def give_back(conn, user_id, resource, n, tz):
         returned.append((resource, n, tz))
 
     monkeypatch.setattr(usage, "give_back", give_back)
-    deleted = [{"uploaded_today": True}, {"uploaded_today": False}, {"uploaded_today": True}]
+    # refundable = uploaded today and processing never started (FR-SEC-05)
+    deleted = [{"refundable": True}, {"refundable": False}, {"refundable": True}]
     await documents.refund_uploads(None, USER, deleted, "Africa/Lagos")
     assert returned == [("upload", 2, "Africa/Lagos")]
 

@@ -118,7 +118,9 @@ async def ingest_document(conn: AsyncConnection, job: dict) -> None:
     source_file_id: UUID | None = None
     try:
         await conn.execute(
-            "update documents set status = 'processing' where id = %s", (document_id,)
+            "update documents set status = 'processing', "
+            "processing_started_at = coalesce(processing_started_at, now()) where id = %s",
+            (document_id,),
         )
         await queue.set_progress(conn, job["id"], 5)
 

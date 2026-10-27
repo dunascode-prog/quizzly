@@ -168,9 +168,10 @@ async def release(conn: AsyncConnection, deleted: list[dict]) -> list[str]:
 async def refund_uploads(
     conn: AsyncConnection, user_id: UUID, deleted: list[dict], tz: str
 ) -> None:
-    """Documents uploaded today give their upload back when deleted, so the student can upload
-    again while under the daily limit. Earlier days' uploads were counted on those days."""
-    await usage.give_back(conn, user_id, "upload", sum(r["uploaded_today"] for r in deleted), tz)
+    """A deleted document gives today's upload back only if it was never processed (FR-SEC-05),
+    e.g. a wrong file deleted before it finished uploading. Once processing has started the
+    upload stays counted, so upload → delete → upload can't get round the daily limit."""
+    await usage.give_back(conn, user_id, "upload", sum(r["refundable"] for r in deleted), tz)
 
 
 async def delete_document(
@@ -183,8 +184,9 @@ async def delete_document(
             await conn.execute(
                 "delete from documents where id = %(id)s and user_id = %(user)s "
                 "returning upload_path, source_file_id, "
+                "processing_started_at is null and "
                 "(created_at at time zone %(tz)s)::date = (now() at time zone %(tz)s)::date "
-                "as uploaded_today",
+                "as refundable",
                 {"id": document_id, "user": user_id, "tz": tz},
             )
         ).fetchall()
