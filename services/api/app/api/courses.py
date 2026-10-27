@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import courses
+from app.domain import courses, documents, sharing
 from app.worker import cleanup
 
 router = APIRouter(prefix="/v1/courses", tags=["courses"])
@@ -24,6 +24,12 @@ class CourseOut(BaseModel):
     created_at: datetime
     exam_date: date | None = None  # FR-CRS-04
     accent: Accent = "lagoon"
+    # Sharing (FR-SHARE-05/07): a course you shared shows its member count; a course shared with
+    # you shows who shared it, and is read-only.
+    shared: bool = False
+    member_count: int | None = None
+    shared_by: str | None = None
+    member_id: UUID | None = None
 
 
 class _CourseFields(BaseModel):
@@ -64,9 +70,24 @@ def _duplicate(code: str) -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, f"You already have a course called {code}.")
 
 
+READ_ONLY = "This course was shared with you, so only its owner can change it."
+
+
 @router.get("")
 async def list_courses(user: User, conn: Conn) -> list[CourseOut]:
-    return [CourseOut(**c) for c in await courses.list_courses(conn, user.id)]
+    """The student's courses, then courses shared with them (FR-SHARE-05)."""
+    shared = await courses.shared_course_ids(conn, user.id)
+    own = [
+        CourseOut(**c, shared=c["id"] in shared, member_count=shared.get(c["id"]))
+        for c in await courses.list_courses(conn, user.id)
+    ]
+    return own + [CourseOut(**c) for c in await courses.joined_courses(conn, user.id)]
+
+
+async def _not_member(conn, user_id: UUID, course_id: UUID) -> None:
+    """FR-DOC-12: a member trying to change a shared course gets 403, not "not found"."""
+    if await documents.is_course_member(conn, user_id, course_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -97,6 +118,7 @@ async def update_course(course_id: UUID, body: CourseUpdate, user: User, conn: C
     except courses.DuplicateCourse as exc:
         raise _duplicate(str(exc)) from exc
     if course is None:
+        await _not_member(conn, user.id, course_id)
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
     return CourseOut(**course)
 
@@ -110,11 +132,14 @@ async def delete_course(
     settings: AppSettings,
     documents: Annotated[Literal["delete", "unfile"], Query()],
 ) -> Response:
-    """FR-CRS-03: the app asks whether to delete the course's documents or move them to Unfiled."""
+    """FR-CRS-03: the app asks whether to delete the course's documents or move them to Unfiled.
+    A shared course stops being shared first, so members are told (FR-CRS-03)."""
+    await sharing.stop(conn, user.id, course_id)
     paths = await courses.delete_course(
         conn, user.id, course_id, documents == "delete", settings.timezone
     )
     if paths is None:
+        await _not_member(conn, user.id, course_id)
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
     await cleanup.remove_or_queue(conn, storage, paths)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

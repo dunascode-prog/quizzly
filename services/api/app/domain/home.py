@@ -43,7 +43,7 @@ select distinct on (qn.id) qn.id, qn.topic_id, qn.question_set_id, d.id as docum
 from questions qn
 join question_sets s on s.id = qn.question_set_id
 join documents d on d.source_file_id = s.source_file_id
-where d.user_id = %(user)s and d.status = 'ready' and d.deleted_at is null
+where d.status = 'ready' and d.id in (select readable_documents(%(user)s))
   and not qn.hidden and qn.type::text = any(%(types)s)
 """
 
@@ -89,18 +89,28 @@ async def _readiness(
 
 
 async def _focus_course(conn: AsyncConnection, user_id: UUID, today: date) -> dict | None:
-    """The course with the nearest exam, or the most practised one if none has a date."""
+    """The course with the nearest exam, or the most practised one if none has a date. Courses
+    shared with the student count too, without the owner's exam date (FR-SHARE-05)."""
     return await (
         await conn.execute(
             """
-            select c.id, c.code, c.title, c.accent::text as accent,
-                   case when c.exam_date >= %(d)s then c.exam_date end as exam_date
-            from courses c
-            left join topic_mastery m on m.user_id = c.user_id and m.course_id = c.id
-            where c.user_id = %(u)s
-            group by c.id
-            order by (c.exam_date >= %(d)s) is not true, c.exam_date,
-                     coalesce(sum(m.answered), 0) desc, c.created_at
+            with mine as (
+              select c.id, c.code, c.title, c.accent, c.created_at,
+                     case when c.exam_date >= %(d)s then c.exam_date end as exam_date
+              from courses c where c.user_id = %(u)s
+              union all
+              select c.id, c.code, c.title, c.accent, c.created_at, null::date
+              from course_members m
+              join course_shares s on s.id = m.share_id and s.status = 'active'
+              join courses c on c.id = s.course_id
+              where m.user_id = %(u)s and m.status = 'active'
+            )
+            select mine.id, mine.code, mine.title, mine.accent::text as accent, mine.exam_date
+            from mine
+            left join topic_mastery m on m.user_id = %(u)s and m.course_id = mine.id
+            group by mine.id, mine.code, mine.title, mine.accent, mine.exam_date, mine.created_at
+            order by mine.exam_date is null, mine.exam_date,
+                     coalesce(sum(m.answered), 0) desc, mine.created_at
             limit 1
             """,
             {"u": user_id, "d": today},
@@ -184,8 +194,8 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
     """FR-HOME-05: up to 3 rows (about 15 min)."""
     has_notes = await (
         await conn.execute(
-            "select 1 from documents where user_id = %s and status = 'ready' "
-            "and deleted_at is null limit 1",
+            "select 1 from documents d where d.status = 'ready' "
+            "and d.id in (select readable_documents(%s)) limit 1",
             (user_id,),
         )
     ).fetchone()
@@ -204,8 +214,8 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
                    d.id as document_id
             from topic_mastery m
             join topics t on t.id = m.topic_id
-            join documents d on d.source_file_id = t.source_file_id and d.user_id = m.user_id
-              and d.status = 'ready' and d.deleted_at is null
+            join documents d on d.source_file_id = t.source_file_id and d.status = 'ready'
+              and d.id in (select readable_documents(m.user_id))
             where m.user_id = %s and m.answered >= %s and m.mastery < %s
             order by m.mastery, m.topic_id, d.created_at desc
             limit 1
@@ -230,7 +240,7 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
             select t.id as topic_id, t.title, t.token_count, d.id as document_id
             from documents d
             join topics t on t.source_file_id = d.source_file_id and t.parent_id is null
-            where d.user_id = %(u)s and d.status = 'ready' and d.deleted_at is null
+            where d.status = 'ready' and d.id in (select readable_documents(%(u)s))
               and not exists (select 1 from topic_reads r where r.user_id = %(u)s
                               and r.topic_id = t.id)
               and not exists (select 1 from topic_mastery m where m.user_id = %(u)s
@@ -408,7 +418,7 @@ async def record_reading(conn: AsyncConnection, user_id: UUID, events: list[dict
         readable = await (
             await conn.execute(
                 "select 1 from topics t join documents d on d.source_file_id = t.source_file_id "
-                "where t.id = %s and d.user_id = %s and d.deleted_at is null limit 1",
+                "where t.id = %s and can_read_document(d.id, %s) limit 1",
                 (e["topic_id"], user_id),
             )
         ).fetchone()

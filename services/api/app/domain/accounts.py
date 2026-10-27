@@ -5,7 +5,7 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
-from app.domain import documents
+from app.domain import documents, sharing
 
 _PROFILE_SQL = """
 select p.full_name, p.institution_id, p.institution_other, p.department, p.level,
@@ -83,6 +83,7 @@ async def delete_account_data(conn: AsyncConnection, user_id: UUID) -> list[str]
     (FR-AUTH-05). Returns the Storage paths to remove. The rest of their rows go with the
     auth user (cascade)."""
     async with conn.transaction():
+        await sharing.end_all_for_owner(conn, user_id)  # members are told (FR-AUTH-05)
         rows = await (
             await conn.execute(
                 "delete from documents where user_id = %s returning upload_path, source_file_id",

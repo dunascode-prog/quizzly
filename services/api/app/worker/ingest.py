@@ -15,7 +15,7 @@ from psycopg import AsyncConnection
 
 from app.core.config import get_settings
 from app.core.storage import Storage
-from app.domain import notifications
+from app.domain import notifications, sharing
 from app.domain.documents import FAILURE_MESSAGES
 from app.llm.config import load_models_config
 from app.llm.gateway import AllProvidersBusy, LLMGateway
@@ -107,6 +107,7 @@ async def _tell(conn: AsyncConnection, docs: list[dict], failure: str | None = N
     for d in docs:
         target = {"route": "/document/[id]", "params": {"id": str(d["id"])}}
         if failure is None:
+            await sharing.document_ready_in_shared_course(conn, d["id"])  # FR-SHARE-06
             await notifications.notify(
                 conn,
                 d["user_id"],

@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.api.deps import get_storage
-from app.domain import courses, documents, uploads, usage
+from app.domain import courses, documents, sharing, uploads, usage
 from app.worker import queue
 from tests.conftest import JWT_SECRET
 from tests.test_api import make_token
@@ -99,6 +99,15 @@ def fake(client, monkeypatch):
     async def today(conn, user_id):
         return TODAY
 
+    async def no_shares(conn, user_id):
+        return {}
+
+    async def no_joined(conn, user_id):
+        return []
+
+    async def stop(conn, owner, course_id):
+        return False
+
     async def delete_course(conn, user_id, course_id, delete_documents, tz):
         if state["courses"].pop(course_id, None) is None:
             return None
@@ -115,6 +124,9 @@ def fake(client, monkeypatch):
 
     async def course_belongs_to(conn, user_id, course_id):
         return course_id in state["courses"]
+
+    async def is_course_member(conn, user_id, course_id):
+        return course_id in state.get("joined", set())
 
     async def create_document(conn, user_id, filename, course_id, image_count=None):
         doc_id = uuid.uuid4()
@@ -151,10 +163,14 @@ def fake(client, monkeypatch):
         (courses, "create_course", create_course),
         (courses, "update_course", update_course),
         (courses, "today", today),
+        (courses, "shared_course_ids", no_shares),
+        (courses, "joined_courses", no_joined),
+        (sharing, "stop", stop),
         (courses, "delete_course", delete_course),
         (usage, "take", take),
         (usage, "used_today", used_today),
         (documents, "course_belongs_to", course_belongs_to),
+        (documents, "is_course_member", is_course_member),
         (documents, "create_document", create_document),
         (documents, "get_document", get_document),
         (documents, "mark_uploaded", mark_uploaded),
@@ -373,3 +389,24 @@ def test_a_row_pointing_outside_the_users_folder_gets_no_upload_url(client, fake
     fake["docs"][uuid.UUID(doc_id)]["status"] = "failed"
     assert client.post(f"/v1/documents/{doc_id}/upload-url", headers=auth()).status_code == 409
     assert finish(client, doc_id).status_code == 409
+
+
+def test_a_joined_course_is_read_only(client, fake):
+    """FR-DOC-12: no uploads into a course shared with you, and its documents can't be changed."""
+    joined = uuid.uuid4()
+    fake["joined"] = {joined}
+    r = client.post(
+        "/v1/documents",
+        headers=auth(),
+        json={"filename": "a.pdf", "size_bytes": 10, "course_id": str(joined)},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "This course was shared with you, so its notes can't be changed."
+    doc = doc_row(read_only=True, status="ready")
+    fake["docs"][doc["id"]] = doc
+    assert (
+        client.patch(f"/v1/documents/{doc['id']}", headers=auth(), json={"title": "x"}).status_code
+        == 403
+    )
+    assert client.delete(f"/v1/documents/{doc['id']}", headers=auth()).status_code == 403
+    assert client.get(f"/v1/documents/{doc['id']}", headers=auth()).json()["read_only"] is True

@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     daily_question_sets: int = 15
     daily_markings: int = 20  # theory / short answers marked by the LLM (PRD §9)
     daily_chat_messages: int = 40
+    daily_share_recipients: int = 20  # people a student can send courses to per day (FR-SHARE-10)
+    # Host of share and invite links (PRD Q4): https://{invite_domain}/c/{code}
+    invite_domain: str = "quizzly.example"
     # FR-SEC-08: a day's AI spend across all students; reaching either pauses new AI work.
     daily_llm_token_budget: int = 5_000_000
     daily_llm_cost_budget_usd: float = 2.0

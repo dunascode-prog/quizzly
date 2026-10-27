@@ -177,11 +177,10 @@ async def course_readiness(conn: AsyncConnection, user_id: UUID, course_id: UUID
             select distinct t.id, t.token_count, coalesce(m.mastery, 0) as mastery
             from documents d
             join topics t on t.source_file_id = d.source_file_id and t.parent_id is null
-            left join topic_mastery m on m.user_id = d.user_id and m.topic_id = t.id
-            where d.user_id = %s and d.course_id = %s and d.status = 'ready'
-              and d.deleted_at is null
+            left join topic_mastery m on m.user_id = %s and m.topic_id = t.id
+            where d.course_id = %s and d.status = 'ready' and can_read_document(d.id, %s)
             """,
-            (user_id, course_id),
+            (user_id, course_id, user_id),
         )
     ).fetchall()
     return progress.readiness((r["token_count"], float(r["mastery"])) for r in rows)
