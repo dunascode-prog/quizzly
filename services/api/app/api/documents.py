@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
 from app.domain import documents, uploads, usage
-from app.worker import queue
+from app.worker import cleanup, queue
 
 router = APIRouter(tags=["documents"])
 
@@ -217,5 +217,5 @@ async def delete_document(
     paths = await documents.delete_document(conn, user.id, document_id, settings.timezone)
     if paths is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
-    await storage.remove(paths)
+    await cleanup.remove_or_queue(conn, storage, paths)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
