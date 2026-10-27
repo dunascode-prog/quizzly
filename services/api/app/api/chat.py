@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.api.deps import AppSettings, Conn, User
 from app.core import db
 from app.domain import chat, study, usage
+from app.llm import usage as llm_usage
 from app.llm.gateway import AllProvidersBusy
 from app.rag import chat as rag
 from app.rag import retrieve
@@ -107,6 +108,7 @@ async def ask(
             await usage.give_back(conn, user.id, "chat_message", 1, settings.timezone)
 
     async def events() -> AsyncIterator[str]:
+        llm_usage.for_user(user.id)  # llm_calls rows for chat carry the student, no job
         think = rag.ThinkFilter()
         raw, model, first_ms = "", "", None
         try:

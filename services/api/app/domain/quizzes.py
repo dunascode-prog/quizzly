@@ -71,7 +71,10 @@ async def get_quiz(conn: AsyncConnection, user_id: UUID, quiz_id: UUID) -> dict 
             select z.id, z.title, z.document_id, z.mode_default::text as mode, z.question_set_id,
                    z.time_limit_sec, s.status::text as status, s.requested_count, s.generated_count,
                    (select progress from jobs where dedupe_key = 'questions:' || s.id::text
-                    order by created_at desc limit 1) as progress
+                    order by created_at desc limit 1) as progress,
+                   coalesce((select j.status = 'queued' and j.error = 'busy' from jobs j
+                    where j.dedupe_key = 'questions:' || s.id::text
+                    order by j.created_at desc limit 1), false) as busy
             from quizzes z join question_sets s on s.id = z.question_set_id
             where z.id = %s and z.user_id = %s
             """,

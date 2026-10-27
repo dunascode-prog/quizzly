@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     daily_question_sets: int = 15
     daily_markings: int = 20  # theory / short answers marked by the LLM (PRD §9)
     daily_chat_messages: int = 40
+    # FR-SEC-08: a day's AI spend across all students; reaching either pauses new AI work.
+    daily_llm_token_budget: int = 5_000_000
+    daily_llm_cost_budget_usd: float = 2.0
 
     models_config_path: Path = SERVICE_ROOT / "config" / "models.yaml"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
