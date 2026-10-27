@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from psycopg import AsyncConnection
 
-from app.domain import uploads, usage
+from app.domain import page_images, uploads, usage
 
 MIME_TYPES = {
     ".pdf": "application/pdf",
@@ -149,12 +149,14 @@ async def release(conn: AsyncConnection, deleted: list[dict]) -> list[str]:
         orphan = await (
             await conn.execute(
                 "delete from source_files sf where sf.id = %s and not exists "
-                "(select 1 from documents d where d.source_file_id = sf.id) returning storage_path",
+                "(select 1 from documents d where d.source_file_id = sf.id) "
+                "returning storage_path, sha256",
                 (sf_id,),
             )
         ).fetchone()
         if orphan:
             paths.add(orphan["storage_path"])
+            paths.add(page_images.cache_folder(orphan["sha256"]))  # rendered pages (FR-DOC-10)
     if not paths:
         return []
     still_used = await (

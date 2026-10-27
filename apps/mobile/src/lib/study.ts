@@ -61,6 +61,21 @@ export function usePage(documentId: string, page: number) {
   });
 }
 
+/**
+ * The page as uploaded (FR-DOC-10): a signed URL that lasts 5 minutes, so it's refetched after 4
+ * and never persisted. `url` is null for slides, which show their text instead.
+ */
+export function usePageImage(documentId: string, page: number) {
+  return useQuery({
+    queryKey: ['page-image', documentId, page],
+    queryFn: () => apiFetch<{ url: string | null }>(`/v1/documents/${documentId}/pages/${page}/image`),
+    enabled: useSignedIn() && page > 0,
+    staleTime: 4 * 60_000,
+    gcTime: 4 * 60_000,
+    retry: 1,
+  });
+}
+
 const WRITING: Explanation['status'][] = ['pending', 'generating'];
 
 /**
