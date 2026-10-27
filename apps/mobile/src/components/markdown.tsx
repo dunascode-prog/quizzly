@@ -221,7 +221,7 @@ export function Markdown({ content, onCite }: { content: string; onCite: (page: 
 const styles = StyleSheet.create({
   root: { gap: Spacing.three },
   headingGap: { marginTop: Spacing.two },
-  bold: { fontFamily: FontFamily.semibold },
+  bold: { fontFamily: FontFamily.bold },
   italic: { fontStyle: 'italic' },
   inlineCode: { fontFamily: Fonts.mono, fontSize: 15 },
   list: { gap: Spacing.two },

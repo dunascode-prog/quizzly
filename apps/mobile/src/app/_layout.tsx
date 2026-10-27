@@ -1,4 +1,5 @@
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import { BricolageGrotesque_700Bold } from '@expo-google-fonts/bricolage-grotesque';
+import { Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
@@ -9,7 +10,6 @@ import { useColorScheme } from 'react-native';
 
 import { OfflineBanner } from '@/components/offline-banner';
 import { ProfileLoadError } from '@/components/profile-load-error';
-import { FontFamily } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { startAuthListener, useAuth } from '@/lib/auth';
 import { startNetworkListener } from '@/lib/network';
@@ -32,11 +32,13 @@ startOutbox();
 
 function RootNavigator() {
   const theme = useTheme();
+  // DESIGN.md §4: Bricolage Grotesque 700 for headlines and big numbers, Manrope for the rest.
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    [FontFamily.display]: require('@/assets/fonts/InterDisplay-SemiBold.ttf'),
+    BricolageGrotesque_700Bold,
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
   });
   const { session, ready } = useAuth();
   const me = useMe();
