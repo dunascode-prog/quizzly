@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { File } from 'expo-file-system';
 import { create } from 'zustand';
 
+import type { AccentName } from '@/constants/theme';
 import { ApiError, apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { queryClient } from '@/lib/query-client';
@@ -12,7 +13,12 @@ export type Course = {
   title: string | null;
   document_count: number;
   created_at: string;
+  /** "YYYY-MM-DD"; null when unset or already past (FR-CRS-04). */
+  exam_date: string | null;
+  accent: AccentName;
 };
+
+type CourseFields = { code?: string; title?: string | null; exam_date?: string | null; accent?: AccentName };
 
 export type DocumentStatus = 'awaiting_upload' | 'uploaded' | 'processing' | 'ready' | 'failed';
 
@@ -95,7 +101,7 @@ export function useDocuments(scope: DocScope) {
 
 export function useCreateCourse() {
   return useMutation({
-    mutationFn: (body: { code: string; title?: string | null }) =>
+    mutationFn: (body: CourseFields & { code: string }) =>
       apiFetch<Course>('/v1/courses', { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: invalidateLibrary,
   });
@@ -103,7 +109,7 @@ export function useCreateCourse() {
 
 export function useUpdateCourse(courseId: string) {
   return useMutation({
-    mutationFn: (body: { code?: string; title?: string | null }) =>
+    mutationFn: (body: CourseFields) =>
       apiFetch<Course>(`/v1/courses/${courseId}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: invalidateLibrary,
   });
