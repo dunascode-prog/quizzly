@@ -17,6 +17,7 @@ from psycopg import AsyncConnection
 from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.domain import notifications
 from app.llm import usage
 from app.llm.gateway import AllProvidersBusy, BudgetReached
 from app.worker import (
@@ -27,6 +28,7 @@ from app.worker import (
     ingest,
     marking,
     progress,
+    push,
     questions,
     queue,
 )
@@ -43,6 +45,7 @@ HANDLERS: dict[str, Handler] = {
     "delete_account": accounts.delete_account,
     "cleanup_storage": cleanup.cleanup_storage,
     "update_mastery": progress.update_mastery,
+    "send_push": push.send_push,
 }
 
 POLL_INTERVAL = 2.0
@@ -134,7 +137,8 @@ async def main() -> None:
                     last_sweep = time.monotonic()
                 if time.monotonic() - last_snapshot > SNAPSHOT_INTERVAL:
                     written = await progress.snapshot_all(conn)
-                    log.info("readiness snapshots written: %d", written)
+                    old = await notifications.delete_old(conn)  # 90 days (FR-NOTIF-04)
+                    log.info("readiness snapshots: %d, old notifications deleted: %d", written, old)
                     last_snapshot = time.monotonic()
                 had_work = await run_one(conn, worker_id)
             if not had_work:

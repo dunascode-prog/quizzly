@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     cors_origins: list[str] = []
     log_level: str = "info"
     timezone: str = "Africa/Lagos"
+    # Optional: Expo push security token (FR-NOTIF-03). Pushes work without it unless the
+    # Expo project requires one.
+    expo_access_token: str = ""
 
     supabase_url: str = ""
     supabase_service_role_key: str = ""

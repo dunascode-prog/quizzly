@@ -9,19 +9,29 @@ from app.worker import ingest
 
 
 class Conn:
-    """Records SQL; `rows` are what the next fetchone calls return, in order."""
+    """Records SQL; `rows` are what the next fetchone calls return, in order. `updated` is what an
+    UPDATE ... RETURNING on documents returns (the documents that changed)."""
 
-    def __init__(self, rows=()):
+    def __init__(self, rows=(), updated=()):
         self.sql: list[str] = []
         self.rows = list(rows)
+        self.updated = list(updated)
 
     async def execute(self, sql, params=None):
         self.sql.append(" ".join(sql.split()))
-        rows = self.rows
+        rows, updated = self.rows, self.updated
+        is_doc_update = sql.lstrip().startswith("update documents")
 
         class Cur:
             async def fetchone(self):
+                if sql.lstrip().startswith("insert into notifications"):
+                    return {"id": uuid.uuid4(), "push_sent_at": None}
                 return rows.pop(0) if rows else None
+
+            async def fetchall(self):
+                if is_doc_update and updated:
+                    return [updated.pop(0)]
+                return []
 
         return Cur()
 
@@ -45,9 +55,19 @@ async def test_transient_failures_release_the_shared_file_instead(reason):
     assert touched(conn, "source_files") == [
         "delete from source_files where id = %s and status <> 'ready'"
     ]
-    assert (
-        conn.sql[-1] == "update documents set status = 'failed', failure_reason = %s where id = %s"
+    assert conn.sql[-1].startswith(
+        "update documents set status = 'failed', failure_reason = %s where id = %s"
     )
+
+
+async def test_the_student_is_told_when_their_notes_fail():
+    """FR-DOC-11: a document_failed inbox row (and a push job) with the readable reason."""
+    doc = {"id": uuid.uuid4(), "user_id": uuid.uuid4(), "title": "Stacks"}
+    conn = Conn(updated=[doc])
+    await ingest._fail(conn, doc["id"], "encrypted")
+    inserts = [s for s in conn.sql if s.startswith("insert into notifications")]
+    jobs = [s for s in conn.sql if s.startswith("insert into jobs")]
+    assert len(inserts) == 1 and len(jobs) == 1
 
 
 async def test_a_permanently_failed_file_fails_new_uploads_at_once():
