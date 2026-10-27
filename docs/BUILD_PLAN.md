@@ -49,7 +49,7 @@ From the v0.1 code review. Each task needs a regression test.
 
 ## Phase C — Engagement and sharing backend (M4)
 
-- [ ] **C1. Migration `0007_engagement_sharing.sql`** (0005/0006 were taken by A1/A2) (DATA_MODELS §2.9–2.12): profile and course columns, `topic_mastery`, `readiness_snapshots`, `study_days`, `review_queue`, `achievements`, `course_shares`, `course_members`, `user_blocks`, `notifications`, `notification_settings`, `referrals`, `waitlist`; enums; `is_course_member()`; select-only RLS per §5; add `notifications` to the `supabase_realtime` publication; new `job_type` values; backfill `display_name`, `invite_code`, course accents.
+- [x] **C1. Migration `0011_engagement_sharing.sql`** (0005–0010 were taken by Phase A) (DATA_MODELS §2.9–2.12): profile and course columns, `topic_mastery`, `readiness_snapshots`, `study_days`, `review_queue`, `achievements`, `course_shares`, `course_members`, `user_blocks`, `notifications`, `notification_settings`, `referrals`, `waitlist`; enums; `is_course_member()`; select-only RLS per §5; add `notifications` to the `supabase_realtime` publication; new `job_type` values; backfill `display_name`, `invite_code`, course accents.
 - [ ] **C2. Courses: exam date and accent** (FR-CRS-04/05). API + new/edit course sheet field.
 - [ ] **C3. Progress engine** (FR-HOME-03, FR-HAB-01..04, ARCHITECTURE §5.8). `update_mastery` job, nightly snapshot, Leitner review queue, study-day rules, achievements. Unit tests with fixed fixtures for mastery and readiness.
 - [ ] **C4. Endpoints** `GET /home`, `GET /daily5`, `POST /events/reading` (batched reading seconds), `GET /recap/{week}`, `PATCH /me/settings` (goal, accent, modes, share permission, identity toggle), `PATCH /me/notification-settings`.
