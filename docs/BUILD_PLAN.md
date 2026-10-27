@@ -30,7 +30,7 @@ From the v0.1 code review. Each task needs a regression test.
 - [x] **A3. Bounded job retries** (FR-SEC-03). In `services/api/app/worker/queue.py` `claim()`, the expired-lease branch must require `attempts < max_attempts`; add a sweep that marks expired, exhausted jobs `failed` with `crashed` and fails their document. Test with a job that "crashes" repeatedly.
 - [x] **A4. Ingestion resource caps** (FR-SEC-04). Pixel cap (40 MP) before rendering/OCR, PPTX zip uncompressed size and ratio checks, size check from storage metadata before download (photo sets too), 10-minute job timeout.
 - [x] **A5. Refund only unprocessed uploads** (FR-SEC-05). Add `documents.processing_started_at`; refund in delete only when null. Test upload → ready → delete → upload counts 2.
-- [ ] **A6. Transient vs permanent failures** (FR-SEC-06). Only `encrypted|corrupt|no_text|too_large|blocked|crashed` mark `source_files` failed; provider/network errors retry.
+- [x] **A6. Transient vs permanent failures** (FR-SEC-06). Only `encrypted|corrupt|no_text|too_large|blocked|crashed` mark `source_files` failed; provider/network errors retry.
 - [ ] **A7. Shared canonical copy** (FR-SEC-07). On ready, copy to `shared/{sha256}`, point `source_files.storage_path` there; `cleanup_storage` job retries failed removes. Test: delete uploader A, B's pages still load.
 - [ ] **A8. Budget and throttling** (FR-SEC-08, FR-LIM-02, FR-LIM-03). Write every LLM call to `llm_calls` (currently not written); daily budget in config trips the circuit breaker; "High demand" message; Supabase Auth rate limits configured for OTP.
 - [ ] **A9. Secure token storage** (FR-AUTH-06, FR-SEC-09). Supabase client storage adapter on `expo-secure-store` (chunk values > 2 KB); migrate existing sessions on first launch.

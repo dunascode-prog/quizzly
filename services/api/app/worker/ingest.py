@@ -43,10 +43,28 @@ def gateway() -> LLMGateway:
     return _gateway
 
 
+# Reasons that are about the file itself, so they hold for every upload of it (FR-SEC-06).
+# Anything else (provider or network errors, `internal`) is transient: it fails this document
+# only, and the next upload of the same file is processed afresh.
+PERMANENT_REASONS = {"encrypted", "corrupt", "no_text", "too_large", "blocked", "crashed"}
+
+
+async def _release_source_file(conn: AsyncConnection, source_file_id: UUID) -> None:
+    """Drops a half-processed shared file after a transient failure, so it doesn't block or
+    poison later uploads of the same file. A ready file is never touched."""
+    await conn.execute(
+        "delete from source_files where id = %s and status <> 'ready'", (source_file_id,)
+    )
+
+
 async def _fail(
     conn: AsyncConnection, document_id: UUID, reason: str, source_file_id: UUID | None = None
 ) -> None:
-    """A file we can't use: readable reason on the document, and on the shared source file."""
+    """A file we can't use: readable reason on the document. Only a permanent reason is also
+    recorded on the shared source file (FR-SEC-06)."""
+    if source_file_id and reason not in PERMANENT_REASONS:
+        await _release_source_file(conn, source_file_id)
+        source_file_id = None
     if source_file_id:
         await conn.execute(
             "update source_files set status = 'failed', failure_reason = %s where id = %s",
@@ -93,7 +111,21 @@ async def _claim_source_file(
     if sf["status"] == "ready":
         return sf["id"], True
     if sf["status"] == "failed":
-        raise extract.ExtractionError(sf["failure_reason"] or "internal")
+        if sf["failure_reason"] in PERMANENT_REASONS:
+            raise extract.ExtractionError(sf["failure_reason"])
+        # Failed for a transient reason (e.g. rows marked `internal` before FR-SEC-06): take it
+        # over and process it again from this upload.
+        await conn.execute(
+            "update source_files set status = 'processing', failure_reason = null, "
+            "storage_path = %s where id = %s",
+            (doc["upload_path"], sf["id"]),
+        )
+        await conn.execute(
+            "update documents set source_file_id = %s where id = %s", (sf["id"], doc["id"])
+        )
+        for table in ("chunks", "topics", "pages"):
+            await conn.execute(f"delete from {table} where source_file_id = %s", (sf["id"],))
+        return sf["id"], False
     if doc["source_file_id"] != sf["id"]:
         raise queue.RetryLater(timedelta(seconds=15), "same file is processing for someone else")
     # Ours, left half-done by a crash or an LLM outage: start its derived data again.
