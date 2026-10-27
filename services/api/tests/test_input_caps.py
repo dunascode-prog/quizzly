@@ -1,5 +1,6 @@
 """FR-SEC-10 input caps and FR-SEC-18 idempotent ids: readable 422s and 409s, never 500."""
 
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -107,3 +108,21 @@ def test_ids_already_used_elsewhere_get_409_not_500(client, fake_attempts):
         send = client.put if url.endswith("answers") else client.post
         r = send(url, headers=auth(), json=body)
         assert r.status_code == 409, url
+
+
+def test_answers_keep_their_type():
+    """True/false answers stay booleans and option indexes ints, or marking can't match them."""
+    from app.api import quizzes as quiz_api
+
+    def parsed(value):
+        return quiz_api.AnswerIn(id=uuid.uuid4(), question_id=uuid.uuid4(), response=value).response
+
+    assert parsed(True) is True and parsed(False) is False
+    assert parsed(1) == 1 and type(parsed(1)) is int
+    assert parsed(0) == 0 and type(parsed(0)) is int
+    assert parsed("stack") == "stack"
+    raw = {
+        "answers": [{"id": str(uuid.uuid4()), "question_id": str(uuid.uuid4()), "response": True}]
+    }
+    body = quiz_api.AnswersIn.model_validate_json(json.dumps(raw))
+    assert body.answers[0].response is True
