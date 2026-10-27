@@ -6,7 +6,7 @@
 | **Date** | 2026-10-26 |
 | **Applies to** | `apps/mobile` (Expo SDK in `apps/mobile/package.json`, Expo Router) and the link-service landing page |
 | **Related** | [PRD](PRD.md) · [FRD](FRD.md) · [Architecture](ARCHITECTURE.md) · [Build plan](BUILD_PLAN.md) |
-| **Source of truth** | The "Quizzly MVP Design" canvas on claude.ai. Screen images live in `docs/design/` (`01-sign-in.png` … `24-invite-landing.png`, plus `01b`/`01c` sign-in steps, the UI spec, type options and logo boards). |
+| **Source of truth** | The "Quizzly MVP Design" canvas on claude.ai. Screen images live in `docs/design/` (`01-sign-in.png` … `30-admin-dashboard.png`, plus `01b`/`01c` sign-in steps, `-dark` versions of 25–30, the UI spec, type options and logo boards). |
 
 This file is written for whoever builds the UI, human or Claude Code. Follow it exactly. Where it is silent, follow the FRD and keep to the look described here.
 
@@ -17,6 +17,7 @@ This file is written for whoever builds the UI, human or Claude Code. Follow it 
 3. **Sign-in is now a welcome screen** that sells the app while staying monochrome: the study illustration with three ink/white feature stickers, an ink hero card "Your notes, exam‑ready." with a short ticked list of what Quizzly does, and a "Get started" pill. Email and code are steps 2 and 3. §7 screen 01.
 4. **Today is the home tab.** Tabs: Today, Library, Practice, Account.
 5. **Eleven new screens (14–24)** for habits, sharing, notifications and invites, and the components they need. §6, §7.
+6. **Screens 25–30** for v0.1 requirements that had no design yet: flashcards, past-question mode, rename/merge topics, save for offline, the original page viewer and the admin dashboard, each in light and dark. §7.
 
 ---
 
@@ -85,6 +86,17 @@ Accents never appear on the welcome/sign-in screen (01) or the invite landing pa
 Accents never replace the semantic colours: correct is always `success`, wrong is always `danger`.
 
 Checked contrast (light): muted on ground 6.0:1, muted on surface 6.9:1, mutedOnInk on ink 7.8:1, success on successSoft 5.4:1, danger on dangerSoft 5.1:1, warning on warningSoft 5.7:1, ink on every accent ≥ 7:1.
+
+
+### 3.3 Dark mode (every screen is drawn in both)
+
+Every screen 01–30 has a `-dark.png` next to its light image in `docs/design/`, and a "· dark" artboard on the canvas. Dark mode follows the phone setting (`userInterfaceStyle: "automatic"`) and Night study mode (FR-HAB-07).
+
+- **Normal screens:** ground → black, surface → `#1B1C22`, field → `#26272E`, and **ink cards turn light** (`#F5F5FA` with ink text), so each screen keeps one high-contrast block. The floating tab bar and primary action pills invert the same way.
+- **Ink "detail" screens** (06 Outline, 12 Results, 16 Celebrate): the ink top part becomes **dark grey `#1B1C22`, not white**, and the sheet below becomes black. In code: these screens use `hdr`/`onHdr` colours instead of `text`/`onInk` for the top part.
+- **Extra tokens used by the dark drawings:** `inkTile` (tiles on ink cards: `#26272E` light / `#E4E5EC` dark), `onInkSoft` (soft text on ink: `#E4E5EC` / `#26272E`), `dangerText` (rubric hints: `#7F1910` / `#FFB4AC`), `dim` (behind sheets: `#5E5F6B` / black).
+- **Unchanged in dark:** accent colours (text on them stays ink), the page image in the viewer (29) stays white, and the **weekly recap image (17) always exports in light** so it looks the same on WhatsApp.
+- Check contrast on every new component in both modes; the study-days grid gets brighter as activity rises in dark mode.
 
 ## 4. Typography
 
@@ -190,7 +202,7 @@ Routes live in `src/app/`. A root redirect sends signed-out users to `(auth)`, u
 | 06 | `document/[id]/index.tsx` | Outline | FR-TOP-01 | `GET /documents/{id}/outline` |
 | 07 | `document/[id]/topic/[topicId].tsx` | Explanation | FR-EXPL-01–05, FR-MOD-01/03 | `explanations` |
 | 08 | `document/[id]/chat.tsx` | Chat | FR-CHAT-01–06, FR-SEC-14 | SSE |
-| — | `document/[id]/page/[n].tsx` | Source page viewer (own docs) / quote view (shared) | FR-DOC-10, FR-SHARE-02 | signed URL (5 min) / chunk text |
+| 29 | `document/[id]/page/[n].tsx` | Original page viewer (own docs) / quote view (shared) | FR-DOC-10, FR-SHARE-02 | signed URL (5 min) / chunk text |
 | 09 | `quiz/new.tsx` | Quiz setup | FR-QGEN-01/07/08 | `POST /quizzes` |
 | 10–11 | `quiz/[id]/play.tsx` | Question (objective + theory) | FR-QUIZ-01–05, FR-SEC-12 | `GET /quizzes/{id}`, outbox |
 | 12 | `quiz/[id]/results.tsx` | Results | FR-QUIZ-06 | `quiz_attempts` |
@@ -210,12 +222,25 @@ Routes live in `src/app/`. A root redirect sends signed-out users to `(auth)`, u
 | 23 | `invite.tsx` | Invite friends | FR-INV-01/04/05 | `GET /me/invite` |
 | — | `i/[code].tsx` | Invite deep link (stores code, routes on) | FR-INV-02/03 | — |
 | 24 | web: `INVITE_DOMAIN/i/{code}`, `/c/{code}` | Invite / share landing (mobile web) | FR-INV-02, FR-INV-06 | link service |
+| 25 | `document/[id]/topic/[topicId]/cards.tsx` | Flashcards (front, back, finished) | FR-QGEN-10 | `GET /topics/{id}/flashcards`, `review_queue` |
+| 26a | `past-questions/upload.tsx` (formSheet) | Add past questions | FR-QGEN-09, FR-DOC-01..03 | `POST /courses/{id}/past-papers` |
+| 26b | `quiz/new.tsx` (style row) | Quiz setup with past-question style | FR-QGEN-01, FR-QGEN-09 | `POST /quizzes {style}` |
+| 27 | `document/[id]/index.tsx` (sheets) | Rename / merge topics | FR-TOP-03 | `PUT /documents/{id}/topic-overrides` |
+| 28 | `course/[id]/offline.tsx` (formSheet) | Save course for offline | FR-OFF-03 | `GET /courses/{id}/offline-manifest` |
+| 30 | admin web: `/admin` | Costs and reports | FR-LIM-02, FR-MOD-01/02/04 | `llm_calls`, `reports` (service role) |
 
 Move the current Library from `(tabs)/index.tsx` to `(tabs)/library.tsx`; Today takes `index`.
 
 ### 01 Sign in — welcome (redesigned, monochrome)
 Follows the reference: ground background, padding 24/20/22, no accent colours. **Top row:** only the logo in a 52 ink circle (no pill, no wordmark). **Illustration area** (flex, fills the free space): the animated `StudyIllustration` at about 320 wide, with three `Sticker`s around it: "Slides in" (field, up arrow, top-left), "20 exam questions" (ink, tick, top-right), "Cited from page 14" (field, "p.", bottom-right). **Ink hero card** (radius 32, padding 24/22/20): "Your notes,⏎exam‑ready." (`hero` 44) with a diagonal ↗ arrow (up-right) top-right, then a `FeatureList`: ✓ **Upload** slides or note photos · ✓ **Understand** it in plain English · ✓ **Practise** exam-style questions · ✓ **Check** the page every answer cites. **Bottom:** light `ActionPill` "Get started" (ink circle with a book icon), then two text buttons side by side: "Continue with Google" (ink) and "I have an account" (muted). Footer: terms + privacy links (12 muted).
 **Step 2 (email):** the illustration and card stay; the card drops the list. Below: Email `TextField` labelled "Email · we'll send a 6‑digit code", light `ActionPill` "Send my code", text button "Back". **Step 3 (code):** `CodeField`, light `ActionPill` "Verify" (tick), text button "Use a different email · Resend in 0:42" (60 s countdown). Images: `01-sign-in.png`, `01b-sign-in-email.png`, `01c-sign-in-code.png`.
+
+**Small phones (v0.4.1).** The welcome screen must never cut the hero card. Layout rules, in order of priority:
+1. The hero card, the "Get started" pill, the two text buttons and the terms line are fixed size and always fully visible.
+2. The illustration takes whatever height is left (`flex: 1`, `minHeight: 0`) and scales down with its aspect ratio (max 320 × 216).
+3. **Compact mode when the window height is under 740 dp** (`useWindowDimensions`): hide the three stickers, headline 36/38 instead of 44, feature list 14/19 with 7 px gaps, card padding 20. See `01d-sign-in-small-phone.png` (360 × 640).
+4. **Under 600 dp, or at large font scales**, hide the illustration entirely; if the content still doesn't fit (e.g. 200% font), the middle becomes a `ScrollView` while the "Get started" pill stays pinned at the bottom.
+
 
 ### 02 Profile setup
 Back `IconButton`. Headline "Where do you **study?**". Fields: Full name, Institution (searchable; "My school isn't listed"), Department. "Level" pills: 100L–500L, Other. Terms checkbox. Ink `ActionPill` "Start studying". After this, a pending share/invite code is applied (FR-AUTH-07).
@@ -265,10 +290,44 @@ Back. Headline "Study with your **friends**". `LinkCard` with "{domain}/i/TOLU7"
 ### 24 Invite / share landing (mobile web, link service)
 Same tokens and fonts as the app (web fonts from Google Fonts are fine here). A grey URL pill shows the link (in the canvas only, to explain context). Logo + "Quizzly" wordmark. Inviter card: "**Tolu** (UNILAG, 200L) invited you to study together on Quizzly" (hidden if the inviter turned identity off; for `/c/` links: "Ada shared CSC 225 with you"). Ink card "Your notes, **made clear.**" with three ticks (upload, explanations and questions, share with coursemates). `ActionPill` "Get it on Google Play" (download icon). Footer: "iPhone: coming soon · Join the waitlist" and "Already have Quizzly? Open the app". On desktop: the same card centred with a QR code.
 
+### 25–30: more study tools (from the v0.1 FRD; drawn in light and dark)
+
+All six use the same tokens; the dark images (`*-dark.png`) show the dark token set from §3.1, where ink cards turn light (`#F5F5FA`) and the ground turns black. Typography is Bricolage Grotesque + Manrope (not Inter).
+
+#### 25 Flashcards (FR-QGEN-10)
+Header: close `IconButton`, centred "Flashcards · CSC 225" + topic name, report `IconButton`. Headline "Flip and **recall**". Progress: "4 of 20" + "3 known · 0 missed" and a 6 px bar. The **ink card** fills the free height and is one big touch target (`accessibilityRole="button"`, label "Flip card to see the answer"): front = "QUESTION" caption + the term/question (`title`, 32/38) + "Tap to flip"; back = "ANSWER" caption + answer (22/30 bold) + a one-line extra in `mutedOnInk` + a `CitationChip` (outlined in `onInk`) "p. 6 · From your notes" + "Flip back". Flip is a 250 ms Y-rotation (cross-fade under reduce motion). Under the card: two 56-tall field pills **Didn't know** (✕) and **Knew it** (✓); the chosen one gets a 2 px `text` border (no red/green — this is self-rating, not marking). Choosing one also flips to the back. Main action: ink `ActionPill` "Next card". **Finished:** headline "Round **done**", ink card with a 96 ring "60%" + "12 of 20 known" + "The 8 you missed will come back in your Daily 5.", list "Cards to go over" (surface rows with the question and a page chip, "+ 5 more"), `ActionPill` "Review the 8 you missed" (flip icon), text button "Back to topic". Missed cards go to `review_queue` box 1.
+
+#### 26a Add past questions — sheet (FR-QGEN-09)
+Scrimmed sheet, radius 32. Title "Add past **questions**" + close. Ink card "HOW IT WORKS": three numbered rows (1 Upload a past paper for this course · 2 Quizzly learns its style: question types, wording and marks · 3 New questions copy that style, using only your notes) + "We never reuse the old questions or answers word for word." `TextField` Course. "Year" radio pills 2024 / **2023** / 2022 / Older. Two tiles: Photos (camera) and PDF (file; selected = ink). `ActionPill` "Choose PDF" (or "Take photos") + "Up to 25 MB · counts as 1 upload today".
+
+#### 26b Quiz setup with past-question style (FR-QGEN-09)
+Screen 09 plus an **ink style card** under the headline: 48 circle with a history icon, "Style" caption, "Past questions (CSC 225, 2023)", a "Change" pill, and "Same format as the 2023 paper. Every answer comes from your notes." With a past-paper style the type chips collapse into one surface row "Matches the paper: **Theory, Short answer**" with an "Edit" pill (opens the type chips). Count circles and the Practice/Exam segmented pill as 09; Exam is pre-selected for past-paper style.
+
+#### 27 Rename or merge topics (FR-TOP-03)
+On screen 06, **long-press** a topic row (also available from a `…` on the row for TalkBack users) → scrimmed sheet:
+- **27a Menu:** the topic (48 ink number circle, title, "Topic 2 · p. 6–11") + close; two 72-tall field option rows with an ink icon circle: **Rename** ("Give it a name that makes sense to you") and **Merge with next topic** ("Combine with 3 · Array vs linked list"); info note "Only you see these changes. Coursemates and shared copies keep the original names." (Hide Merge on the last topic.)
+- **27b Rename:** "Rename **topic**", focused `TextField` "Topic name" with a clear button, "Was: Push, pop and peek" and a 0/60 counter, info note, `ActionPill` "Save name", text button "Reset to original name" (only when renamed).
+- **27c Merge:** "Merge **topics**", ink preview card: the two topics as `inkRaised` rows with page ranges → "BECOMES ONE TOPIC" + combined title + "Topic 2 · p. 6–17 · 12 pages"; `TextField` "Name for the merged topic"; info note "Only you see this. Your outline goes from 7 to 6 topics; nothing is deleted, and you can split them again."; `ActionPill` "Merge topics"; "Cancel". Merged topics can be split from the same sheet ("Split back into 2 topics").
+
+#### 28 Save course for offline (FR-OFF-03)
+From the ink download `IconButton` on screen 05 → sheet:
+- **28a:** "Save for **offline**"; ink card "WHAT WE'LL SAVE" with ticked rows (12 explanations · All 3 styles you've opened / 4 quizzes · 80 questions with answers / Outlines · For all 4 documents), a divider, "About **3.2 MB**" and "Original files stay online. Chat needs internet."; `ToggleRow` "Only download on Wi‑Fi"; note "New notes you add to CSC 225 are saved automatically while this is on."; `ActionPill` "Download".
+- **28b In progress:** "Saving for **offline**"; ink card with an 88 ring "62%", "2.0 of 3.2 MB", "You can leave this screen. We'll keep going.", and per-part rows (✓ Outlines 4 of 4, ✓ 12 explanations Done, spinner Quizzes 2 of 4); `ActionPill` "Keep studying" (closes the sheet; download continues), text button "Cancel download".
+- **28c Saved:** on screen 05 the ink hero becomes "✓ Saved for offline · 3.2 MB · Updated just now" with an "Update" pill; each document row adds "✓ On this phone".
+
+#### 29 Original page viewer (FR-DOC-10)
+Opens from any `CitationChip` on your own documents. Header: back `IconButton` ("Back to explanation"), centred "Page 4 of 25" + file name (ellipsised), "All pages" grid `IconButton`. The page image fills the remaining height on the ground (black in dark mode); the page itself stays white. The cited passage is tinted with a translucent amber highlight. A one-time ink hint chip "Pinch to zoom · double-tap to fit" pulses three times, then hides. Bottom: floating ink bar (68) with previous/next 52 circles and "4 / 25 · Cited page" + a thin progress bar. Swipe left/right also pages. In a shared course the chip opens the quote view instead (FR-SHARE-02).
+
+#### 30 Admin dashboard (web, 1280; FR-LIM-02, FR-MOD-02)
+Sidebar (`hdr` colour): logo + "Quizzly Admin", nav pills Overview / AI costs / Reports (count badge) / Takedowns / Limits, footer status. Main: date line + headline "Costs and **reports**" + Today / 7 days segmented pill.
+- **Ink cost card:** "AI cost today $0.42 of $2.00 daily budget" with a budget bar ("21% used · breaker trips at 100%"), "Last 7 days $2.69", and **three small-multiple bar charts** (Groq, OpenRouter, Cloudflare), one series each, so no categorical colours are needed: seven bars per provider, today solid with its value labelled, earlier days at 42% opacity, one mid gridline, a hover tooltip per bar ("Groq · Tue · $0.21").
+- **Calls and tokens table:** Provider × (Today: Calls, Tokens, Cost | Last 7 days: Calls, Tokens, Cost) with a Total row; tabular numbers.
+- **Reports queue:** filter pills (All 14 · Questions 9 · Explanations 3 · Chat answers 2 · Auto-hidden 3); columns Type, Reason, Note, Reports, Date, Status, Actions. Rows with ≥ 3 reports from different students show an amber **Auto-hidden** chip (eye-off icon) and the actions View / Keep hidden / Dismiss (Dismiss restores it); other rows show "Open" and View / Hide / Dismiss.
+
 ### Not drawn — build from the components
 - **Practice tab:** quizzes and attempts as `ListCard`s (title, score ring, date; "Resume" for in-progress).
 - **Daily 5 play:** screen 10's UI with "Daily 5 · 3 of 5" in the header.
-- **Source viewer / quote view:** full-screen page image with the page number in the header (own documents); for shared courses, the quoted passage on a field card with "From Ada's notes · p. 14".
+- **Quote view (shared courses):** the quoted passage on a field card with "From Ada's notes · p. 14" (the own-document viewer is screen 29).
 - **Report sheet:** Wrong / Unclear / Inappropriate (+ Copyright for shared courses) + optional note ≤ 500 chars.
 - **Delete course dialog:** "Delete documents" or "Move to Unfiled"; if shared: "Members will lose access."
 - **New / edit course sheet:** Course code (2–12), optional title, **Exam date** (optional date picker, "Add exam date for a countdown"), accent swatches.
