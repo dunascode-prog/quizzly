@@ -145,3 +145,90 @@ async def _always_crashes():
             assert await queue.claim(conn, "test", ["delete_account"]) is None
         finally:
             await conn.rollback()
+
+
+# --- v0.2 engagement and sharing tables (0011, DATA_MODELS §2.9–2.12) ---------------------------
+
+
+def _profile(conn, name: str) -> uuid.UUID:
+    """Signs a student up the way Supabase Auth does: the auth.users trigger creates the profile,
+    and 0011's triggers fill display_name, invite_code and notification settings."""
+    uid = uuid.uuid4()
+    conn.execute(
+        "insert into auth.users (id, aud, role, email, raw_user_meta_data) "
+        "values (%s, 'authenticated', 'authenticated', %s, %s)",
+        (uid, f"{uid}@example.com", json.dumps({"full_name": name})),
+    )
+    return uid
+
+
+def test_profiles_get_a_display_name_a_unique_invite_code_and_settings(conn):
+    a, b = _profile(conn, "ada okafor nnamdi"), _profile(conn, "Ada Bello")
+    assert conn.execute(
+        "select count(*) from notification_settings where user_id = any(%s)", ([a, b],)
+    ).fetchone() == (2,)
+    rows = dict(
+        conn.execute(
+            "select id, (display_name, invite_code) from profiles where id = any(%s)", ([a, b],)
+        ).fetchall()
+    )
+    assert rows[a][0] == "Ada N." and rows[b][0] == "Ada B."
+    assert rows[a][1].startswith("ADA") and rows[a][1].upper() != rows[b][1].upper()
+
+
+def test_new_courses_rotate_accents(conn):
+    uid = _profile(conn, "Tolu Adebayo")
+    for code in ("CSC 201", "CSC 202", "CSC 203", "CSC 204", "CSC 205"):
+        conn.execute("insert into courses (user_id, code) values (%s, %s)", (uid, code))
+    accents = [
+        r[0]
+        for r in conn.execute(
+            "select accent::text from courses where user_id = %s order by created_at, code", (uid,)
+        ).fetchall()
+    ]
+    assert accents == ["lagoon", "ankara", "palm", "lavender", "lagoon"]
+
+
+def test_members_see_a_shared_course_and_only_their_own_notifications(conn):
+    owner, member, stranger = (_profile(conn, n) for n in ("Ada Okafor", "Tolu A", "Bayo B"))
+    course = conn.execute(
+        "insert into courses (user_id, code) values (%s, 'CSC 225') returning id", (owner,)
+    ).fetchone()[0]
+    share = conn.execute(
+        "insert into course_shares (course_id, owner_id, code) values (%s, %s, '7KQ2M9XD') "
+        "returning id",
+        (course, owner),
+    ).fetchone()[0]
+    conn.execute(
+        "insert into course_members (share_id, user_id, source, status) values (%s, %s, 'link', "
+        "'active'), (%s, %s, 'in_app', 'pending')",
+        (share, member, share, stranger),
+    )
+    assert conn.execute(
+        "select member_count from course_shares where id = %s", (share,)
+    ).fetchone() == (1,)
+    conn.execute(
+        "insert into notifications (user_id, type, title) values (%s, 'course_shared', 'x'), "
+        "(%s, 'course_shared', 'y')",
+        (member, stranger),
+    )
+
+    conn.execute("savepoint s")
+    as_role(conn, "authenticated", member)
+    assert conn.execute("select is_course_member(%s)", (course,)).fetchone() == (True,)
+    assert conn.execute("select count(*) from course_shares").fetchone() == (1,)
+    assert conn.execute("select title from notifications").fetchall() == [("x",)]
+    conn.execute("rollback to savepoint s")
+
+    as_role(conn, "authenticated", stranger)  # pending isn't a member yet
+    assert conn.execute("select is_course_member(%s)", (course,)).fetchone() == (False,)
+    assert conn.execute("select count(*) from course_shares").fetchone() == (0,)
+
+
+def test_nobody_but_the_server_reads_the_waitlist(conn):
+    for role in ("authenticated", "anon"):
+        conn.execute("savepoint s")
+        as_role(conn, role, uuid.uuid4())
+        with pytest.raises(errors.InsufficientPrivilege):
+            conn.execute("select * from waitlist")
+        conn.execute("rollback to savepoint s")
