@@ -158,6 +158,41 @@
 .footer-cols a:hover { text-decoration: underline; }
 .footer-bottom { border-top: 1.5px solid var(--line); padding-top: 20px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 
+/* Motion (DESIGN.md §5). Entrances use opacity, translate and scale so the tilts set with transform stay put.
+   globals.css switches every animation off under reduce motion, which leaves everything in its final state. */
+@keyframes qzRise { from { opacity: 0; translate: 0 24px; } }
+@keyframes qzPhoneIn { from { opacity: 0; translate: 0 48px; } }
+@keyframes qzPop { 0% { opacity: 0; scale: .6; } 70% { opacity: 1; scale: 1.06; } 100% { scale: 1; } }
+@keyframes qzBob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
+@keyframes qzFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -12px; } }
+
+/* Page load: the header, then the hero copy line by line, then the phones, then the stickers pop on. */
+.site-header > * { animation: qzRise .6s cubic-bezier(.2, .7, .2, 1) both; }
+.site-header > :nth-child(2) { animation-delay: 60ms; }
+.site-header > :nth-child(3) { animation-delay: 120ms; }
+.hero-copy > * { animation: qzRise .7s cubic-bezier(.2, .7, .2, 1) both; }
+.hero-copy > :nth-child(1) { animation-delay: 120ms; }
+.hero-copy > :nth-child(2) { animation-delay: 220ms; }
+.hero-copy > :nth-child(3) { animation-delay: 320ms; }
+.hero-copy > :nth-child(4) { animation-delay: 420ms; }
+.hero-copy > :nth-child(5) { animation-delay: 520ms; }
+
+/* Phones rise in, then keep floating with offset phases. */
+.hero-art .phone { animation: qzPhoneIn .9s cubic-bezier(.2, .7, .2, 1) both, qzFloat 5s ease-in-out infinite; }
+.hero-art .hero-main { animation-delay: 300ms, 1.2s; }
+.hero-art .hero-side.left { animation-delay: 450ms, 2.4s; }
+.hero-art .hero-side.right { animation-delay: 600ms, 3.4s; }
+
+/* Stickers pop in (500 ms, 150 ms apart), then bob ±6 px every 3.6 s. */
+.hero-art .sticker { animation: qzPop .5s cubic-bezier(.3, 1.4, .5, 1) both, qzBob 3.6s ease-in-out infinite; }
+.hero-art .sticker:nth-of-type(1) { animation-delay: 900ms, 1.4s; }
+.hero-art .sticker:nth-of-type(2) { animation-delay: 1050ms, 2.6s; }
+.hero-art .sticker:nth-of-type(3) { animation-delay: 1200ms, 3.8s; }
+
+/* Scroll reveal (components/ScrollReveal.tsx marks the blocks that start off screen). */
+[data-reveal] { opacity: 0; translate: 0 32px; }
+[data-reveal].in { opacity: 1; translate: 0 0; transition: opacity .7s ease, translate .7s cubic-bezier(.2, .7, .2, 1); transition-delay: var(--reveal-delay, 0ms); }
+
 /* The design's pixel sizes read as zoomed-in in a real browser, so desktop renders it at 82%
    (content 1050px wide, centred). Narrow laptop widths step down further so it never overflows. */
 @media (min-width: 1100px) { .qz { zoom: .82; } }

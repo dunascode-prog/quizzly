@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { Phone } from "@/components/Phone";
 import { PlayQrCode } from "@/components/PlayQrCode";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { IPHONE_WAITLIST_URL, PLAY_STORE_URL } from "@/lib/site";
 
 // Landing page: docs/WEB.md §2, built from docs/reference/landing.html.
@@ -554,6 +555,8 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <ScrollReveal />
     </>
   );
 }
