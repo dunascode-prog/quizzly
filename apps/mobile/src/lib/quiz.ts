@@ -41,6 +41,8 @@ export type Quiz = {
   busy?: boolean;
   time_limit_sec: number | null;
   questions: Question[];
+  /** "daily5": the Daily 5 (FR-HAB-01), which ends on screen 15 instead of the results. */
+  kind?: 'quiz' | 'daily5';
 };
 
 export type Response = number | boolean | string;

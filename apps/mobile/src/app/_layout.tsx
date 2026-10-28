@@ -81,6 +81,7 @@ function RootNavigator() {
           <Stack.Screen name="quiz/new" options={{ presentation: 'modal' }} />
           <Stack.Screen name="quiz/[id]/play" options={{ gestureEnabled: false }} />
           <Stack.Screen name="quiz/[id]/results" />
+          <Stack.Screen name="daily5/done" options={{ gestureEnabled: false }} />
           <Stack.Screen name="quiz/[id]/review" />
           <Stack.Screen name="upload" options={SHEET} />
           <Stack.Screen name="course/new" options={SHEET} />

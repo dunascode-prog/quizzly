@@ -126,3 +126,21 @@ def test_settings_only_allow_unlocked_themes_and_real_values(client, fake):
 def test_reading_minutes_from_topic_length():
     assert home.reading_minutes(0) == 1
     assert home.reading_minutes(800) == 3  # 600 words at 200 a minute
+
+
+def test_study_days_grid_is_whole_weeks(client, monkeypatch):
+    """FR-HAB-04: 5 weeks by default, at most 12."""
+
+    async def study_days(conn, user_id, weeks):
+        start = TODAY - timedelta(days=TODAY.weekday()) - timedelta(weeks=weeks - 1)
+        days = [
+            {"day": start + timedelta(i), "questions": 0, "studied": False}
+            for i in range(weeks * 7)
+        ]
+        return {"today": TODAY, "days": days, "study_days": 0}
+
+    monkeypatch.setattr(home, "study_days", study_days)
+    r = client.get("/v1/study-days", headers=auth())
+    assert r.status_code == 200 and len(r.json()["days"]) == 35
+    assert r.json()["days"][0]["day"] == "2026-09-28"  # a Monday
+    assert client.get("/v1/study-days?weeks=13", headers=auth()).status_code == 422
