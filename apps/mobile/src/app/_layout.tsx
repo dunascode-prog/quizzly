@@ -6,12 +6,13 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 
 import { OfflineBanner } from '@/components/offline-banner';
 import { Toast } from '@/components/ui/toast';
 import { ProfileLoadError } from '@/components/profile-load-error';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAppearance } from '@/lib/appearance';
 import { startAuthListener, useAuth } from '@/lib/auth';
 import { useApplyPendingCode, useLinkCapture } from '@/lib/links';
 import { startNetworkListener } from '@/lib/network';
@@ -19,6 +20,7 @@ import { useNotificationsChannel, usePushRouting } from '@/lib/notifications';
 import { flush, startOutbox } from '@/lib/outbox';
 import { useMe } from '@/lib/profile';
 import { persistOptions, queryClient } from '@/lib/query-client';
+import { useSettings } from '@/lib/settings';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -96,6 +98,8 @@ function RootNavigator() {
           <Stack.Screen name="i/[code]" />
           <Stack.Screen name="invite" />
           <Stack.Screen name="settings/privacy" />
+          <Stack.Screen name="settings/themes" />
+          <Stack.Screen name="settings/reminders" />
           <Stack.Screen name="quiz/[id]/review" />
           <Stack.Screen name="upload" options={SHEET} />
           <Stack.Screen name="course/new" options={SHEET} />
@@ -118,6 +122,19 @@ function RootNavigator() {
 function Live() {
   useNotificationsChannel();
   usePushRouting();
+  // The theme and study modes everyone reads (FR-HAB-07).
+  const settings = useSettings().data;
+  useEffect(() => {
+    if (settings) {
+      useAppearance.getState().set({
+        accent: settings.accent,
+        nightMode: settings.night_mode,
+        lowData: settings.low_data_mode,
+      });
+    }
+  }, [settings]);
+  // Signed out: the next account starts from the defaults.
+  useEffect(() => () => useAppearance.getState().set({ accent: 'ink', nightMode: false, lowData: false }), []);
   return <Toast />;
 }
 

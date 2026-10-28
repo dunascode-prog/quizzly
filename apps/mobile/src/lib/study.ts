@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api';
+import { useAppearance } from '@/lib/appearance';
 import { useAuth } from '@/lib/auth';
 import { queryClient } from '@/lib/query-client';
 
@@ -66,10 +67,11 @@ export function usePage(documentId: string, page: number) {
  * and never persisted. `url` is null for slides, which show their text instead.
  */
 export function usePageImage(documentId: string, page: number) {
+  const lowData = useAppearance((s) => s.lowData);
   return useQuery({
     queryKey: ['page-image', documentId, page],
     queryFn: () => apiFetch<{ url: string | null }>(`/v1/documents/${documentId}/pages/${page}/image`),
-    enabled: useSignedIn() && page > 0,
+    enabled: useSignedIn() && page > 0 && !lowData,
     staleTime: 4 * 60_000,
     gcTime: 4 * 60_000,
     retry: 1,

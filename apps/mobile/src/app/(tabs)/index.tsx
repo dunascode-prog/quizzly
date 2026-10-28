@@ -16,6 +16,7 @@ import { TextField } from '@/components/ui/text-field';
 import { WeekStrip } from '@/components/ui/week-strip';
 import { Accent, BottomTabInset, Colors, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAccent } from '@/lib/appearance';
 import { friendlyError } from '@/lib/errors';
 import { getDaily5, type PlanItem, useHome, useJoinByCode } from '@/lib/home';
 import { useMe } from '@/lib/profile';
@@ -38,6 +39,7 @@ type Row = { title: string; meta: string; hint?: string; onPress: () => void };
 /** The bell (screen 14 → 22) with the unread count on a Lagoon badge (DESIGN.md §3.2). */
 function Bell({ count }: { count: number }) {
   const theme = useTheme();
+  const badge = useAccent() ?? Accent.lagoon;
   return (
     <View>
       <IconButton
@@ -46,7 +48,7 @@ function Bell({ count }: { count: number }) {
         onPress={() => router.push('/notifications')}
       />
       {count ? (
-        <View style={[styles.badge, { backgroundColor: Accent.lagoon, borderColor: theme.background }]} pointerEvents="none">
+        <View style={[styles.badge, { backgroundColor: badge, borderColor: theme.background }]} pointerEvents="none">
           <Text variant="caption" style={styles.badgeText}>
             {count > 9 ? '9+' : count}
           </Text>

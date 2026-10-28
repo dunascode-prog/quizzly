@@ -44,3 +44,37 @@ export function useUpdateSettings() {
     },
   });
 }
+
+export type NotificationSettings = {
+  daily_reminder: boolean;
+  /** "19:30:00" */
+  daily_reminder_time: string;
+  quiet_start: string;
+  quiet_end: string;
+  types: { exam: boolean; due: boolean; recap: boolean; mates: boolean; ready: boolean };
+};
+
+const notifyKey = ['notification-settings'] as const;
+
+/** Reminders (FR-HAB-08). */
+export function useNotificationSettings() {
+  return useQuery({
+    queryKey: notifyKey,
+    queryFn: () => apiFetch<NotificationSettings>('/v1/me/notification-settings'),
+    enabled: Boolean(useAuth((s) => s.session)),
+  });
+}
+
+export function useUpdateNotificationSettings() {
+  return useMutation({
+    mutationFn: (fields: Partial<Omit<NotificationSettings, 'types'>> & { types?: Partial<NotificationSettings['types']> }) =>
+      apiFetch<NotificationSettings>('/v1/me/notification-settings', { method: 'PATCH', body: JSON.stringify(fields) }),
+    onMutate: async (fields) => {
+      const before = queryClient.getQueryData<NotificationSettings>(notifyKey);
+      if (before) queryClient.setQueryData(notifyKey, { ...before, ...fields, types: { ...before.types, ...fields.types } });
+      return { before };
+    },
+    onError: (_e, _f, ctx) => ctx?.before && queryClient.setQueryData(notifyKey, ctx.before),
+    onSuccess: (s) => queryClient.setQueryData(notifyKey, s),
+  });
+}

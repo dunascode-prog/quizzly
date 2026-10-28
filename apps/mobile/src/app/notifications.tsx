@@ -12,6 +12,7 @@ import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
 import { Accent, FontFamily, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAccent } from '@/lib/appearance';
 import { friendlyError } from '@/lib/errors';
 import {
   blockUser,
@@ -65,6 +66,7 @@ function Title({ n }: { n: Notification }) {
 function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
   const theme = useTheme();
   const accept = useAcceptShare();
+  const dot = useAccent() ?? Accent.lagoon;
   const unread = !n.read_at;
   const pendingShare = n.type === 'course_shared' && n.target?.params?.memberId;
   return (
@@ -99,7 +101,7 @@ function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
           </Text>
         </View>
         {/* Unread dot: one of the places an accent may appear (DESIGN.md §3.2). */}
-        {unread ? <View style={[styles.dot, { backgroundColor: Accent.lagoon }]} accessible={false} /> : null}
+        {unread ? <View style={[styles.dot, { backgroundColor: dot }]} accessible={false} /> : null}
       </Pressable>
       <View style={styles.below}>
         {pendingShare && unread ? (

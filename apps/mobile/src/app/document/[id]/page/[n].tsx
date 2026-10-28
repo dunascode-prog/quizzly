@@ -249,7 +249,7 @@ export default function PageScreen() {
   const url = image.data?.url;
   const ratio = useAspect(url);
   const hasImage = !!url && !image.isError && ratio !== 0;
-  const waiting = image.isPending || (hasImage && !ratio);
+  const waiting = image.isLoading || (hasImage && !ratio); // not while skipped in low-data mode
   const count = page.data?.page_count ?? null;
   const quote = Boolean((page.data as { quote?: boolean } | undefined)?.quote);
 
