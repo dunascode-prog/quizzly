@@ -1,6 +1,6 @@
 /* Landing page (docs/reference/landing.html), drawn on a 1440px canvas with 1280px of content.
-   Over 1440 the content stays 1280 wide and centred; 1100–1439 scales the whole canvas down in
-   proportion (stepped zoom below); 1099 and under uses the one-column layout. */
+   From 1100px up the whole canvas is zoomed down (see the end of the file) with the content
+   capped and centred; 1099 and under uses the one-column layout. */
 
 .qz { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font-body); overflow: hidden; }
 .qz-inner { display: flex; flex-direction: column; }
@@ -158,11 +158,9 @@
 .footer-cols a:hover { text-decoration: underline; }
 .footer-bottom { border-top: 1.5px solid var(--line); padding-top: 20px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 
-/* Laptop widths: render the 1440 design at the window's scale instead of overflowing it. */
-@media (max-width: 1439px) { .qz { zoom: .956; } }
-@media (max-width: 1375px) { .qz { zoom: .911; } }
-@media (max-width: 1311px) { .qz { zoom: .867; } }
-@media (max-width: 1247px) { .qz { zoom: .822; } }
+/* The design's pixel sizes read as zoomed-in in a real browser, so desktop renders it at 82%
+   (content 1050px wide, centred). Narrow laptop widths step down further so it never overflows. */
+@media (min-width: 1100px) { .qz { zoom: .82; } }
 @media (max-width: 1183px) { .qz { zoom: .764; } }
 
 @media (max-width: 1099px) {
