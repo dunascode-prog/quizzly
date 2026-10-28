@@ -62,6 +62,7 @@ function Row({ label, icon: Icon, onPress, hint }: { label: string; icon: Lucide
 // Screen 13 (DESIGN.md §7): profile, what's left of today's limits (FR-LIM-01), privacy and terms,
 // sign out (FR-AUTH-04) and account deletion (FR-AUTH-05).
 export default function AccountScreen() {
+  const theme = useTheme();
   const me = useMe();
   const usage = useUsage();
   const { refetch } = usage;
@@ -107,6 +108,16 @@ export default function AccountScreen() {
       {usage.isError ? <Banner message={friendlyError(usage.error)} /> : null}
 
       <View style={styles.rows}>
+        <Pressable
+          onPress={() => router.push('/invite')}
+          accessibilityRole="button"
+          accessibilityLabel="Invite friends to Quizzly"
+          style={({ pressed }) => [styles.row, { backgroundColor: theme.text, opacity: pressed ? 0.85 : 1 }]}>
+          <Text variant="label" color="onInk" style={styles.rowText}>
+            Invite friends to Quizzly
+          </Text>
+          <ChevronRight size={22} color={theme.onInk} strokeWidth={2} />
+        </Pressable>
         <Row label="Privacy and blocking" icon={ChevronRight} onPress={() => router.push('/settings/privacy')} />
         <Row label="Privacy Policy and Terms" icon={ChevronRight} onPress={() => router.push('/legal')} />
         <Row label="Sign out" icon={LogOut} onPress={onSignOut} hint={me.data?.email ? `Signed in as ${me.data.email}` : undefined} />
