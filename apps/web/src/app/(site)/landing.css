@@ -1,10 +1,12 @@
-/* Landing page (docs/reference/landing.html). Layout switches to one column under 700px. */
+/* Landing page (docs/reference/landing.html), drawn on a 1440px canvas with 1280px of content.
+   Over 1440 the content stays 1280 wide and centred; 1100–1439 scales the whole canvas down in
+   proportion (stepped zoom below); 1099 and under uses the one-column layout. */
 
 .qz { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font-body); overflow: hidden; }
 .qz-inner { display: flex; flex-direction: column; }
 
 .disp { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.03em; }
-.wrap { padding-left: 80px; padding-right: 80px; }
+.wrap { padding-left: max(80px, calc((100% - 1280px) / 2)); padding-right: max(80px, calc((100% - 1280px) / 2)); }
 .hl { background: var(--ink); color: var(--onInk); padding: 0 .18em; border-radius: .2em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .hl-inv { background: var(--onInk); color: var(--ink); padding: 0 .18em; border-radius: .2em; }
 .g2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
@@ -156,8 +158,16 @@
 .footer-cols a:hover { text-decoration: underline; }
 .footer-bottom { border-top: 1.5px solid var(--line); padding-top: 20px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 
-@media (max-width: 700px) {
-  .wrap { padding-left: 20px; padding-right: 20px; }
+/* Laptop widths: render the 1440 design at the window's scale instead of overflowing it. */
+@media (max-width: 1439px) { .qz { zoom: .956; } }
+@media (max-width: 1375px) { .qz { zoom: .911; } }
+@media (max-width: 1311px) { .qz { zoom: .867; } }
+@media (max-width: 1247px) { .qz { zoom: .822; } }
+@media (max-width: 1183px) { .qz { zoom: .764; } }
+
+@media (max-width: 1099px) {
+  .qz { zoom: 1; }
+  .wrap { padding-left: max(20px, calc((100% - 640px) / 2)); padding-right: max(20px, calc((100% - 640px) / 2)); }
   .g2, .g3, .g4, .bento, .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .h-hero { font-size: 46px; line-height: 48px; }
   .h-sec { font-size: 34px; line-height: 38px; }
