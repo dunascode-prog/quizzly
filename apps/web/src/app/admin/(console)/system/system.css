@@ -1,0 +1,8 @@
+/* 30g System health (docs/reference/admin-system.html) */
+.sy-grid { align-items: start; }
+.sy-note { display: block; font-size: 12px; color: var(--muted); }
+.sy-open { min-height: 44px; }
+.sy-usage { display: flex; flex-direction: column; gap: 22px; padding-top: 10px; }
+.sy-use { display: flex; flex-direction: column; gap: 8px; }
+.sy-use-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.sy-use .a-meter { height: 6px; }
