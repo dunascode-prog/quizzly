@@ -1,5 +1,5 @@
 /* Quizzly design tokens for the web (apps/web). Mirrors apps/mobile/src/constants/theme.ts — keep them in sync. */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Manrope:wght@400..800&display=swap');
+/* Fonts are self-hosted by next/font in src/app/layout.tsx, which sets --font-bricolage and --font-manrope. */
 
 :root {
   --bg: #DCDDE8;
@@ -34,8 +34,8 @@
   --accent-ankara: #F28C38;
   --accent-palm: #4CC46A;
   --accent-lavender: #A08CF5;
-  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
-  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-display: var(--font-bricolage, 'Bricolage Grotesque'), system-ui, sans-serif;
+  --font-body: var(--font-manrope, 'Manrope'), system-ui, sans-serif;
   --radius-pill: 999px; --radius-card: 28px; --radius-sheet: 32px; --radius-field: 20px;
 }
 @media (prefers-color-scheme: dark) {
