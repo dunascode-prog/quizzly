@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quizzly — admin sign in dark</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&amp;family=Manrope:wght@400..800&amp;display=swap" rel="stylesheet">
+<style>
+h1,h2,[style*="font-size: 26px"],[style*="font-size: 28px"],[style*="font-size: 30px"],[style*="font-size: 32px"],[style*="font-size: 34px"],[style*="font-size: 36px"],[style*="font-size: 38px"],[style*="font-size: 40px"],[style*="font-size: 44px"],[style*="font-size: 48px"],[style*="font-size: 56px"],[style*="font-size: 88px"]{font-family:'Bricolage Grotesque',system-ui,sans-serif !important;font-weight:700 !important;letter-spacing:-0.025em !important}
+button,input,select,textarea{font-family:'Manrope',system-ui,sans-serif !important}
+body{margin:0}
+.qz{--bg:#0D0D10;--surface:#1B1C22;--field:#26272E;--ink:#F5F5FA;--onInk:#0D0D10;--text:#F5F5FA;--muted:#A3A4AE;--mutedOnInk:#4D4E5A;--inkRaised:#E4E5EC;--line:#33343C;--track:#C5C6D3;--inactive:#4D4E5A;--scrim:rgba(0,0,0,.72);--circle:#0D0D10;--hdr:#1B1C22;--onHdr:#F5F5FA;--mutedOnHdr:#A3A4AE;--success:#7BD69A;--successSoft:#16301F;--danger:#FF9D94;--dangerSoft:#3A1C1A;--warning:#F2C46D;--warningSoft:#352A12;--page:#FFFFFF;--viewer:#000000;--behind:#1B1C22}
+.qz a{color:inherit}
+.qz button{cursor:pointer}
+@keyframes qzSpin{to{transform:rotate(360deg)}}
+@keyframes qzHint{0%,100%{opacity:.95}50%{opacity:.55}}
+@media (prefers-reduced-motion: reduce){.qz *{animation:none !important}}
+
+</style>
+
+</head>
+<body>
+
+
+<div class="qz" style="width: 100%; min-height: 100vh; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: 'Manrope', system-ui, sans-serif; position: relative; overflow: hidden">
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px; box-sizing: border-box"><div style="width: 440px; display: flex; flex-direction: column; gap: 20px"><a href="landing-dark.html" style="display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text)"><span role="img" aria-label="Quizzly" style="width: 52px; height: 52px; border-radius: 999px; background: var(--ink); color: var(--onInk); display: flex; align-items: center; justify-content: center"><svg width="24" height="24" viewBox="8 4 92 92" aria-hidden="true"><circle cx="44" cy="44" r="30" fill="none" stroke="currentColor" stroke-width="12"></circle><path d="M60 72 L72 84 L94 60" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"></path></svg></span><span style="font-size: 20px; font-weight: 800">Quizzly</span></a><h1 style="margin: 0; font-size: 40px; line-height: 44px; font-weight: 700; letter-spacing: -0.025em">Team <span style="background: var(--ink); color: var(--onInk); padding: 0 10px; border-radius: 12px; -webkit-box-decoration-break: clone; box-decoration-break: clone">sign-in</span></h1><div style="background: var(--ink); color: var(--onInk); border-radius: 28px; padding: 22px; display: flex; flex-direction: column; gap: 10px"><span style="font-size: 15px; line-height: 22px">This area is for the Quizzly team only. Students sign in in the app.</span><span style="font-size: 13px; line-height: 19px; color: var(--mutedOnInk)">We send a 6-digit code to team emails. Two-step verification is required, and every admin action is logged.</span></div><label style="width: 100%; min-height: 60px; border-radius: 18px; background: var(--field); border: 2px solid var(--text); padding: 8px 16px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 2px"><span style="font-size: 12px; font-weight: 600; color: var(--muted)">Team email</span><input value="seyitan@quizzly.app" style="border: none; outline: none; background: transparent; padding: 0; font: 600 15px Manrope, sans-serif; color: var(--text); min-width: 0"></label><a href="admin-overview-dark.html" style="min-height: 64px; border-radius: 999px; background: var(--ink); color: var(--onInk); display: flex; align-items: center; gap: 12px; padding: 6px 24px 6px 6px; text-decoration: none; font: 700 17px Manrope, sans-serif"><span style="width: 52px; height: 52px; border-radius: 999px; background: var(--circle); color: var(--text); display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></span><span style="flex: 1; text-align: center">Send my code</span><span style="font-size: 20px; letter-spacing: -3px; color: var(--mutedOnInk)">›››</span></a><a href="landing-dark.html" style="align-self: center; font-size: 14px; font-weight: 600; color: var(--muted)">← Back to quizzly.app</a></div></div>
+</div>
+
+</body>
+</html>

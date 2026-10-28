@@ -1,0 +1,104 @@
+/* Quizzly design tokens for the web (apps/web). Mirrors apps/mobile/src/constants/theme.ts — keep them in sync. */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Manrope:wght@400..800&display=swap');
+
+:root {
+  --bg: #DCDDE8;
+  --surface: #ECEDF4;
+  --field: #F5F5FA;
+  --ink: #0D0D10;
+  --onInk: #FFFFFF;
+  --text: #0D0D10;
+  --muted: #4D4E5A;
+  --mutedOnInk: #A3A4AE;
+  --inkRaised: #1B1C22;
+  --line: #C5C6D3;
+  --track: #3A3B44;
+  --inactive: #C9CAD3;
+  --scrim: rgba(13,13,16,.62);
+  --circle: #F5F5FA;
+  --hdr: #0D0D10;
+  --onHdr: #FFFFFF;
+  --mutedOnHdr: #A3A4AE;
+  --success: #186A33;
+  --successSoft: #D6EEDC;
+  --danger: #B42318;
+  --dangerSoft: #F7DCD9;
+  --warning: #7A5200;
+  --warningSoft: #F3E6C4;
+  --page: #FFFFFF;
+  --viewer: #DCDDE8;
+  --behind: #ECEDF4;
+  --bezel: #0D0D10;
+  --bezelRing: transparent;
+  --accent-lagoon: #2BB3A8;
+  --accent-ankara: #F28C38;
+  --accent-palm: #4CC46A;
+  --accent-lavender: #A08CF5;
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --radius-pill: 999px; --radius-card: 28px; --radius-sheet: 32px; --radius-field: 20px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --bg: #0D0D10;
+  --surface: #1B1C22;
+  --field: #26272E;
+  --ink: #F5F5FA;
+  --onInk: #0D0D10;
+  --text: #F5F5FA;
+  --muted: #A3A4AE;
+  --mutedOnInk: #4D4E5A;
+  --inkRaised: #E4E5EC;
+  --line: #33343C;
+  --track: #C5C6D3;
+  --inactive: #4D4E5A;
+  --scrim: rgba(0,0,0,.72);
+  --circle: #0D0D10;
+  --hdr: #1B1C22;
+  --onHdr: #F5F5FA;
+  --mutedOnHdr: #A3A4AE;
+  --success: #7BD69A;
+  --successSoft: #16301F;
+  --danger: #FF9D94;
+  --dangerSoft: #3A1C1A;
+  --warning: #F2C46D;
+  --warningSoft: #352A12;
+  --page: #FFFFFF;
+  --viewer: #000000;
+  --behind: #1B1C22;
+  --bezel: #26272E;
+  --bezelRing: #3A3B44;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D0D10;
+  --surface: #1B1C22;
+  --field: #26272E;
+  --ink: #F5F5FA;
+  --onInk: #0D0D10;
+  --text: #F5F5FA;
+  --muted: #A3A4AE;
+  --mutedOnInk: #4D4E5A;
+  --inkRaised: #E4E5EC;
+  --line: #33343C;
+  --track: #C5C6D3;
+  --inactive: #4D4E5A;
+  --scrim: rgba(0,0,0,.72);
+  --circle: #0D0D10;
+  --hdr: #1B1C22;
+  --onHdr: #F5F5FA;
+  --mutedOnHdr: #A3A4AE;
+  --success: #7BD69A;
+  --successSoft: #16301F;
+  --danger: #FF9D94;
+  --dangerSoft: #3A1C1A;
+  --warning: #F2C46D;
+  --warningSoft: #352A12;
+  --page: #FFFFFF;
+  --viewer: #000000;
+  --behind: #1B1C22;
+  --bezel: #26272E;
+  --bezelRing: #3A3B44;
+}
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+h1, h2, h3, .display { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.03em; }
