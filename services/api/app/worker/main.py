@@ -32,6 +32,7 @@ from app.worker import (
     push,
     questions,
     queue,
+    reminders,
     sharing,
 )
 
@@ -55,6 +56,7 @@ HANDLERS: dict[str, Handler] = {
 POLL_INTERVAL = 2.0
 HEARTBEAT_INTERVAL = 60.0
 SWEEP_INTERVAL = 60.0
+REMINDER_INTERVAL = 900.0  # FR-HAB-08: every 15 minutes
 SNAPSHOT_INTERVAL = 3600.0  # daily readiness rows; each day's row is written once
 # FR-SEC-04: no job may run longer than this; a file that takes longer fails as too_large.
 JOB_TIMEOUT = timedelta(minutes=10)
@@ -132,13 +134,16 @@ async def main() -> None:
     pool = await db.open_pool()
     beat = asyncio.create_task(heartbeat(worker_id))
     log.info("worker %s started", worker_id)
-    last_sweep = last_snapshot = 0.0
+    last_sweep = last_snapshot = last_reminders = 0.0
     try:
         while True:
             async with pool.connection() as conn:
                 if time.monotonic() - last_sweep > SWEEP_INTERVAL:
                     await sweep(conn)
                     last_sweep = time.monotonic()
+                if time.monotonic() - last_reminders > REMINDER_INTERVAL:
+                    await reminders.schedule_reminders(conn)
+                    last_reminders = time.monotonic()
                 if time.monotonic() - last_snapshot > SNAPSHOT_INTERVAL:
                     written = await progress.snapshot_all(conn)
                     old = await notifications.delete_old(conn)  # 90 days (FR-NOTIF-04)
