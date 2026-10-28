@@ -68,34 +68,40 @@ function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
   const unread = !n.read_at;
   const pendingShare = n.type === 'course_shared' && n.target?.params?.memberId;
   return (
-    <Pressable
-      onPress={() => void openTarget(n)}
-      onLongPress={onLongPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${unread ? 'New. ' : ''}${n.title}. ${when(n.created_at)}`}
-      accessibilityHint="Opens it. Long-press for more options"
-      style={({ pressed }) => [styles.row, { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.9 : 1 }]}>
-      {n.actor_name ? (
-        <View style={[styles.avatar, { backgroundColor: theme.text }]}>
-          <Text variant="label" color="onInk">
-            {initials(n.actor_name)}
-          </Text>
-        </View>
-      ) : (
-        <View style={[styles.avatar, { borderWidth: 1.5, borderColor: theme.line }]}>
-          <Text variant="label">Q</Text>
-        </View>
-      )}
-      <View style={styles.rowText}>
-        <Title n={n} />
-        {n.body && !n.title.includes(n.body) ? (
+    <View style={[styles.card, { backgroundColor: theme.backgroundSelected }]}>
+      <Pressable
+        onPress={() => void openTarget(n)}
+        onLongPress={onLongPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${unread ? 'New. ' : ''}${n.title}. ${when(n.created_at)}`}
+        accessibilityHint="Opens it. Long-press for more options"
+        style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
+        {n.actor_name ? (
+          <View style={[styles.avatar, { backgroundColor: theme.text }]}>
+            <Text variant="label" color="onInk">
+              {initials(n.actor_name)}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.avatar, { borderWidth: 1.5, borderColor: theme.line }]}>
+            <Text variant="label">Q</Text>
+          </View>
+        )}
+        <View style={styles.rowText}>
+          <Title n={n} />
+          {n.body && !n.title.includes(n.body) ? (
+            <Text variant="small" color="textSecondary">
+              {n.body}
+            </Text>
+          ) : null}
           <Text variant="small" color="textSecondary">
-            {n.body}
+            {when(n.created_at)}
           </Text>
-        ) : null}
-        <Text variant="small" color="textSecondary">
-          {when(n.created_at)}
-        </Text>
+        </View>
+        {/* Unread dot: one of the places an accent may appear (DESIGN.md §3.2). */}
+        {unread ? <View style={[styles.dot, { backgroundColor: Accent.lagoon }]} accessible={false} /> : null}
+      </Pressable>
+      <View style={styles.below}>
         {pendingShare && unread ? (
           accept.isSuccess ? (
             <Text variant="label" color="success">
@@ -110,9 +116,7 @@ function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
         ) : null}
         {accept.isError ? <Banner message={friendlyError(accept.error)} /> : null}
       </View>
-      {/* Unread dot: one of the places an accent may appear (DESIGN.md §3.2). */}
-      {unread ? <View style={[styles.dot, { backgroundColor: Accent.lagoon }]} accessible={false} /> : null}
-    </Pressable>
+    </View>
   );
 }
 
@@ -207,7 +211,9 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, flexWrap: 'wrap' },
   newPill: { borderRadius: Radius.full, paddingHorizontal: Spacing.three, paddingVertical: 6 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  row: { flexDirection: 'row', gap: Spacing.three, padding: Spacing.three, borderRadius: Radius.card, alignItems: 'flex-start' },
+  card: { borderRadius: Radius.card, padding: Spacing.three },
+  row: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },
+  below: { paddingLeft: 48 + Spacing.three },
   avatar: { width: 48, height: 48, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   rowText: { flex: 1, gap: 4 },
   bold: { fontFamily: FontFamily.bold },

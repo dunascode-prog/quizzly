@@ -101,6 +101,10 @@ export function openTarget(n: Pick<Notification, 'id' | 'target' | 'read_at'>) {
       return router.push({ pathname: '/document/[id]', params: { id: p.id } });
     case '/course/[id]':
       return router.push({ pathname: '/course/[id]', params: { id: p.id } });
+    case '/shares/[memberId]':
+      return router.push({ pathname: '/shares/[memberId]', params: { memberId: p.memberId } });
+    case '/course/[id]/members':
+      return router.push({ pathname: '/course/[id]/members', params: { id: p.id } });
     case '/quiz/[id]/play':
       return router.push({ pathname: '/quiz/[id]/play', params: { id: p.id, mode: 'practice' } });
     case '/daily5':

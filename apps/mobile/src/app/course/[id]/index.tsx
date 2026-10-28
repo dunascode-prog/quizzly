@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
-import { ChevronLeft, Ellipsis, Plus } from '@/components/icons';
+import { ChevronLeft, Ellipsis, Plus, Share2 } from '@/components/icons';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
 import { HeroCard } from '@/components/ui/hero-card';
@@ -11,11 +12,13 @@ import { Pill } from '@/components/ui/pill';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
+import { TextButton } from '@/components/ui/text-button';
 import { Radius, Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { formatDay, plural } from '@/lib/format';
 import { type Doc, type DocScope, retryUpload, useCourses, useDocuments, useUploads } from '@/lib/library';
+import { useReportCourse, useRespond } from '@/lib/sharing';
 
 type Line = { text: string; color?: ThemeColor; action?: { label: string; onPress: () => void } };
 
@@ -44,7 +47,59 @@ function statusLine(doc: Doc, upload: { progress: number; failed: boolean; probl
   }
 }
 
-// Screen 05 (DESIGN.md §7): a course's documents with live status (FR-CRS-03, FR-DOC-04..09).
+const REASONS: { key: 'copyright' | 'wrong' | 'spam' | 'other'; label: string }[] = [
+  { key: 'copyright', label: 'Copyright' },
+  { key: 'wrong', label: 'Wrong content' },
+  { key: 'spam', label: 'Spam' },
+  { key: 'other', label: 'Something else' },
+];
+
+/** The "…" menu of a course shared with you: Leave course, Report course (DESIGN.md §7, 05). */
+function JoinedMenu({ courseId, memberId, onClose }: { courseId: string; memberId: string; onClose: () => void }) {
+  const theme = useTheme();
+  const respond = useRespond();
+  const report = useReportCourse(courseId);
+  const [reporting, setReporting] = useState(false);
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]} onPress={onClose} accessible={false} />
+      <View style={[styles.menu, { backgroundColor: theme.background }]}>
+        {report.isSuccess ? (
+          <Text variant="body" style={styles.center} accessibilityLiveRegion="polite">
+            Thanks. We&apos;ll look at it.
+          </Text>
+        ) : reporting ? (
+          <>
+            <Text variant="label" style={styles.center}>
+              What&apos;s wrong with this course?
+            </Text>
+            <View style={styles.reasons}>
+              {REASONS.map((r) => (
+                <Pill key={r.key} label={r.label} onPress={() => report.mutate(r.key)} />
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
+            <TextButton
+              label={respond.isPending ? 'Leaving…' : 'Leave course'}
+              color="danger"
+              onPress={() =>
+                respond.mutate({ memberId, action: 'leave' }, { onSuccess: () => router.dismissTo('/library') })
+              }
+            />
+            <TextButton label="Report course" onPress={() => setReporting(true)} />
+          </>
+        )}
+        {respond.isError || report.isError ? <Banner message={friendlyError(respond.error ?? report.error)} /> : null}
+        <TextButton label={report.isSuccess ? 'Done' : 'Cancel'} color="textSecondary" onPress={onClose} />
+      </View>
+    </Modal>
+  );
+}
+
+// Screen 05 (DESIGN.md §7): a course's documents with live status (FR-CRS-03, FR-DOC-04..09). A course
+// shared with you is read-only: no upload, rename or delete; you can leave or report it (FR-DOC-12).
 export default function CourseScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -53,6 +108,8 @@ export default function CourseScreen() {
   const docs = useDocuments(scope);
   const uploads = useUploads((s) => s.byDoc);
   const course = courses.data?.find((c) => c.id === id);
+  const joined = Boolean(course?.shared_by);
+  const [menu, setMenu] = useState(false);
   const title = id === 'unfiled' ? 'Unfiled' : (course?.title || course?.code || '');
   const busy = docs.data?.find((d) => uploads[d.id] && !uploads[d.id].failed) ??
     docs.data?.find((d) => d.status === 'uploaded' || d.status === 'processing');
@@ -61,21 +118,34 @@ export default function CourseScreen() {
   return (
     <Screen
       footer={
-        <ActionPill
-          label="Add notes"
-          icon={Plus}
-          variant="light"
-          onPress={() => router.push({ pathname: '/upload', params: id === 'unfiled' ? {} : { courseId: id } })}
-        />
+        joined ? undefined : (
+          <ActionPill
+            label="Add notes"
+            icon={Plus}
+            variant="light"
+            onPress={() => router.push({ pathname: '/upload', params: id === 'unfiled' ? {} : { courseId: id } })}
+          />
+        )
       }>
       <View style={styles.topBar}>
         <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
         {course ? (
-          <IconButton
-            icon={Ellipsis}
-            accessibilityLabel="Course options"
-            onPress={() => router.push({ pathname: '/course/[id]/edit', params: { id: course.id } })}
-          />
+          <View style={styles.actions}>
+            {joined ? null : (
+              <IconButton
+                icon={Share2}
+                accessibilityLabel={course.shared ? 'Sharing options' : 'Share with coursemates'}
+                onPress={() => router.push({ pathname: '/course/[id]/share', params: { id: course.id } })}
+              />
+            )}
+            <IconButton
+              icon={Ellipsis}
+              accessibilityLabel="Course options"
+              onPress={() =>
+                joined ? setMenu(true) : router.push({ pathname: '/course/[id]/edit', params: { id: course.id } })
+              }
+            />
+          </View>
         ) : null}
       </View>
 
@@ -88,6 +158,13 @@ export default function CourseScreen() {
             .filter(Boolean)
             .join(' · ')}
         </Text>
+        {course?.shared_by ? (
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSelected }]}>
+            <Text variant="caption" color="textSecondary">
+              Shared by {course.shared_by} · read-only
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {busy ? (
@@ -131,9 +208,13 @@ export default function CourseScreen() {
                     ? router.push({ pathname: '/document/[id]', params: { id: d.id } })
                     : router.push({ pathname: '/document/[id]/edit', params: { id: d.id } })
                 }
-                onLongPress={() => router.push({ pathname: '/document/[id]/edit', params: { id: d.id } })}
+                onLongPress={d.read_only ? undefined : () => router.push({ pathname: '/document/[id]/edit', params: { id: d.id } })}
                 accessibilityHint={
-                  d.status === 'ready' ? 'Opens the outline. Long press to rename, move or delete.' : 'Rename, move or delete'
+                  d.read_only
+                    ? 'Opens the outline'
+                    : d.status === 'ready'
+                      ? 'Opens the outline. Long press to rename, move or delete.'
+                      : 'Rename, move or delete'
                 }
                 trailing={line.action ? <Pill label={line.action.label} selected onPress={line.action.onPress} /> : undefined}
               />
@@ -141,12 +222,18 @@ export default function CourseScreen() {
           })}
         </View>
       )}
+      {menu && course?.member_id ? <JoinedMenu courseId={course.id} memberId={course.member_id} onClose={() => setMenu(false)} /> : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'space-between' },
+  actions: { flexDirection: 'row', gap: Spacing.two },
+  tag: { alignSelf: 'flex-start', borderRadius: Radius.full, paddingHorizontal: Spacing.three, paddingVertical: 4, marginTop: Spacing.one },
+  menu: { position: 'absolute', left: Spacing.gutter, right: Spacing.gutter, bottom: Spacing.six, borderRadius: Radius.sheet, padding: Spacing.three, gap: Spacing.two },
+  reasons: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, justifyContent: 'center' },
+  center: { textAlign: 'center' },
   heading: { gap: Spacing.one },
   hero: { flexDirection: 'row', alignItems: 'center' },
   heroText: { flex: 1, gap: Spacing.one },

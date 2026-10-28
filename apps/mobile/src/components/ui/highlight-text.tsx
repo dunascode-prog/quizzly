@@ -8,15 +8,24 @@ import { Text } from './text';
 type Props = {
   /** The whole headline, e.g. "Where do you study?". */
   children: string;
-  /** The one word set on an ink block, e.g. "study?". Must appear in `children`. */
+  /** The word (or short phrase, e.g. "CSC 225") set on an ink block. Must appear in `children`. */
   highlight: string;
-  variant?: 'display' | 'hero';
+  variant?: 'display' | 'hero' | 'title';
 };
 
-/** Screen headline with one word on an ink block (DESIGN.md §4). Wraps word by word. */
+/** Screen headline with one word on an ink block (DESIGN.md §4). Wraps word by word; a highlighted
+ * phrase stays together on its block. */
 export function HighlightText({ children, highlight, variant = 'display' }: Props) {
   const theme = useTheme();
-  const words = children.split(' ');
+  const at = children.indexOf(highlight);
+  const words =
+    highlight && at >= 0
+      ? [
+          ...children.slice(0, at).split(' ').filter(Boolean),
+          highlight,
+          ...children.slice(at + highlight.length).split(' ').filter(Boolean),
+        ]
+      : children.split(' ');
   const type = Type[variant];
 
   return (

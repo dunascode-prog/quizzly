@@ -85,6 +85,11 @@ function RootNavigator() {
           <Stack.Screen name="quiz/[id]/results" />
           <Stack.Screen name="daily5/done" options={{ gestureEnabled: false }} />
           <Stack.Screen name="notifications" />
+          <Stack.Screen name="course/[id]/share" options={SHEET} />
+          <Stack.Screen name="course/[id]/members" />
+          <Stack.Screen name="shares/[memberId]" />
+          <Stack.Screen name="c/[code]" />
+          <Stack.Screen name="settings/privacy" />
           <Stack.Screen name="quiz/[id]/review" />
           <Stack.Screen name="upload" options={SHEET} />
           <Stack.Screen name="course/new" options={SHEET} />

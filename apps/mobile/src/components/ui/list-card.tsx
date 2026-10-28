@@ -15,13 +15,28 @@ type Props = {
   badge?: string;
   /** Replaces the chevron, e.g. a "Retry" pill. */
   trailing?: ReactNode;
+  /** v0.4: a small tag under the title, e.g. "Shared by Ada O." */
+  tag?: string;
+  /** v0.4: the course's accent dot next to the title (DESIGN.md §3.2). */
+  accentColor?: string;
   onPress?: () => void;
   onLongPress?: () => void;
   accessibilityHint?: string;
 };
 
 /** Surface card for a course or document (DESIGN.md §6). */
-export function ListCard({ title, meta, metaColor = 'textSecondary', badge, trailing, onPress, onLongPress, accessibilityHint }: Props) {
+export function ListCard({
+  title,
+  meta,
+  metaColor = 'textSecondary',
+  badge,
+  trailing,
+  tag,
+  accentColor,
+  onPress,
+  onLongPress,
+  accessibilityHint,
+}: Props) {
   const theme = useTheme();
   const body = (
     <>
@@ -33,13 +48,23 @@ export function ListCard({ title, meta, metaColor = 'textSecondary', badge, trai
         </View>
       ) : null}
       <View style={styles.text}>
-        <Text variant="label" style={styles.title} numberOfLines={2}>
-          {title}
-        </Text>
+        <View style={styles.titleRow}>
+          {accentColor ? <View style={[styles.dot, { backgroundColor: accentColor }]} /> : null}
+          <Text variant="label" style={styles.title} numberOfLines={2}>
+            {title}
+          </Text>
+        </View>
         {meta ? (
           <Text variant="small" color={metaColor} numberOfLines={2}>
             {meta}
           </Text>
+        ) : null}
+        {tag ? (
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSelected }]}>
+            <Text variant="caption" color="textSecondary">
+              {tag}
+            </Text>
+          </View>
         ) : null}
       </View>
       {trailing ?? (onPress ? <ChevronRight size={22} color={theme.text} strokeWidth={2} /> : null)}
@@ -58,7 +83,7 @@ export function ListCard({ title, meta, metaColor = 'textSecondary', badge, trai
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
-      accessibilityLabel={[title, meta].filter(Boolean).join(', ')}
+      accessibilityLabel={[title, meta, tag].filter(Boolean).join(', ')}
       accessibilityHint={accessibilityHint}
       style={({ pressed }) => [styles.card, { backgroundColor: theme.backgroundElement, opacity: pressed ? 0.85 : 1 }]}>
       {body}
@@ -67,6 +92,9 @@ export function ListCard({ title, meta, metaColor = 'textSecondary', badge, trai
 }
 
 const styles = StyleSheet.create({
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  tag: { alignSelf: 'flex-start', borderRadius: Radius.full, paddingHorizontal: Spacing.two, paddingVertical: 2, marginTop: 4 },
   card: {
     minHeight: Size.field + 8,
     borderRadius: Radius.option + 2,
@@ -85,5 +113,5 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 13 },
   text: { flex: 1, gap: Spacing.half },
-  title: { fontSize: 17, fontFamily: FontFamily.semibold },
+  title: { flexShrink: 1, fontSize: 17, fontFamily: FontFamily.semibold },
 });

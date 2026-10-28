@@ -80,6 +80,7 @@ class PreviewOut(BaseModel):
     status: str | None
     course_id: UUID
     code: str
+    accent: str = "lagoon"
     title: str | None
     owner_name: str | None
     institution: str | None
@@ -102,6 +103,12 @@ class JoinedOut(BaseModel):
 
 class BlockIn(BaseModel):
     user_id: UUID
+
+
+class BlockedOut(BaseModel):
+    user_id: UUID
+    display_name: str | None
+    created_at: datetime
 
 
 class CourseReportIn(BaseModel):
@@ -244,6 +251,18 @@ async def respond(
     if done is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Share not found")
     return JoinedOut(**done)
+
+
+@router.get("/v1/blocks")
+async def blocked(user: User, conn: Conn) -> list[BlockedOut]:
+    """Privacy and blocking: the people you've blocked."""
+    return [BlockedOut(**b) for b in await sharing.blocked(conn, user.id)]
+
+
+@router.delete("/v1/blocks/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unblock(user_id: UUID, user: User, conn: Conn) -> Response:
+    await sharing.unblock(conn, user.id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/v1/blocks", status_code=status.HTTP_204_NO_CONTENT)

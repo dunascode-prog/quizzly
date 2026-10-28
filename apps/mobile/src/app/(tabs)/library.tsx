@@ -10,7 +10,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { ListCard } from '@/components/ui/list-card';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
-import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import { Accent, BottomTabInset, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { courseBadge, plural } from '@/lib/format';
@@ -67,6 +67,14 @@ export default function LibraryScreen() {
               key={c.id}
               badge={courseBadge(c.code)}
               title={c.title || c.code}
+              accentColor={Accent[c.accent]}
+              tag={
+                c.shared_by
+                  ? `Shared by ${c.shared_by}`
+                  : c.shared
+                    ? `Shared · ${c.member_count ?? 0} joined`
+                    : undefined
+              }
               meta={`${c.code} · ${plural(c.document_count, 'document')}`}
               onPress={() => router.push({ pathname: '/course/[id]', params: { id: c.id } })}
             />
