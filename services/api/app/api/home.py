@@ -74,6 +74,26 @@ class StudyDaysOut(BaseModel):
     study_days: int
 
 
+class CelebrationReadiness(BaseModel):
+    code: str
+    before: float | None
+    now: float
+
+
+class CelebrationOut(BaseModel):
+    """Screen 16 (FR-HAB-05): one of the student's own achievements, ready to draw."""
+
+    id: UUID
+    kind: str
+    ref: dict[str, Any]
+    ring: float
+    ring_label: str  # "80%", or "4/4" days for the weekly goal
+    subtitle: str | None
+    before: float | None  # "Since last Monday" bars; None hides the card
+    now: float | None
+    readiness: CelebrationReadiness | None
+
+
 class SeenIn(BaseModel):
     ids: list[UUID] = Field(max_length=50)
 
@@ -197,6 +217,15 @@ async def get_study_days(
     if data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile not found")
     return StudyDaysOut(**data)
+
+
+@router.get("/v1/achievements/{achievement_id}")
+async def get_achievement(achievement_id: UUID, user: User, conn: Conn) -> CelebrationOut:
+    """Only the student's own achievements; anyone else's is a 404."""
+    data = await home.achievement(conn, user.id, achievement_id)
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    return CelebrationOut(**data)
 
 
 @router.post("/v1/achievements/seen", status_code=status.HTTP_204_NO_CONTENT)

@@ -100,6 +100,8 @@ function RootNavigator() {
           <Stack.Screen name="settings/privacy" />
           <Stack.Screen name="settings/themes" />
           <Stack.Screen name="settings/reminders" />
+          <Stack.Screen name="celebrate/[achievementId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+          <Stack.Screen name="recap/[week]" />
           <Stack.Screen name="quiz/[id]/review" />
           <Stack.Screen name="upload" options={SHEET} />
           <Stack.Screen name="course/new" options={SHEET} />
