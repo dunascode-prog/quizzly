@@ -18,6 +18,7 @@ Built on open-source models through free hosted tiers, with a retrieval-augmente
 | [Data models](docs/DATA_MODELS.md) | ER diagram and every table |
 | [Data flows](docs/DATA_FLOWS.md) | Context and level-1 DFDs, a DFD per entity, key sequences |
 | [Design](docs/DESIGN.md) | Look, tokens, components, every MVP screen, logo; screen images in `docs/design/` |
+| [Website and admin](docs/WEB.md) | `apps/web`: landing page, invite links, legal pages, admin app; approved HTML in `docs/reference/` |
 
 ## Stack
 
@@ -34,6 +35,7 @@ Built on open-source models through free hosted tiers, with a retrieval-augmente
 
 ```
 apps/mobile/          Expo app
+apps/web/             Next.js site: landing, invite links, admin (quizzly.app)
 services/api/         FastAPI app + worker, LLM config
 supabase/migrations/  SQL schema and row-level security
 evals/                Evaluation set for prompts
@@ -51,6 +53,9 @@ cd services/api && uv sync && cp .env.example .env && uv run uvicorn app.main:ap
 
 # Mobile app
 cd apps/mobile && npm install && cp .env.example .env.local && npx expo start
+
+# Website and admin (http://localhost:3000)
+cd apps/web && npm install && cp .env.example .env.local && npm run dev
 ```
 
 Apply the database schema to a Supabase project:
@@ -60,7 +65,7 @@ supabase link --project-ref <ref>
 supabase db push
 ```
 
-More detail: [apps/mobile](apps/mobile/README.md) · [services/api](services/api/README.md) · [infra](infra/README.md).
+More detail: [apps/mobile](apps/mobile/README.md) · [apps/web](apps/web/README.md) · [services/api](services/api/README.md) · [infra](infra/README.md).
 
 ## Contributing
 
