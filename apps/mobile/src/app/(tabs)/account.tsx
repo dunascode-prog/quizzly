@@ -107,7 +107,8 @@ export default function AccountScreen() {
       {usage.isError ? <Banner message={friendlyError(usage.error)} /> : null}
 
       <View style={styles.rows}>
-        <Row label="Privacy and terms" icon={ChevronRight} onPress={() => router.push('/legal')} />
+        <Row label="Privacy and blocking" icon={ChevronRight} onPress={() => router.push('/settings/privacy')} />
+        <Row label="Privacy Policy and Terms" icon={ChevronRight} onPress={() => router.push('/legal')} />
         <Row label="Sign out" icon={LogOut} onPress={onSignOut} hint={me.data?.email ? `Signed in as ${me.data.email}` : undefined} />
       </View>
       {error ? <Banner message={error} /> : null}

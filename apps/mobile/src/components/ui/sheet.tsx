@@ -6,13 +6,20 @@ import { X } from '@/components/icons';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
+import { HighlightText } from './highlight-text';
 import { IconButton } from './icon-button';
 import { Text } from './text';
 
-type Props = { title: string; onClose: () => void; children: ReactNode };
+type Props = {
+  title: string;
+  /** The word of the title on the ink block, e.g. the course code. */
+  highlight?: string;
+  onClose: () => void;
+  children: ReactNode;
+};
 
 /** Body of a formSheet route: title + close button, sized to its content (DESIGN.md §7, 04). */
-export function Sheet({ title, onClose, children }: Props) {
+export function Sheet({ title, highlight, onClose, children }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -21,9 +28,17 @@ export function Sheet({ title, onClose, children }: Props) {
       contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, Spacing.three) + Spacing.two }]}
       keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
-        <Text variant="title" accessibilityRole="header" style={styles.title}>
-          {title}
-        </Text>
+        <View style={styles.title}>
+          {highlight ? (
+            <HighlightText variant="title" highlight={highlight}>
+              {title}
+            </HighlightText>
+          ) : (
+            <Text variant="title" accessibilityRole="header">
+              {title}
+            </Text>
+          )}
+        </View>
         <IconButton icon={X} accessibilityLabel="Close" onPress={onClose} />
       </View>
       {children}

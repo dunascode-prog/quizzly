@@ -358,7 +358,7 @@ async def take_down(conn: AsyncConnection, share_id: UUID) -> None:
 
 _SHARE_COLUMNS = """
        s.id as share_id, s.status::text as share_status,
-       s.member_count, s.owner_id, c.id as course_id, c.code, c.title,
+       s.member_count, s.owner_id, c.id as course_id, c.code, c.title, c.accent::text as accent,
        p.display_name as owner_name, p.level,
        coalesce(i.short_name, i.name, p.institution_other) as institution
 from course_shares s
@@ -377,6 +377,7 @@ async def _preview(conn: AsyncConnection, row: dict) -> dict[str, Any]:
         "status": row.get("status"),
         "course_id": row["course_id"],
         "code": row["code"],
+        "accent": row["accent"],
         "title": row["title"],
         "owner_name": row["owner_name"],
         "institution": row["institution"],
@@ -553,6 +554,24 @@ async def block(conn: AsyncConnection, user_id: UUID, blocked_id: UUID) -> None:
         where s.id = m.share_id and s.owner_id = %s and m.user_id = %s and m.status = 'pending'
         """,
         (blocked_id, user_id),
+    )
+
+
+async def blocked(conn: AsyncConnection, user_id: UUID) -> list[dict[str, Any]]:
+    """People the student has blocked, display names only (Privacy and blocking)."""
+    return await (
+        await conn.execute(
+            "select b.blocked_id as user_id, p.display_name, b.created_at from user_blocks b "
+            "join profiles p on p.id = b.blocked_id where b.blocker_id = %s "
+            "order by b.created_at desc",
+            (user_id,),
+        )
+    ).fetchall()
+
+
+async def unblock(conn: AsyncConnection, user_id: UUID, blocked_id: UUID) -> None:
+    await conn.execute(
+        "delete from user_blocks where blocker_id = %s and blocked_id = %s", (user_id, blocked_id)
     )
 
 

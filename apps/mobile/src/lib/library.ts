@@ -16,6 +16,12 @@ export type Course = {
   /** "YYYY-MM-DD"; null when unset or already past (FR-CRS-04). */
   exam_date: string | null;
   accent: AccentName;
+  /** Your course is shared (FR-SHARE-07), with how many have joined. */
+  shared?: boolean;
+  member_count?: number | null;
+  /** A course shared with you: who shared it, and your membership (to leave). Read-only. */
+  shared_by?: string | null;
+  member_id?: string | null;
 };
 
 type CourseFields = { code?: string; title?: string | null; exam_date?: string | null; accent?: AccentName };
@@ -23,6 +29,8 @@ type CourseFields = { code?: string; title?: string | null; exam_date?: string |
 export type DocumentStatus = 'awaiting_upload' | 'uploaded' | 'processing' | 'ready' | 'failed';
 
 export type Doc = {
+  /** In a course shared with you: study only (FR-DOC-12). */
+  read_only?: boolean;
   id: string;
   title: string;
   original_filename: string;
