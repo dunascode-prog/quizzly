@@ -67,7 +67,11 @@ async def _ask(
     wanted = {src.topic_id: src.count for src in batch}
     drafts: list[q.Draft] = []
     for item in q.parse(completion.text):
-        d = q.validate(item, by_label, types, difficulty)
+        d = (
+            q.validate_flashcard(item, by_label)
+            if types == [q.FLASHCARD]
+            else q.validate(item, by_label, types, difficulty)
+        )
         if d is not None and sum(x.topic_id == d.topic_id for x in drafts) < wanted[d.topic_id]:
             drafts.append(d)
     return drafts
@@ -110,7 +114,8 @@ async def generate_questions(conn: AsyncConnection, job: dict) -> None:
                 (qs["topic_ids"],),
             )
         ).fetchall()
-        types = [t for t in qs["types"] if t in q.ALL_TYPES]
+        flashcards = qs["types"] == [q.FLASHCARD]  # FR-QGEN-10: their own prompt and checks
+        types = [q.FLASHCARD] if flashcards else [t for t in qs["types"] if t in q.ALL_TYPES]
         pages = await _pages(conn, qs["source_file_id"])
         topic_pages = {
             t["id"]: [
@@ -146,7 +151,9 @@ async def generate_questions(conn: AsyncConnection, job: dict) -> None:
         alloc = q.allocate(weights, qs["requested_count"])
         labels = {t["id"]: f"t{i}" for i, t in enumerate(usable, start=1)}
         titles = {t["id"]: t["title"] for t in usable}
-        template = q.PROMPT_PATH.read_text(encoding="utf-8")
+        template = (q.FLASHCARD_PROMPT_PATH if flashcards else q.PROMPT_PATH).read_text(
+            encoding="utf-8"
+        )
 
         drafts: list[q.Draft] = []
         vectors: list[list[float]] = []

@@ -48,7 +48,7 @@ export function useOutline(documentId: string) {
   return useQuery({
     queryKey: ['outline', documentId],
     queryFn: () => apiFetch<Outline>(`/v1/documents/${documentId}/outline`),
-    enabled: useSignedIn(),
+    enabled: useSignedIn() && Boolean(documentId),
     staleTime: 10 * 60_000,
   });
 }

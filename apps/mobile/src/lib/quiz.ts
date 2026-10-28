@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { refreshHomeSoon } from '@/lib/home';
 import { queryClient } from '@/lib/query-client';
 
-export type QuestionType = 'mcq' | 'true_false' | 'fill_blank' | 'short_answer' | 'theory';
+export type QuestionType = 'mcq' | 'true_false' | 'fill_blank' | 'short_answer' | 'theory' | 'flashcard';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed';
 export type Mode = 'practice' | 'exam';
 
@@ -17,7 +17,8 @@ export type Question = {
   stem: string;
   options: string[] | null;
   /** Null in an exam quiz until the student has submitted (FR-SEC-12). */
-  answer: number | boolean | { text: string; alternatives: string[] } | { model_answer: string } | null;
+  /** A flashcard's back is `{ text }`; its `explanation` is the one-line extra (FR-QGEN-10). */
+  answer: number | boolean | { text: string; alternatives?: string[] } | { model_answer: string } | null;
   explanation: string | null;
   source_pages: number[];
   topic_id: string | null;
@@ -41,8 +42,9 @@ export type Quiz = {
   busy?: boolean;
   time_limit_sec: number | null;
   questions: Question[];
-  /** "daily5": the Daily 5 (FR-HAB-01), which ends on screen 15 instead of the results. */
-  kind?: 'quiz' | 'daily5';
+  /** "daily5": the Daily 5 (FR-HAB-01), which ends on screen 15 instead of the results.
+   * "flashcards": a round of flashcards for one topic (screen 25). */
+  kind?: 'quiz' | 'daily5' | 'flashcards';
 };
 
 export type Response = number | boolean | string;
@@ -88,7 +90,7 @@ export type Attempt = {
 export type AttemptSummary = Pick<
   Attempt,
   'id' | 'quiz_id' | 'title' | 'document_id' | 'mode' | 'status' | 'started_at' | 'submitted_at' | 'current_index' | 'score' | 'max_score'
-> & { question_count: number };
+> & { question_count: number; kind?: Quiz['kind'] };
 
 export type WeakTopic = TopicResult & { document_id: string };
 
@@ -105,6 +107,17 @@ export type QuizSettings = {
 
 function useSignedIn() {
   return Boolean(useAuth((s) => s.session));
+}
+
+/** A round of flashcards for one topic: cached cards, generated once (FR-QGEN-10). */
+export function createFlashcards(documentId: string, topicId: string) {
+  return apiFetch<Quiz>(`/v1/documents/${documentId}/flashcards`, { method: 'POST', body: JSON.stringify({ topic_id: topicId }) }).then(
+    (quiz) => {
+      queryClient.setQueryData(['quiz', quiz.id], quiz);
+      void queryClient.invalidateQueries({ queryKey: ['usage'] });
+      return quiz;
+    },
+  );
 }
 
 export function createQuiz(documentId: string, settings: QuizSettings) {
@@ -216,6 +229,8 @@ export function isWritten(question: Pick<Question, 'type'>) {
 export function isCorrect(question: Question, response: Response): boolean {
   const { type, answer } = question;
   if (isWritten(question)) return false;
+  // A flashcard is self-rated: true is "Knew it" (FR-QGEN-10).
+  if (type === 'flashcard') return response === true;
   if (type === 'mcq') return typeof response === 'number' && response === answer;
   if (type === 'true_false') return typeof response === 'boolean' && response === answer;
   if (typeof response !== 'string' || !answer || typeof answer !== 'object' || !('text' in answer)) return false;
@@ -234,6 +249,7 @@ export function answerText(question: Question): string {
 
 export function responseText(question: Question, response: Response | undefined): string {
   if (response === undefined) return 'No answer';
+  if (question.type === 'flashcard') return response === true ? 'Knew it' : "Didn't know";
   if (question.type === 'mcq' && question.options && typeof response === 'number') return question.options[response] ?? '';
   if (typeof response === 'boolean') return response ? 'True' : 'False';
   return String(response);
@@ -245,6 +261,7 @@ export const TYPE_LABELS: Record<QuestionType, string> = {
   fill_blank: 'Fill the blank',
   short_answer: 'Short answer',
   theory: 'Theory',
+  flashcard: 'Flashcard',
 };
 
 /** "4", "1.5": half marks at most. */

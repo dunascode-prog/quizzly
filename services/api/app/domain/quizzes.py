@@ -35,7 +35,16 @@ async def create_set(
         "difficulty, requested_count, variant, prompt_version) "
         "values (%s, %s, %s, %s::question_type[], %s, %s, %s, %s) "
         "on conflict (cache_key) do nothing",
-        (source_file_id, key, topic_ids, types, difficulty, count, variant, q.PROMPT_VERSION),
+        (
+            source_file_id,
+            key,
+            topic_ids,
+            types,
+            difficulty,
+            count,
+            variant,
+            q.prompt_version(types),
+        ),
     )
     return await find_set(conn, key)
 
@@ -54,12 +63,13 @@ async def create_quiz(
     title: str,
     mode: str,
     time_limit_sec: int | None = None,
+    kind: str = "quiz",
 ) -> UUID:
     row = await (
         await conn.execute(
             "insert into quizzes (user_id, document_id, question_set_id, title, mode_default, "
-            "time_limit_sec) values (%s, %s, %s, %s, %s, %s) returning id",
-            (user_id, document_id, set_id, title[:200], mode, time_limit_sec),
+            "time_limit_sec, kind) values (%s, %s, %s, %s, %s, %s, %s) returning id",
+            (user_id, document_id, set_id, title[:200], mode, time_limit_sec, kind),
         )
     ).fetchone()
     return row["id"]
@@ -369,7 +379,7 @@ async def list_attempts(conn: AsyncConnection, user_id: UUID, limit: int = 30) -
             """
             select a.id, a.quiz_id, z.title, z.document_id, a.mode::text as mode,
                    a.status::text as status, a.started_at, a.submitted_at, a.current_index,
-                   a.score, a.max_score,
+                   a.score, a.max_score, z.kind,
                    coalesce(cardinality(z.question_ids), s.generated_count) as question_count
             from quiz_attempts a
             join quizzes z on z.id = a.quiz_id
@@ -392,6 +402,7 @@ async def weak_topics(conn: AsyncConnection, user_id: UUID, attempts: int = 20) 
                 select a.topic_breakdown, z.document_id from quiz_attempts a
                 join quizzes z on z.id = a.quiz_id
                 where a.user_id = %s and a.status = 'completed' and a.topic_breakdown is not null
+                  and z.kind <> 'flashcards'
                 order by a.submitted_at desc limit %s
             )
             select t->>'topic_id' as topic_id, max(t->>'title') as title,

@@ -178,16 +178,24 @@ async def _daily5_state(conn: AsyncConnection, user_id: UUID, today: date) -> di
               (select count(*) from review_queue rq
                where rq.user_id = %(u)s and rq.due_on <= %(d)s
                  and rq.question_id in (select id from ("""
-            + _POOL
+            + _POOL.replace("%(types)s", "%(review_types)s")
             + """) p)) as due,
               exists ("""
             + _POOL
             + """) as any_questions
             """,
-            {"u": user_id, "user": user_id, "d": today, "types": list(progress.OBJECTIVE_TYPES)},
+            {
+                "u": user_id,
+                "user": user_id,
+                "d": today,
+                "types": list(progress.OBJECTIVE_TYPES),
+                "review_types": list(progress.REVIEW_TYPES),
+            },
         )
     ).fetchone()
-    return {"done": bool(row["done"]), "due": row["due"], "available": row["any_questions"]}
+    # Due flashcards alone are enough for a Daily 5 (FR-QGEN-10).
+    available = row["any_questions"] or row["due"] > 0
+    return {"done": bool(row["done"]), "due": row["due"], "available": available}
 
 
 async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUID | None) -> list:
@@ -348,7 +356,8 @@ def _fraction_mastery(rows: list[dict]) -> tuple[float, int]:
     fractions = [
         f
         for r in rows
-        if (f := progress.answer_fraction(r["score"], r["is_correct"], r["marks"])) is not None
+        if r["type"] != progress.FLASHCARD
+        and (f := progress.answer_fraction(r["score"], r["is_correct"], r["marks"])) is not None
     ]
     return progress.topic_mastery(fractions), len(fractions)
 
@@ -507,10 +516,12 @@ async def _pick(conn: AsyncConnection, user_id: UUID, today: date) -> list[dict]
         ).fetchall()
         picked.extend(rows)
 
+    params["types"] = list(progress.REVIEW_TYPES)  # due flashcards come back here only
     await take(
         "join review_queue rq on rq.question_id = p.id and rq.user_id = %(user)s "
         "where rq.due_on <= %(d)s and p.id <> all(%(skip)s) order by rq.due_on, rq.box"
     )
+    params["types"] = list(progress.OBJECTIVE_TYPES)
     await take(
         "join topic_mastery m on m.topic_id = p.topic_id and m.user_id = %(user)s "
         f"where m.answered >= {WEAK_TOPIC_MIN_ANSWERS} and m.mastery < {WEAK_TOPIC_BELOW} "

@@ -15,7 +15,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { useMe } from '@/lib/profile';
-import { createQuiz } from '@/lib/quiz';
+import { createFlashcards, createQuiz } from '@/lib/quiz';
 import { type Style, useExplanation, useOutline, useRateExplanation } from '@/lib/study';
 
 const STYLES: { value: Style; label: string }[] = [
@@ -88,9 +88,24 @@ export default function ExplanationScreen() {
     }
   };
 
+  // Screen 25: a round of flashcards on this topic (FR-QGEN-10).
+  const flashcards = async () => {
+    setQuizBusy(true);
+    setQuizError(null);
+    try {
+      const round = await createFlashcards(id, topicId);
+      router.push({ pathname: '/flashcards/[id]', params: { id: round.id } });
+    } catch (e) {
+      setQuizError(friendlyError(e));
+    } finally {
+      setQuizBusy(false);
+    }
+  };
+
   const footer = (
     <>
       <ActionPill label="Quiz me on this" icon={SquareCheck} onPress={quizMe} loading={quizBusy} />
+      <TextButton label="Flip through flashcards" onPress={() => !quizBusy && void flashcards()} />
       {next ? (
         <TextButton
           label="Next topic"

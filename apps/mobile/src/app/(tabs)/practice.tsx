@@ -23,6 +23,10 @@ function pct(a: AttemptSummary) {
 }
 
 function open(a: AttemptSummary) {
+  if (a.kind === 'flashcards') {
+    router.push({ pathname: '/flashcards/[id]', params: { id: a.quiz_id, attempt: a.id } });
+    return;
+  }
   if (a.status === 'in_progress') {
     router.push({ pathname: '/quiz/[id]/play', params: { id: a.quiz_id, mode: a.mode, attempt: a.id } });
   } else {
@@ -42,6 +46,23 @@ function ResumeTag() {
 
 function AttemptCard({ a }: { a: AttemptSummary }) {
   const mode = a.mode === 'exam' ? 'Exam' : 'Practice';
+  if (a.kind === 'flashcards') {
+    // Self-rated, so a count of cards known rather than a score (FR-QGEN-10).
+    const known = Math.round(a.score ?? 0);
+    return (
+      <ListCard
+        title={a.title}
+        meta={
+          a.status === 'in_progress'
+            ? `Flashcards · card ${Math.min(a.current_index + 1, a.question_count)} of ${a.question_count} · ${day(a.started_at)}`
+            : `Flashcards · ${known} known · ${day(a.submitted_at ?? a.started_at)}`
+        }
+        onPress={() => open(a)}
+        accessibilityHint={a.status === 'in_progress' ? 'Carries on where you stopped' : 'Opens the round'}
+        trailing={a.status === 'in_progress' ? <ResumeTag /> : undefined}
+      />
+    );
+  }
   if (a.status === 'in_progress') {
     return (
       <ListCard

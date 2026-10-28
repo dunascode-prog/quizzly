@@ -120,6 +120,7 @@ class AttemptSummary(BaseModel):
     question_count: int
     score: float | None
     max_score: float | None
+    kind: str = "quiz"  # "flashcards" rounds open screen 25, not the quiz player
 
 
 class WeakTopic(BaseModel):
@@ -157,8 +158,9 @@ class AttemptOut(BaseModel):
 
 def _notice(row: dict) -> str | None:
     if row["status"] == "ready" and row["generated_count"] < row["requested_count"]:
+        what = "cards" if row.get("kind") == "flashcards" else "questions"
         return (
-            f"We made {row['generated_count']} good questions out of {row['requested_count']} "
+            f"We made {row['generated_count']} good {what} out of {row['requested_count']} "
             "— your notes on this topic are short."
         )
     return None
@@ -215,6 +217,54 @@ async def _attempt_out(conn, row: dict) -> AttemptOut:
     )
 
 
+async def _question_set(
+    conn,
+    user_id: UUID,
+    settings,
+    source_file_id: UUID,
+    topic_ids: list[UUID],
+    types: list[str],
+    difficulty: str,
+    count: int,
+    new_questions: bool = False,
+) -> dict:
+    """The cached set for these choices (FR-QGEN-07), or a new one from today's allowance; queues
+    generation when it isn't written yet."""
+    sf = str(source_file_id)
+
+    def key(variant: int) -> str:
+        return q.cache_key(sf, [str(t) for t in topic_ids], types, difficulty, count, variant)
+
+    variant = 0
+    existing = await quizzes.find_set(conn, key(0))
+    if new_questions:
+        while existing is not None:  # the next unused variant is a brand-new set
+            variant += 1
+            existing = await quizzes.find_set(conn, key(variant))
+    if existing is None:
+        limit = settings.daily_question_sets
+        if await usage.take(conn, user_id, "question_set", limit, settings.timezone) is None:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                f"You've used today's {limit} quiz generations. Resets at 12:00 AM.",
+            )
+        existing = await quizzes.create_set(
+            conn, source_file_id, key(variant), topic_ids, types, difficulty, count, variant
+        )
+    elif existing["status"] == "failed":
+        await quizzes.retry_set(conn, existing["id"])  # our failure: retry without using another
+        existing = {**existing, "status": "pending"}
+    if existing["status"] == "pending":
+        await queue.enqueue(
+            conn,
+            "generate_questions",
+            {"question_set_id": str(existing["id"])},
+            user_id=user_id,
+            dedupe_key=f"questions:{existing['id']}",
+        )
+    return existing
+
+
 @router.post("/v1/documents/{document_id}/quizzes", status_code=status.HTTP_201_CREATED)
 async def create_quiz(
     document_id: UUID, body: QuizCreate, user: User, conn: Conn, settings: AppSettings
@@ -228,52 +278,59 @@ async def create_quiz(
     if body.topic_ids and len(chosen) != len(set(body.topic_ids)):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown topic")
     topic_ids = sorted(t["id"] for t in chosen)
-    types = sorted(set(body.types))
-    sf = str(doc["source_file_id"])
-
-    def key(variant: int) -> str:
-        return q.cache_key(
-            sf, [str(t) for t in topic_ids], types, body.difficulty, body.count, variant
-        )
-
-    variant = 0
-    existing = await quizzes.find_set(conn, key(0))
-    if body.new_questions:
-        while existing is not None:  # the next unused variant is a brand-new set
-            variant += 1
-            existing = await quizzes.find_set(conn, key(variant))
-    if existing is None:
-        limit = settings.daily_question_sets
-        if await usage.take(conn, user.id, "question_set", limit, settings.timezone) is None:
-            raise HTTPException(
-                status.HTTP_429_TOO_MANY_REQUESTS,
-                f"You've used today's {limit} quiz generations. Resets at 12:00 AM.",
-            )
-        existing = await quizzes.create_set(
-            conn,
-            doc["source_file_id"],
-            key(variant),
-            topic_ids,
-            types,
-            body.difficulty,
-            body.count,
-            variant,
-        )
-    elif existing["status"] == "failed":
-        await quizzes.retry_set(conn, existing["id"])  # our failure: retry without using another
-        existing = {**existing, "status": "pending"}
-    if existing["status"] == "pending":
-        await queue.enqueue(
-            conn,
-            "generate_questions",
-            {"question_set_id": str(existing["id"])},
-            user_id=user.id,
-            dedupe_key=f"questions:{existing['id']}",
-        )
+    existing = await _question_set(
+        conn,
+        user.id,
+        settings,
+        doc["source_file_id"],
+        topic_ids,
+        sorted(set(body.types)),
+        body.difficulty,
+        body.count,
+        body.new_questions,
+    )
     title = chosen[0]["title"] if len(chosen) == 1 and len(all_topics) > 1 else doc["title"]
     limit_sec = body.time_limit_min * 60 if body.mode == "exam" and body.time_limit_min else None
     quiz_id = await quizzes.create_quiz(
         conn, user.id, document_id, existing["id"], title, body.mode, limit_sec
+    )
+    return await _quiz_out(conn, await quizzes.get_quiz(conn, user.id, quiz_id), user.id)
+
+
+FLASHCARDS_PER_TOPIC = 20
+
+
+class FlashcardsCreate(BaseModel):
+    topic_id: UUID
+
+
+@router.post("/v1/documents/{document_id}/flashcards", status_code=status.HTTP_201_CREATED)
+async def create_flashcards(
+    document_id: UUID, body: FlashcardsCreate, user: User, conn: Conn, settings: AppSettings
+) -> QuizOut:
+    """A round of flashcards for one topic (FR-QGEN-10, screen 25): a cached set of front/back
+    cards, played as a practice-only quiz of kind "flashcards". Rating a card is its answer."""
+    doc = await study.ready_document(conn, user.id, document_id)
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found or not ready yet")
+    topic = next(
+        (t for t in await study.topics(conn, doc["source_file_id"]) if t["id"] == body.topic_id),
+        None,
+    )
+    if topic is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown topic")
+    existing = await _question_set(
+        conn,
+        user.id,
+        settings,
+        doc["source_file_id"],
+        [topic["id"]],
+        [q.FLASHCARD],
+        "mixed",
+        FLASHCARDS_PER_TOPIC,
+    )
+    quiz_id = await quizzes.create_quiz(
+        conn, user.id, document_id, existing["id"], topic["title"], "practice", kind="flashcards"
     )
     return await _quiz_out(conn, await quizzes.get_quiz(conn, user.id, quiz_id), user.id)
 
