@@ -296,6 +296,42 @@ async def home(conn: AsyncConnection, user_id: UUID) -> dict | None:
     }
 
 
+async def study_days(conn: AsyncConnection, user_id: UUID, weeks: int) -> dict | None:
+    """The study-days grid (FR-HAB-04): the last `weeks` weeks, Monday first, with questions
+    answered per day; days still to come this week are included (empty) so rows are whole weeks."""
+    ctx = await context(conn, user_id)
+    if ctx is None:
+        return None
+    today: date = ctx["today"]
+    start = progress.week_start(today) - timedelta(weeks=weeks - 1)
+    rows = {
+        r["day"]: r
+        for r in await (
+            await conn.execute(
+                "select day, questions_answered, counted from study_days "
+                "where user_id = %s and day between %s and %s",
+                (user_id, start, today),
+            )
+        ).fetchall()
+    }
+    days = []
+    for i in range(weeks * 7):
+        d = start + timedelta(days=i)
+        r = rows.get(d) or {}
+        days.append(
+            {
+                "day": d,
+                "questions": r.get("questions_answered", 0),
+                "studied": bool(r.get("counted")),
+            }
+        )
+    return {
+        "today": today,
+        "days": days,
+        "study_days": sum(1 for d in days if d["studied"]),
+    }
+
+
 async def mark_achievements_seen(conn: AsyncConnection, user_id: UUID, ids: list[UUID]) -> None:
     """The app shows a celebration once (FR-HAB-05)."""
     await conn.execute(

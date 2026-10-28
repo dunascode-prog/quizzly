@@ -65,6 +65,8 @@ class QuizOut(BaseModel):
     busy: bool = False
     time_limit_sec: int | None
     questions: list[QuestionOut]
+    # "daily5" for the Daily 5 (FR-HAB-01): the app shows screen 15 when it's done.
+    kind: str = "quiz"
 
 
 class AttemptStart(BaseModel):
@@ -179,6 +181,7 @@ async def _quiz_out(conn, row: dict, user_id: UUID) -> QuizOut:
         busy=bool(row.get("busy")),
         time_limit_sec=row["time_limit_sec"],
         questions=[QuestionOut(**x) for x in qs],
+        kind=row.get("kind") or "quiz",
     )
 
 

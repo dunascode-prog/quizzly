@@ -55,8 +55,24 @@ export function useHome() {
 
 /** Progress changes after a quiz; the progress job takes a moment, so look again shortly after. */
 export function refreshHomeSoon() {
-  void queryClient.invalidateQueries({ queryKey: homeKey });
-  setTimeout(() => void queryClient.invalidateQueries({ queryKey: homeKey }), 4000);
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: homeKey });
+    void queryClient.invalidateQueries({ queryKey: ['study-days'] });
+  };
+  refresh();
+  setTimeout(refresh, 4000);
+}
+
+export type StudyDays = { today: string; days: WeekDay[]; study_days: number };
+
+/** The study-days grid, last 5 weeks (FR-HAB-04). */
+export function useStudyDays(weeks = 5) {
+  return useQuery({
+    queryKey: ['study-days', weeks],
+    queryFn: () => apiFetch<StudyDays>(`/v1/study-days?weeks=${weeks}`),
+    enabled: Boolean(useAuth((s) => s.session)),
+    staleTime: 30_000,
+  });
 }
 
 /** Today's Daily 5 quiz (made on first request, the same all day; FR-HAB-01). */

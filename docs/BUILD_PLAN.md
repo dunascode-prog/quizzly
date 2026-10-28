@@ -50,7 +50,7 @@ From the v0.1 code review. Each task needs a regression test.
 ## Phase D — Engagement and sharing UI (M4)
 
 - [x] **D1. Today** (14) with `CountdownCard`, `WeekStrip`, `PlanRow`, new-user state.
-- [ ] **D2. Daily 5** play (reuses `play.tsx`) and **15** done screen with `StudyGrid`.
+- [x] **D2. Daily 5** play (reuses `play.tsx`) and **15** done screen with `StudyGrid`.
 - [ ] **D3. Realtime notifications** (FR-NOTIF-02, 04, 07): `useNotificationsChannel` (foreground only, `AppState`), global `Toast`, bell badge, **22** inbox with filters and inline actions, catch-up fetch, push registration and tap routing with `expo-notifications`.
 - [ ] **D4. Sharing UI**: **19** share sheet (`PrivacyList`, `MateChip`, `LinkCard`), members screen, **20** join screen, joined-course states in 03/05/07/08 (tag, read-only, quote view), leave/report, privacy and blocking settings.
 - [ ] **D5. Deep links and invites**: `app.json` Android `intentFilters` (`autoVerify`) for `INVITE_DOMAIN` paths `/i/*`, `/c/*`; routes `i/[code]`, `c/[code]`; pending code kept in secure storage through sign-up (FR-AUTH-07); Play Install Referrer on first launch (`react-native-device-info` `getInstallReferrer()`, development build); **23** invite screen with QR (`react-native-qrcode-svg`).

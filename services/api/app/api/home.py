@@ -1,11 +1,11 @@
 """Today, Daily 5, reading time, weekly recap and settings (BUILD_PLAN C4)."""
 
 from datetime import date, datetime, time
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.deps import Conn, User
@@ -66,6 +66,12 @@ class HomeOut(BaseModel):
     unread_notifications: int
     # Not celebrated yet (FR-HAB-05); the app marks them seen.
     achievements: list[Achievement]
+
+
+class StudyDaysOut(BaseModel):
+    today: date
+    days: list[Day]  # whole weeks, Monday first, oldest first
+    study_days: int
 
 
 class SeenIn(BaseModel):
@@ -180,6 +186,17 @@ async def get_home(user: User, conn: Conn) -> HomeOut:
     if data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile not found")
     return HomeOut(**data)
+
+
+@router.get("/v1/study-days")
+async def get_study_days(
+    user: User, conn: Conn, weeks: Annotated[int, Query(ge=1, le=12)] = 5
+) -> StudyDaysOut:
+    """The study-days grid on screen 15 (FR-HAB-04)."""
+    data = await home.study_days(conn, user.id, weeks)
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile not found")
+    return StudyDaysOut(**data)
 
 
 @router.post("/v1/achievements/seen", status_code=status.HTTP_204_NO_CONTENT)

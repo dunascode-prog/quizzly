@@ -110,10 +110,16 @@ export default function PlayScreen() {
   const marked = question ? attempt.data?.answers.find((a) => a.question_id === question.id) : undefined;
   const waiting = revealed && written && !marked?.feedback;
 
+  // The Daily 5 ends on its own screen (15); other quizzes on the results (12).
+  const showResults = () =>
+    quiz.data?.kind === 'daily5'
+      ? router.replace({ pathname: '/daily5/done', params: { attempt: attemptId } })
+      : router.replace({ pathname: '/quiz/[id]/results', params: { id, attempt: attemptId } });
+
   // Resume (FR-QUIZ-05): restore the answers and move to the first unanswered question.
   const restore = (a: Attempt) => {
     if (a.status !== 'in_progress') {
-      router.replace({ pathname: '/quiz/[id]/results', params: { id, attempt: attemptId } });
+      showResults();
       return;
     }
     if (!a.answers.length) return;
@@ -207,7 +213,7 @@ export default function PlayScreen() {
       setSubmitting(false);
       return;
     }
-    router.replace({ pathname: '/quiz/[id]/results', params: { id, attempt: attemptId } });
+    showResults();
   };
 
   useEffect(() => {
