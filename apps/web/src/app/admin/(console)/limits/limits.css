@@ -1,0 +1,39 @@
+/* 30e Limits and plans (docs/reference/admin-limits-plans.html) */
+.lp-form { display: flex; flex-direction: column; gap: 22px; }
+.lp-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+
+.lp-plan-head { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; margin-bottom: 16px; }
+.lp-plan { display: inline-flex; flex-direction: column; align-items: flex-end; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--text); }
+.lp-plan-note { font-size: 11px; font-weight: 500; color: var(--muted); }
+.lp-table th[scope="row"] { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); padding: 12px; border-top: 1px solid var(--line); text-align: left; white-space: normal; }
+.lp-table td { padding: 10px 0 10px 24px; }
+.lp-num { width: 96px; min-height: 44px; border: 2px solid transparent; border-radius: 14px; background: var(--field); padding: 0 12px; text-align: right; font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.lp-num:focus { outline: none; border-color: var(--text); }
+.lp-num[aria-invalid="true"], .lp-input:has(input[aria-invalid="true"]) { border-color: var(--danger); }
+.lp-table .lp-muted-row th, .lp-table .lp-muted-row td { font-weight: 400; color: var(--muted); font-size: 14px; }
+.lp-price { color: var(--text); }
+
+.lp-h2 { padding-bottom: 16px; }
+.lp-rows { display: flex; flex-direction: column; }
+.lp-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); }
+.lp-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lp-row-title { font-size: 15px; font-weight: 600; }
+.lp-row-note { font-size: 12px; color: var(--muted); }
+.lp-input { width: 144px; cursor: text; flex: none; min-height: 44px; border: 2px solid transparent; border-radius: 14px; background: var(--field); padding: 0 12px; display: flex; align-items: center; justify-content: flex-end; gap: 1px; font-size: 15px; font-weight: 700; }
+.lp-input:focus-within { border-color: var(--text); }
+.lp-input input { width: auto; min-width: 1ch; flex: 0 1 auto; field-sizing: content; border: none; outline: none; background: transparent; padding: 0; text-align: right; font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.lp-save { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+.lp-save-note { font-size: 13px; color: var(--muted); }
+.lp-save-btn { width: auto; min-height: 56px; padding: 4px 22px 4px 4px; }
+.lp-save-btn .a-action-circle { width: 48px; height: 48px; }
+.lp-save-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+@media (max-width: 1100px) {
+  .lp-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px) {
+  .lp-num { width: 72px; }
+  .lp-input { width: 112px; }
+  .lp-save { flex-direction: column; align-items: stretch; }
+}
