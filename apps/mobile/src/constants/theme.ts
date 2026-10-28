@@ -30,6 +30,16 @@ export const Colors = {
     dangerSoft: '#F7DCD9',
     warning: '#7A5200',
     warningSoft: '#F3E6C4',
+    // DESIGN.md §3.3 (v0.4.1). The top part of the ink detail screens (06, 12, 16): ink in light,
+    // dark grey (not white) in dark mode.
+    hdr: '#0D0D10',
+    onHdr: '#FFFFFF',
+    mutedOnHdr: '#A3A4AE',
+    hdrLine: '#3A3B44', // outline pills on hdr
+    inkTile: '#26272E', // tiles on ink cards
+    onInkSoft: '#E4E5EC', // soft text on ink
+    dangerText: '#7F1910', // rubric hints
+    dim: '#5E5F6B', // behind sheets
   },
   dark: {
     text: '#F5F5FA',
@@ -50,6 +60,14 @@ export const Colors = {
     dangerSoft: '#3A1C1A',
     warning: '#F2C46D',
     warningSoft: '#352A12',
+    hdr: '#1B1C22',
+    onHdr: '#F5F5FA',
+    mutedOnHdr: '#A3A4AE',
+    hdrLine: '#4D4E5A',
+    inkTile: '#E4E5EC',
+    onInkSoft: '#26272E',
+    dangerText: '#FFB4AC',
+    dim: '#000000',
   },
 } as const;
 
