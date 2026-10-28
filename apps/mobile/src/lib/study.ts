@@ -12,6 +12,12 @@ export type Topic = {
   summary: string | null;
   page_start: number | null;
   page_end: number | null;
+  /** The name before this student renamed or merged it (FR-TOP-03). */
+  original_title?: string | null;
+  /** The original topics this one covers: more than one after a merge. */
+  parts?: string[];
+  /** The original names of `parts`. */
+  part_titles?: string[];
 };
 
 export type Outline = {
@@ -126,4 +132,34 @@ export function useReport() {
       note?: string;
     }) => apiFetch<void>('/v1/reports', { method: 'POST', body: JSON.stringify(body) }),
   });
+}
+
+// --- The student's own topic names and merges (FR-TOP-03, screen 27) ------------------------------
+
+function changeOutline(documentId: string, path: string, init: RequestInit) {
+  return apiFetch<Outline>(`/v1/documents/${documentId}/topics/${path}`, init).then((outline) => {
+    queryClient.setQueryData(['outline', documentId], outline);
+    void queryClient.invalidateQueries({ queryKey: ['home'] }); // plan rows use the names
+    return outline;
+  });
+}
+
+/** A new name for this student only; null goes back to the original. */
+export function renameTopic(documentId: string, topicId: string, title: string | null) {
+  return changeOutline(documentId, `${topicId}/name`, { method: 'PUT', body: JSON.stringify({ title }) });
+}
+
+/** This topic and the next one become one, for this student only. */
+export function mergeTopic(documentId: string, topicId: string, title: string | null) {
+  return changeOutline(documentId, `${topicId}/merge`, { method: 'POST', body: JSON.stringify({ title }) });
+}
+
+export function splitTopic(documentId: string, topicId: string) {
+  return changeOutline(documentId, `${topicId}/split`, { method: 'POST' });
+}
+
+/** "p. 6–11", or "p. 6" for one page. */
+export function pageRange(t: Pick<Topic, 'page_start' | 'page_end'>) {
+  if (!t.page_start) return '';
+  return t.page_end && t.page_end !== t.page_start ? `p. ${t.page_start}–${t.page_end}` : `p. ${t.page_start}`;
 }

@@ -4,6 +4,7 @@ import uuid
 import pytest
 
 from app.domain import quizzes, study, usage
+from app.domain import topics as topic_overrides
 from app.rag import questions as q
 from app.worker import queue
 from tests.conftest import JWT_SECRET
@@ -186,7 +187,7 @@ def auth():
 
 @pytest.fixture
 def fake(client, monkeypatch):
-    state = {"sets": {}, "used": 0, "jobs": [], "quizzes": {}}
+    state = {"sets": {}, "used": 0, "jobs": [], "quizzes": {}, "overrides": {}}
     doc = {
         "id": DOC,
         "title": "Stacks and queues",
@@ -266,7 +267,11 @@ def fake(client, monkeypatch):
     async def questions_for(conn, set_id, question_ids=None):
         return []
 
+    async def overrides(conn, user_id, sf):
+        return state["overrides"]
+
     for mod, name, fn in [
+        (topic_overrides, "overrides", overrides),
         (study, "ready_document", ready_document),
         (study, "topics", topics_for),
         (quizzes, "find_set", find_set),
@@ -451,3 +456,15 @@ def test_flashcards_are_self_rated_and_keyed_on_their_own_prompt_version():
     assert q.cache_key("sf", ["t"], ["flashcard"], "mixed", 20, 0) != q.cache_key(
         "sf", ["t"], ["mcq"], "mixed", 20, 0
     )
+
+
+def test_flashcards_for_a_merged_topic_cover_its_parts_under_the_students_name(client, fake):
+    """FR-TOP-03: after merging Queues into Stacks, one round covers both topics."""
+    fake["overrides"] = {
+        T2: {"topic_id": T2, "title": None, "merged_into_topic_id": T1},
+        T1: {"topic_id": T1, "title": "Stacks and queues", "merged_into_topic_id": None},
+    }
+    body = client.post(FLASH_URL, headers=auth(), json={"topic_id": str(T1)}).json()
+    assert body["title"] == "Stacks and queues"
+    (only,) = fake["sets"].values()
+    assert only["topic_ids"] == sorted([T1, T2])

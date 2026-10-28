@@ -16,10 +16,14 @@ type Props = {
   highlight?: string;
   onClose: () => void;
   children: ReactNode;
+  /** Shown before the title, e.g. a topic's number circle (screen 27a). */
+  leading?: ReactNode;
+  /** A line under the title. */
+  subtitle?: string;
 };
 
 /** Body of a formSheet route: title + close button, sized to its content (DESIGN.md §7, 04). */
-export function Sheet({ title, highlight, onClose, children }: Props) {
+export function Sheet({ title, highlight, onClose, children, leading, subtitle }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -28,16 +32,22 @@ export function Sheet({ title, highlight, onClose, children }: Props) {
       contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, Spacing.three) + Spacing.two }]}
       keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
+        {leading}
         <View style={styles.title}>
           {highlight ? (
             <HighlightText variant="title" highlight={highlight}>
               {title}
             </HighlightText>
           ) : (
-            <Text variant="title" accessibilityRole="header">
+            <Text variant={leading ? 'heading' : 'title'} accessibilityRole="header">
               {title}
             </Text>
           )}
+          {subtitle ? (
+            <Text variant="body" color="textSecondary">
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
         <IconButton icon={X} accessibilityLabel="Close" onPress={onClose} />
       </View>

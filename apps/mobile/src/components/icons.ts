@@ -2,6 +2,7 @@
 // 'lucide-react-native' barrel would bundle every icon (~1,600) into the app.
 export type { LucideIcon } from 'lucide-react-native';
 export { default as ArrowDownRight } from 'lucide-react-native/icons/arrow-down-right';
+export { default as ArrowDownToLine } from 'lucide-react-native/icons/arrow-down-to-line';
 export { default as ArrowRight } from 'lucide-react-native/icons/arrow-right';
 export { default as ArrowUp } from 'lucide-react-native/icons/arrow-up';
 export { default as ArrowUpRight } from 'lucide-react-native/icons/arrow-up-right';
@@ -18,14 +19,18 @@ export { default as Folder } from 'lucide-react-native/icons/folder';
 export { default as Hand } from 'lucide-react-native/icons/hand';
 export { default as House } from 'lucide-react-native/icons/house';
 export { default as Image } from 'lucide-react-native/icons/image';
+export { default as Info } from 'lucide-react-native/icons/info';
 export { default as LayoutGrid } from 'lucide-react-native/icons/layout-grid';
 export { default as Lock } from 'lucide-react-native/icons/lock';
 export { default as LogOut } from 'lucide-react-native/icons/log-out';
+export { default as Merge } from 'lucide-react-native/icons/merge';
+export { default as Pencil } from 'lucide-react-native/icons/pencil';
 export { default as Play } from 'lucide-react-native/icons/play';
 export { default as Plus } from 'lucide-react-native/icons/plus';
 export { default as RotateCw } from 'lucide-react-native/icons/rotate-cw';
 export { default as Search } from 'lucide-react-native/icons/search';
 export { default as Share2 } from 'lucide-react-native/icons/share-2';
+export { default as Split } from 'lucide-react-native/icons/split';
 export { default as SquareCheck } from 'lucide-react-native/icons/square-check';
 export { default as ThumbsDown } from 'lucide-react-native/icons/thumbs-down';
 export { default as ThumbsUp } from 'lucide-react-native/icons/thumbs-up';

@@ -218,10 +218,11 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
     weak = await (
         await conn.execute(
             """
-            select distinct on (m.mastery, m.topic_id) m.topic_id, t.title, m.mastery,
-                   d.id as document_id
+            select distinct on (m.mastery, m.topic_id) m.topic_id,
+                   coalesce(o.title, t.title) as title, m.mastery, d.id as document_id
             from topic_mastery m
             join topics t on t.id = m.topic_id
+            left join topic_overrides o on o.topic_id = t.id and o.user_id = m.user_id
             join documents d on d.source_file_id = t.source_file_id and d.status = 'ready'
               and d.id in (select readable_documents(m.user_id))
             where m.user_id = %s and m.answered >= %s and m.mastery < %s
@@ -245,9 +246,11 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
     new = await (
         await conn.execute(
             """
-            select t.id as topic_id, t.title, t.token_count, d.id as document_id
+            select t.id as topic_id, coalesce(o.title, t.title) as title, t.token_count,
+                   d.id as document_id
             from documents d
             join topics t on t.source_file_id = d.source_file_id and t.parent_id is null
+            left join topic_overrides o on o.topic_id = t.id and o.user_id = %(u)s
             where d.status = 'ready' and d.id in (select readable_documents(%(u)s))
               and not exists (select 1 from topic_reads r where r.user_id = %(u)s
                               and r.topic_id = t.id)

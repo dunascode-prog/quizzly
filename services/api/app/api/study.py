@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import chat, page_images, study, usage
+from app.domain import chat, page_images, study, topics, usage
 from app.rag.explain import PROMPT_VERSION
 from app.worker import queue
 
@@ -21,6 +21,20 @@ class TopicOut(BaseModel):
     summary: str | None
     page_start: int | None
     page_end: int | None
+    # The student's own view (FR-TOP-03): the name before they changed it, and the original topics
+    # this one covers (more than one after a merge; quizzes and explanations use all of them).
+    original_title: str | None = None
+    parts: list[UUID] = []
+    part_titles: list[str] = []  # the original names of `parts`, for the merged explanation
+
+
+class TopicName(BaseModel):
+    # None or blank goes back to the original name.
+    title: Annotated[str, Field(max_length=topics.TITLE_MAX)] | None = None
+
+
+class TopicMerge(BaseModel):
+    title: Annotated[str, Field(max_length=topics.TITLE_MAX)] | None = None
 
 
 class OutlineDocument(BaseModel):
@@ -110,14 +124,68 @@ def _out(row: dict) -> ExplanationOut:
     )
 
 
-@router.get("/v1/documents/{document_id}/outline")
-async def outline(document_id: UUID, user: User, conn: Conn) -> OutlineOut:
-    doc = await _document(conn, user.id, document_id)
-    rows = await study.topics(conn, doc["source_file_id"])
+async def _outline(conn, user_id: UUID, doc: dict) -> OutlineOut:
+    """The outline with this student's renames and merges, and nobody else's (FR-TOP-03)."""
+    rows = await topics.outline(
+        conn, user_id, doc["source_file_id"], await study.topics(conn, doc["source_file_id"])
+    )
     return OutlineOut(
         document=OutlineDocument(**doc, topic_count=len(rows)),
         topics=[TopicOut(**t) for t in rows],
     )
+
+
+@router.get("/v1/documents/{document_id}/outline")
+async def outline(document_id: UUID, user: User, conn: Conn) -> OutlineOut:
+    return await _outline(conn, user.id, await _document(conn, user.id, document_id))
+
+
+async def _visible(conn, user_id: UUID, doc: dict, topic_id: UUID) -> tuple[list[dict], int]:
+    """The student's outline and the position of a topic in it; merged-away topics aren't there."""
+    rows = await topics.outline(
+        conn, user_id, doc["source_file_id"], await study.topics(conn, doc["source_file_id"])
+    )
+    at = next((i for i, t in enumerate(rows) if t["id"] == topic_id), None)
+    if at is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Topic not found")
+    return rows, at
+
+
+def _clean_title(title: str | None) -> str | None:
+    return " ".join((title or "").split()) or None
+
+
+@router.put("/v1/documents/{document_id}/topics/{topic_id}/name")
+async def rename_topic(
+    document_id: UUID, topic_id: UUID, body: TopicName, user: User, conn: Conn
+) -> OutlineOut:
+    """Screen 27b: a name that makes sense to the student, for their eyes only."""
+    doc = await _document(conn, user.id, document_id)
+    await _visible(conn, user.id, doc, topic_id)
+    await topics.rename(conn, user.id, topic_id, _clean_title(body.title))
+    return await _outline(conn, user.id, doc)
+
+
+@router.post("/v1/documents/{document_id}/topics/{topic_id}/merge")
+async def merge_topic(
+    document_id: UUID, topic_id: UUID, body: TopicMerge, user: User, conn: Conn
+) -> OutlineOut:
+    """Screen 27c: this topic and the next one become one, for this student only."""
+    doc = await _document(conn, user.id, document_id)
+    rows, at = await _visible(conn, user.id, doc, topic_id)
+    if at == len(rows) - 1:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "There's no next topic to merge")
+    await topics.merge(conn, user.id, topic_id, rows[at + 1]["id"], _clean_title(body.title))
+    return await _outline(conn, user.id, doc)
+
+
+@router.post("/v1/documents/{document_id}/topics/{topic_id}/split")
+async def split_topic(document_id: UUID, topic_id: UUID, user: User, conn: Conn) -> OutlineOut:
+    """Undo a merge: back to the original topics."""
+    doc = await _document(conn, user.id, document_id)
+    await _visible(conn, user.id, doc, topic_id)
+    await topics.split(conn, user.id, topic_id)
+    return await _outline(conn, user.id, doc)
 
 
 @router.get("/v1/documents/{document_id}/pages/{number}")
