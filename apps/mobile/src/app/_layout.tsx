@@ -9,10 +9,12 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { OfflineBanner } from '@/components/offline-banner';
+import { Toast } from '@/components/ui/toast';
 import { ProfileLoadError } from '@/components/profile-load-error';
 import { useTheme } from '@/hooks/use-theme';
 import { startAuthListener, useAuth } from '@/lib/auth';
 import { startNetworkListener } from '@/lib/network';
+import { useNotificationsChannel, usePushRouting } from '@/lib/notifications';
 import { flush, startOutbox } from '@/lib/outbox';
 import { useMe } from '@/lib/profile';
 import { persistOptions, queryClient } from '@/lib/query-client';
@@ -82,6 +84,7 @@ function RootNavigator() {
           <Stack.Screen name="quiz/[id]/play" options={{ gestureEnabled: false }} />
           <Stack.Screen name="quiz/[id]/results" />
           <Stack.Screen name="daily5/done" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="notifications" />
           <Stack.Screen name="quiz/[id]/review" />
           <Stack.Screen name="upload" options={SHEET} />
           <Stack.Screen name="course/new" options={SHEET} />
@@ -94,8 +97,17 @@ function RootNavigator() {
       </Stack>
       {signedIn && me.isError && !me.data ? <ProfileLoadError error={me.error} onRetry={() => me.refetch()} /> : null}
       <OfflineBanner />
+      {signedIn && onboarded ? <Live /> : null}
     </>
   );
+}
+
+/** Live notifications for a signed-in, onboarded student: the Realtime channel, push taps and
+ * the toast (FR-NOTIF-02/03/07). */
+function Live() {
+  useNotificationsChannel();
+  usePushRouting();
+  return <Toast />;
 }
 
 export default function RootLayout() {

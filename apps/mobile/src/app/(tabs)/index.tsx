@@ -2,7 +2,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
-import { ArrowRight, X } from '@/components/icons';
+import { ArrowRight, Bell as BellIcon, X } from '@/components/icons';
 import { ProfileHeader } from '@/components/profile-header';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
@@ -14,7 +14,7 @@ import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { TextField } from '@/components/ui/text-field';
 import { WeekStrip } from '@/components/ui/week-strip';
-import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import { Accent, BottomTabInset, Colors, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { getDaily5, type PlanItem, useHome, useJoinByCode } from '@/lib/home';
@@ -34,6 +34,27 @@ function greeting(d = new Date()) {
 }
 
 type Row = { title: string; meta: string; hint?: string; onPress: () => void };
+
+/** The bell (screen 14 → 22) with the unread count on a Lagoon badge (DESIGN.md §3.2). */
+function Bell({ count }: { count: number }) {
+  const theme = useTheme();
+  return (
+    <View>
+      <IconButton
+        icon={BellIcon}
+        accessibilityLabel={count ? `Notifications, ${count} new` : 'Notifications'}
+        onPress={() => router.push('/notifications')}
+      />
+      {count ? (
+        <View style={[styles.badge, { backgroundColor: Accent.lagoon, borderColor: theme.background }]} pointerEvents="none">
+          <Text variant="caption" style={styles.badgeText}>
+            {count > 9 ? '9+' : count}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 /** Enter the code from a coursemate's share link (screen 20 comes with D4). */
 function JoinSheet({ onClose }: { onClose: () => void }) {
@@ -158,7 +179,12 @@ export default function TodayScreen() {
 
   return (
     <Screen bottomInset={BottomTabInset}>
-      <ProfileHeader me={me.data} title={longDate()} />
+      <View style={styles.header}>
+        <View style={styles.flex}>
+          <ProfileHeader me={me.data} title={longDate()} />
+        </View>
+        <Bell count={data?.unread_notifications ?? 0} />
+      </View>
       <HighlightText highlight={firstName ?? 'there'}>{`${greeting()}, ${firstName ?? 'there'}`}</HighlightText>
 
       {home.isError ? <Banner message={friendlyError(home.error)} /> : null}
@@ -207,6 +233,22 @@ export default function TodayScreen() {
 
 const styles = StyleSheet.create({
   section: { gap: Spacing.two },
+  header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  flex: { flex: 1 },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  // Text on an accent is always ink (DESIGN.md §3.2).
+  badgeText: { color: Colors.light.text, fontSize: 11, lineHeight: 14 },
   planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: Spacing.two },
   skeleton: { height: 120, borderRadius: Radius.card },
   tall: { height: 180 },
