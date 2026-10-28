@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, ScrollView, StyleSheet, useColorScheme, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChevronLeft, FileText } from '@/components/icons';
@@ -40,15 +40,14 @@ function TopicRow({ topic, onPress }: { topic: Topic; onPress: () => void }) {
 // Screen 06 (DESIGN.md §7): the document's outline on a dark detail screen (FR-TOP-01).
 export default function OutlineScreen() {
   const theme = useTheme();
-  const scheme = useColorScheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const outline = useOutline(id);
   const doc = outline.data?.document;
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.text }]}>
-      {/* The ink background is dark in light mode and light in dark mode. */}
-      <StatusBar style={scheme === 'dark' ? 'dark' : 'light'} />
+    <View style={[styles.root, { backgroundColor: theme.hdr }]}>
+      {/* Detail screens keep a dark top in both modes: ink in light, dark grey in dark (§3.3). */}
+      <StatusBar style="light" />
       <SafeAreaView edges={['top']} style={styles.header}>
         <View style={styles.inner}>
           <View style={styles.topBar}>
@@ -59,10 +58,10 @@ export default function OutlineScreen() {
               onPress={() => router.push({ pathname: '/document/[id]/page/[n]', params: { id, n: '1' } })}
             />
           </View>
-          <Text variant="display" color="onInk" accessibilityRole="header">
+          <Text variant="display" color="onHdr" accessibilityRole="header">
             {doc?.title ?? ' '}
           </Text>
-          <Text variant="body" color="mutedOnInk">
+          <Text variant="body" color="mutedOnHdr">
             {doc
               ? [doc.course_code, doc.page_count ? plural(doc.page_count, 'page') : null, plural(doc.topic_count, 'topic')]
                   .filter(Boolean)
@@ -82,8 +81,8 @@ export default function OutlineScreen() {
               accessibilityRole="button"
               accessibilityLabel="Ask your notes"
               accessibilityHint="Chat about this document; answers cite its pages"
-              style={({ pressed }) => [styles.pill, { borderWidth: 1.5, borderColor: theme.track, opacity: pressed ? 0.7 : 1 }]}>
-              <Text variant="label" color="onInk">
+              style={({ pressed }) => [styles.pill, { borderWidth: 1.5, borderColor: theme.hdrLine, opacity: pressed ? 0.7 : 1 }]}>
+              <Text variant="label" color="onHdr">
                 Ask your notes
               </Text>
             </Pressable>

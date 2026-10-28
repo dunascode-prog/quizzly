@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, useColorScheme, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RotateCw, X } from '@/components/icons';
@@ -72,7 +72,6 @@ function Group({ title, parts }: { title: string; parts: Part[] }) {
 // and question type (FR-QUIZ-06/07).
 export default function ResultsScreen() {
   const theme = useTheme();
-  const scheme = useColorScheme();
   const { id, attempt: attemptId } = useLocalSearchParams<{ id: string; attempt: string }>();
   const attempt = useAttempt(attemptId);
   const quiz = useQuiz(id);
@@ -109,8 +108,8 @@ export default function ResultsScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.text }]}>
-      <StatusBar style={scheme === 'dark' ? 'dark' : 'light'} />
+    <View style={[styles.root, { backgroundColor: theme.hdr }]}>
+      <StatusBar style="light" />
       <SafeAreaView edges={['top']} style={styles.inner}>
         <IconButton icon={X} accessibilityLabel="Close results" onPress={() => router.back()} />
         <View
@@ -119,14 +118,21 @@ export default function ResultsScreen() {
           accessibilityLiveRegion="polite"
           accessibilityLabel={!a ? 'Loading score' : marking ? 'Marking your written answers' : `Score ${pct} percent`}>
           {marking ? (
-            <ProgressRing size={168} strokeWidth={10} />
+            <ProgressRing size={168} strokeWidth={10} color="onHdr" trackColor="hdrLine" />
           ) : (
-            <ProgressRing size={168} strokeWidth={10} value={pct / 100} label={a ? `${pct}%` : '…'} />
+            <ProgressRing
+              size={168}
+              strokeWidth={10}
+              value={pct / 100}
+              label={a ? `${pct}%` : '…'}
+              color="onHdr"
+              trackColor="hdrLine"
+            />
           )}
-          <Text variant="title" color="onInk" style={styles.center}>
+          <Text variant="title" color="onHdr" style={styles.center}>
             {a?.title ?? ' '}
           </Text>
-          <Text variant="body" color="mutedOnInk">
+          <Text variant="body" color="mutedOnHdr">
             {a
               ? [plural(quiz.data?.questions.length ?? a.answers.length, 'question'), minutes(a.started_at, a.submitted_at)]
                   .filter(Boolean)

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, type TextInput, View } from 'react-native';
+import { StyleSheet, type TextInput, useWindowDimensions, View } from 'react-native';
 
 import { ArrowRight, ArrowUp, ArrowUpRight, BookOpen, Check } from '@/components/icons';
 import { Logo } from '@/components/logo';
@@ -23,7 +23,13 @@ import { friendlyError } from '@/lib/errors';
 const ART_RATIO = 340 / 230; // study-illustration viewBox
 const ART_MAX_WIDTH = 320;
 const ART_MIN_HEIGHT = 72; // below this the art is too small to read, so it's hidden
+const ART_MIN_HEIGHT_COMPACT = 48; // small phones keep a smaller illustration (01d)
 const STICKERS_MIN_HEIGHT = 200; // the stickers sit above and below the art, so they need room
+// Small phones (DESIGN.md §7 01, v0.4.1): compact under 740 dp, no illustration under 600 dp or at
+// large font sizes. The card, the pill, the two text buttons and the terms always fit.
+const COMPACT_BELOW = 740;
+const NO_ART_BELOW = 600;
+const NO_ART_FONT_SCALE = 1.3;
 const CODE_LENGTH = 6;
 const RESEND_AFTER_S = 60;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -51,6 +57,9 @@ export default function SignInScreen() {
   const [resendIn, setResendIn] = useState(0);
   const codeRef = useRef<TextInput>(null);
   const [art, setArt] = useState<{ width: number; stickers: boolean }>();
+  const window = useWindowDimensions();
+  const compact = window.height < COMPACT_BELOW;
+  const noArt = window.height < NO_ART_BELOW || window.fontScale > NO_ART_FONT_SCALE;
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -171,39 +180,48 @@ export default function SignInScreen() {
       </View>
 
       {/* Takes only the height left over, so the field shows without scrolling. */}
-      <View
-        style={styles.art}
-        accessible
-        accessibilityRole="image"
-        accessibilityLabel="Quizzly turns your slides into exam questions, with the page each answer comes from."
-        onLayout={(e) => {
-          const { width, height } = e.nativeEvent.layout;
-          const stickers = height >= STICKERS_MIN_HEIGHT;
-          // With stickers, leave a little room for them; they may overlap the art's edges.
-          const room = stickers ? height - Size.sticker : height;
-          setArt({
-            width: height < ART_MIN_HEIGHT ? 0 : Math.min(width, ART_MAX_WIDTH, room * ART_RATIO),
-            stickers,
-          });
-        }}>
-        {art?.width ? <StudyIllustration width={art.width} /> : null}
-        {art?.stickers ? (
-          <>
-            <Sticker label="Slides in" icon={ArrowUp} tilt={-6} delay={0} style={styles.topLeft} />
-            <Sticker label="20 exam questions" icon={Check} tone="ink" tilt={5} delay={150} style={styles.topRight} />
-            <Sticker label="Cited from page 14" icon="p." tilt={-4} delay={300} style={styles.bottomRight} />
-          </>
-        ) : null}
-      </View>
+      {noArt ? null : (
+        <View
+          style={styles.art}
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel="Quizzly turns your slides into exam questions, with the page each answer comes from."
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            const stickers = height >= STICKERS_MIN_HEIGHT;
+            // With stickers, leave a little room for them; they may overlap the art's edges.
+            const room = stickers ? height - Size.sticker : height;
+            setArt({
+              width:
+                height < (compact ? ART_MIN_HEIGHT_COMPACT : ART_MIN_HEIGHT)
+                  ? 0
+                  : Math.min(width, ART_MAX_WIDTH, room * ART_RATIO),
+              stickers,
+            });
+          }}>
+          {art?.width ? <StudyIllustration width={art.width} /> : null}
+          {art?.stickers && !compact ? (
+            <>
+              <Sticker label="Slides in" icon={ArrowUp} tilt={-6} delay={0} style={styles.topLeft} />
+              <Sticker label="20 exam questions" icon={Check} tone="ink" tilt={5} delay={150} style={styles.topRight} />
+              <Sticker label="Cited from page 14" icon="p." tilt={-4} delay={300} style={styles.bottomRight} />
+            </>
+          ) : null}
+        </View>
+      )}
 
-      <HeroCard style={styles.hero}>
+      <HeroCard style={[styles.hero, compact && styles.heroCompact]}>
         <View style={styles.heroTop}>
-          <Text variant="hero" color="onInk" accessibilityRole="header" style={styles.heroTitle}>
+          <Text
+            variant="hero"
+            color="onInk"
+            accessibilityRole="header"
+            style={[styles.heroTitle, compact && styles.heroTitleCompact]}>
             {'Your notes,\nexam-ready.'}
           </Text>
           <ArrowUpRight size={32} color={theme.onInk} strokeWidth={2} />
         </View>
-        {step === 'welcome' ? <FeatureList items={FEATURES} /> : null}
+        {step === 'welcome' ? <FeatureList items={FEATURES} compact={compact} /> : null}
       </HeroCard>
 
       {step === 'email' ? (
@@ -253,6 +271,8 @@ const styles = StyleSheet.create({
   hero: { borderRadius: Radius.hero, paddingTop: Spacing.four, paddingHorizontal: 22, paddingBottom: 20 },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
   heroTitle: { flex: 1 },
+  heroCompact: { padding: 20 },
+  heroTitleCompact: { fontSize: 36, lineHeight: 38 },
   pair: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around' },
   legal: { textAlign: 'center', marginTop: Spacing.one },
   link: { textDecorationLine: 'underline' },
