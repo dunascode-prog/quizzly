@@ -17,7 +17,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <span className="brand-mark">
               <Logo />
             </span>
-            <span className="disp" style={{ fontSize: 24 }}>
+            <span className="disp" style={{ fontSize: 20 }}>
               Quizzly
             </span>
           </Link>
@@ -48,7 +48,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
                 <span className="brand-mark">
                   <Logo />
                 </span>
-                <span className="disp" style={{ fontSize: 22 }}>
+                <span className="disp" style={{ fontSize: 19 }}>
                   Quizzly
                 </span>
               </span>

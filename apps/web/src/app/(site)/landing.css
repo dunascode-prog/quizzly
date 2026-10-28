@@ -14,7 +14,7 @@
 .g4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .bento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 .hero-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
-.h-hero { margin: 0; font-size: 74px; line-height: 78px; }
+.h-hero { margin: 0; font-size: 62px; line-height: 66px; }
 .h-sec { margin: 0; font-size: 56px; line-height: 58px; }
 .lead { margin: 0; font-size: 17px; line-height: 27px; color: var(--muted); max-width: 680px; }
 .on-ink .lead { color: var(--mutedOnInk); }
@@ -202,7 +202,7 @@
   .qz { zoom: 1; }
   .wrap { padding-left: max(20px, calc((100% - 640px) / 2)); padding-right: max(20px, calc((100% - 640px) / 2)); }
   .g2, .g3, .g4, .bento, .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .h-hero { font-size: 46px; line-height: 48px; }
+  .h-hero { font-size: 40px; line-height: 43px; }
   .h-sec { font-size: 34px; line-height: 38px; }
   .lead { font-size: 16px; line-height: 25px; }
   .sec { padding-top: 64px; }
