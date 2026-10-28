@@ -71,3 +71,9 @@ def test_share_codes_are_crockford_and_forgiving():
     code = sharing.new_code()
     assert len(code) == 8 and not set(code) & set("ILOU")
     assert sharing.normalise_code(" 7kq2m9xo ") == "7KQ2M9X0"
+
+
+def test_invite_codes_keep_their_letters():
+    """Invite codes are names ("TOLU7"); only share codes map O/I/L to digits."""
+    assert sharing.normalise_invite_code(" tolu7 ") == "TOLU7"
+    assert sharing.normalise_code("tolu7") == "T01U7"

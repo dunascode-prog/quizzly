@@ -11,7 +11,7 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
-from app.domain import progress
+from app.domain import invites, progress
 
 log = logging.getLogger("quizzly.progress")
 
@@ -70,6 +70,7 @@ async def update_mastery(conn: AsyncConnection, job: dict) -> None:
     if attempt["course_id"]:
         await snapshot(conn, user_id, attempt["course_id"], today)
     await _achievements(conn, user_id, attempt_id, attempt, profile, newly_mastered)
+    await invites.check(conn, user_id)  # their 5th answer may credit whoever invited them
 
 
 async def _topics(

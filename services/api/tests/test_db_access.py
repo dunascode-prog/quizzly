@@ -150,7 +150,7 @@ async def _always_crashes():
 # --- v0.2 engagement and sharing tables (0011, DATA_MODELS §2.9–2.12) ---------------------------
 
 
-def _profile(conn, name: str) -> uuid.UUID:
+def _profile(conn, name: str | None) -> uuid.UUID:
     """Signs a student up the way Supabase Auth does: the auth.users trigger creates the profile,
     and 0011's triggers fill display_name, invite_code and notification settings."""
     uid = uuid.uuid4()
@@ -261,3 +261,14 @@ def test_a_course_member_can_still_delete_their_account(conn):
     assert conn.execute(
         "select member_count from course_shares where id = %s", (share,)
     ).fetchone() == (0,)
+
+
+def test_the_invite_code_takes_the_name_given_at_onboarding(conn):
+    """Students sign up by email code with no name, so their first code is a placeholder; the name
+    from onboarding replaces it (FR-INV-01)."""
+    uid = _profile(conn, None)
+    first = conn.execute("select invite_code from profiles where id = %s", (uid,)).fetchone()[0]
+    assert first.startswith("QZ")
+    conn.execute("update profiles set full_name = 'Tolu Adebayo' where id = %s", (uid,))
+    code = conn.execute("select invite_code from profiles where id = %s", (uid,)).fetchone()[0]
+    assert code.startswith("TOLU")
