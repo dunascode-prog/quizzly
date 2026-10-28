@@ -11,7 +11,7 @@
 .ov-provider-head { display: flex; justify-content: space-between; gap: 8px; }
 .ov-provider-name { font-size: 15px; font-weight: 700; }
 .ov-provider .ov-small { font-size: 12px; }
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
   .ov-cost { flex-direction: column; }
   .ov-cost-sum { width: auto; }
 }

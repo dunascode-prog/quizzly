@@ -29,7 +29,7 @@
 .co-share-bar > span { display: block; height: 100%; background: var(--text); }
 .co-total td { font-weight: 700; }
 
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
   .co-daily { flex-direction: column; }
   .co-side { width: auto; flex-direction: row; }
   .co-side > * { flex: 1; }

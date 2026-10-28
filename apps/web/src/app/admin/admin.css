@@ -1,7 +1,7 @@
 /* Admin app (docs/reference/admin-*.html, WEB.md §3). Classes are prefixed a- so they never meet the
    landing page's styles when both are loaded in one session. Colours come only from tokens.css. */
 
-.adm { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+.adm { --adm-zoom: 1; min-height: calc(100vh / var(--adm-zoom)); background: var(--bg); color: var(--text); font-family: var(--font-body); }
 .adm h1, .adm h2, .adm h3, .a-num { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.025em; }
 .adm h1, .adm h2, .adm h3 { margin: 0; }
 .adm button { border: none; font-family: var(--font-body); }
@@ -12,8 +12,8 @@
 .a-on-ink .a-muted, .a-ink .a-muted { color: var(--mutedOnInk); }
 
 /* Shell */
-.a-shell { min-height: 100vh; display: flex; }
-.a-side { width: 248px; flex: none; background: var(--hdr); color: var(--onHdr); padding: 28px 16px; display: flex; flex-direction: column; gap: 28px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.a-shell { min-height: calc(100vh / var(--adm-zoom)); display: flex; }
+.a-side { width: 248px; flex: none; background: var(--hdr); color: var(--onHdr); padding: 28px 16px; display: flex; flex-direction: column; gap: 28px; position: sticky; top: 0; height: calc(100vh / var(--adm-zoom)); overflow-y: auto; }
 .a-side :focus-visible { outline-color: var(--onHdr); }
 .a-brand { display: flex; align-items: center; gap: 12px; padding: 0 8px; text-decoration: none; color: inherit; }
 .a-brand-mark { width: 44px; height: 44px; flex: none; border-radius: 999px; background: var(--onHdr); color: var(--hdr); display: flex; align-items: center; justify-content: center; }
@@ -134,7 +134,7 @@
 .a-switch[aria-checked="true"]::after { background: var(--onInk); transform: translateX(20px); }
 
 /* Sign-in */
-.a-signin { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 16px; }
+.a-signin { min-height: calc(100vh / var(--adm-zoom)); display: flex; align-items: center; justify-content: center; padding: 40px 16px; }
 .a-signin-box { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 20px; }
 .a-signin .a-brand { padding: 0; color: var(--text); }
 .a-signin .a-brand-mark { width: 52px; height: 52px; background: var(--ink); color: var(--onInk); }
@@ -149,8 +149,13 @@
 .a-back { align-self: center; font-size: 14px; font-weight: 600; color: var(--muted); min-height: 48px; display: flex; align-items: center; }
 .a-error { margin: 0; font-size: 14px; font-weight: 600; color: var(--danger); }
 
+/* Like the landing page, the design's pixel sizes read as zoomed-in in a real browser, so the desktop
+   layout renders at 82%. Heights divide by the zoom to still fill the window, and the breakpoints
+   below are real window widths (900px of window is ~1100px of zoomed layout). Phones stay at 100%. */
+@media (min-width: 861px) { .adm { --adm-zoom: .82; zoom: var(--adm-zoom); } }
+
 /* Narrow windows: the admin is built for desktop, but stays usable on a laptop and a phone. */
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
   .a-tiles { flex-wrap: wrap; }
   .a-tile { flex: 1 1 calc(50% - 6px); }
   .a-grid-2 { grid-template-columns: minmax(0, 1fr); }

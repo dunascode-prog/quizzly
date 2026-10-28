@@ -10,6 +10,6 @@
 .st-privacy { margin: 0; display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 19px; color: var(--muted); }
 .st-privacy svg { flex: none; margin-top: 1px; }
 
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
   .st-grid { grid-template-columns: minmax(0, 1fr); }
 }
