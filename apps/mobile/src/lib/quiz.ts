@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { refreshHomeSoon } from '@/lib/home';
 import { queryClient } from '@/lib/query-client';
 
 export type QuestionType = 'mcq' | 'true_false' | 'fill_blank' | 'short_answer' | 'theory';
@@ -160,6 +161,7 @@ export function submitAttempt(attemptId: string, answers: AnswerIn[]) {
     void queryClient.invalidateQueries({ queryKey: ['practice'] });
     // An exam's answers only come with the quiz once it's submitted (FR-SEC-12).
     void queryClient.invalidateQueries({ queryKey: ['quiz', attempt.quiz_id] });
+    refreshHomeSoon(); // mastery, the week and the plan move (C3)
     return attempt;
   });
 }

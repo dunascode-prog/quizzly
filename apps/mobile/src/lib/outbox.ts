@@ -119,7 +119,10 @@ async function sendAll() {
     sent = true;
     await save(items.filter((i) => i !== item));
   }
-  if (sent) void queryClient.invalidateQueries({ queryKey: ['practice'] });
+  if (sent) {
+    void queryClient.invalidateQueries({ queryKey: ['practice'] });
+    void queryClient.invalidateQueries({ queryKey: ['home'] }); // progress moved (C3)
+  }
 }
 
 /** Sends queued work in order. Stops at the first network or server failure and tries again later.
