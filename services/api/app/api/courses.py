@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import courses, documents, sharing
+from app.domain import courses, documents, offline, sharing
 from app.worker import cleanup
 
 router = APIRouter(prefix="/v1/courses", tags=["courses"])
@@ -143,3 +143,43 @@ async def delete_course(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
     await cleanup.remove_or_queue(conn, storage, paths)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class OfflineDocument(BaseModel):
+    id: UUID
+    title: str
+    bytes: int
+
+
+class OfflineExplanation(BaseModel):
+    document_id: UUID
+    topic_id: UUID
+    style: str
+    bytes: int
+
+
+class OfflineQuiz(BaseModel):
+    id: UUID
+    document_id: UUID
+    questions: int
+    bytes: int
+
+
+class OfflineManifest(BaseModel):
+    """What "Save for offline" fetches, with sizes, so the size shows first (FR-OFF-03)."""
+
+    course_id: UUID
+    documents: list[OfflineDocument]
+    explanations: list[OfflineExplanation]
+    quizzes: list[OfflineQuiz]
+    bytes: int
+
+
+@router.get("/{course_id}/offline")
+async def offline_manifest(course_id: UUID, user: User, conn: Conn) -> OfflineManifest:
+    """Outlines, written explanations and the student's quizzes for one of their courses, or a
+    course shared with them. Original files are never included (FR-SHARE-02)."""
+    data = await offline.manifest(conn, user.id, course_id)
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
+    return OfflineManifest(**data)

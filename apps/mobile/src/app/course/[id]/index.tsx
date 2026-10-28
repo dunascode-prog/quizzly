@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
-import { ChevronLeft, Ellipsis, Plus, Share2 } from '@/components/icons';
+import { ArrowDownToLine, Check, ChevronLeft, Ellipsis, Plus, Share2 } from '@/components/icons';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
 import { HeroCard } from '@/components/ui/hero-card';
@@ -15,9 +15,12 @@ import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
 import { Radius, Spacing, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { apiFetch } from '@/lib/api';
 import { friendlyError } from '@/lib/errors';
 import { formatDay, plural } from '@/lib/format';
 import { type Doc, type DocScope, retryUpload, useCourses, useDocuments, useUploads } from '@/lib/library';
+import { download, type Manifest, size, updatedAgo, useAutoUpdate, useOffline } from '@/lib/offline';
+import { queryClient } from '@/lib/query-client';
 import { useReportCourse, useRespond } from '@/lib/sharing';
 
 type Line = { text: string; color?: ThemeColor; action?: { label: string; onPress: () => void } };
@@ -114,6 +117,15 @@ export default function CourseScreen() {
   const busy = docs.data?.find((d) => uploads[d.id] && !uploads[d.id].failed) ??
     docs.data?.find((d) => d.status === 'uploaded' || d.status === 'processing');
   const busyUpload = busy ? uploads[busy.id] : undefined;
+  // Save for offline (screen 28, FR-OFF-03); new notes are fetched too while it's on.
+  const offlineJob = useOffline((s) => s.jobs[id]);
+  const saved = useOffline((s) => s.saved[id]);
+  useAutoUpdate(id === 'unfiled' ? '' : id);
+  const update = () =>
+    void queryClient
+      .fetchQuery({ queryKey: ['offline-manifest', id], queryFn: () => apiFetch<Manifest>(`/v1/courses/${id}/offline`), staleTime: 0 })
+      .then((m) => download(id, m, { wifiOnly: saved?.wifiOnly }))
+      .catch(() => {});
 
   return (
     <Screen
@@ -131,6 +143,12 @@ export default function CourseScreen() {
         <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
         {course ? (
           <View style={styles.actions}>
+            <IconButton
+              icon={ArrowDownToLine}
+              tone={saved || offlineJob ? 'ink' : 'light'}
+              accessibilityLabel={saved ? 'Saved for offline' : 'Save for offline'}
+              onPress={() => router.push({ pathname: '/course/[id]/offline', params: { id: course.id } })}
+            />
             {joined ? null : (
               <IconButton
                 icon={Share2}
@@ -183,6 +201,37 @@ export default function CourseScreen() {
             label={`${Math.round(busyUpload ? busyUpload.progress * 100 : (busy.progress ?? 0))}%`}
           />
         </HeroCard>
+      ) : offlineJob ? (
+        <HeroCard style={styles.hero}>
+          <View style={styles.heroText}>
+            <Text variant="title" color="onInk">
+              Saving for offline
+            </Text>
+            <Text variant="small" color="mutedOnInk">
+              {offlineJob.status === 'waiting_wifi' ? 'Waiting for Wi‑Fi.' : 'You can keep studying.'}
+            </Text>
+          </View>
+          <ProgressRing
+            size={60}
+            value={offlineJob.bytesTotal ? offlineJob.bytesDone / offlineJob.bytesTotal : 0}
+            label={`${Math.round(offlineJob.bytesTotal ? (offlineJob.bytesDone / offlineJob.bytesTotal) * 100 : 0)}%`}
+          />
+        </HeroCard>
+      ) : saved ? (
+        <HeroCard style={styles.hero}>
+          <View style={[styles.savedCheck, { borderColor: theme.onInk }]}>
+            <Check size={30} color={theme.onInk} strokeWidth={2.5} />
+          </View>
+          <View style={styles.heroText}>
+            <Text variant="heading" color="onInk">
+              Saved for offline
+            </Text>
+            <Text variant="small" color="mutedOnInk">
+              {size(saved.bytes)} · Updated {updatedAgo(saved.savedAt)}
+            </Text>
+          </View>
+          <Pill label="Update" onPress={update} accessibilityLabel="Update the offline copy" />
+        </HeroCard>
       ) : null}
 
       {docs.isError ? <Banner message={friendlyError(docs.error)} /> : null}
@@ -201,7 +250,7 @@ export default function CourseScreen() {
               <ListCard
                 key={d.id}
                 title={d.title}
-                meta={line.text}
+                meta={saved?.documentIds.includes(d.id) && d.status === 'ready' ? `${line.text} · ✓ On this phone` : line.text}
                 metaColor={line.color}
                 onPress={() =>
                   d.status === 'ready'
@@ -235,7 +284,8 @@ const styles = StyleSheet.create({
   reasons: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, justifyContent: 'center' },
   center: { textAlign: 'center' },
   heading: { gap: Spacing.one },
-  hero: { flexDirection: 'row', alignItems: 'center' },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  savedCheck: { width: 60, height: 60, borderRadius: Radius.full, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
   heroText: { flex: 1, gap: Spacing.one },
   list: { gap: Spacing.twoHalf },
   skeleton: { height: 76, borderRadius: Radius.option + 2 },
