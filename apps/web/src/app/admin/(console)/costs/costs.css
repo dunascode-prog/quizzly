@@ -1,0 +1,40 @@
+/* 30b AI costs (docs/reference/admin-ai-costs.html) */
+.co-small { font-size: 13px; }
+.co-tiny { font-size: 12px; line-height: 17px; }
+
+.co-daily { display: flex; gap: 28px; }
+.co-chart { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.co-chart-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.adm .co-chart-title { font-family: var(--font-body); font-size: 18px; font-weight: 700; letter-spacing: 0; }
+.co-bars { position: relative; display: flex; align-items: flex-end; gap: 4px; border-bottom: 1px solid var(--track); }
+.co-bars > span:not(.co-budget) { flex: 1; border-radius: 3px 3px 0 0; background: var(--onInk); opacity: .5; }
+.co-bars > .co-now { opacity: 1 !important; }
+.co-budget { position: absolute; left: 0; right: 0; top: 10px; border-top: 2px dashed var(--mutedOnInk); }
+.co-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--mutedOnInk); }
+.co-axis-now { color: var(--onInk); font-weight: 700; }
+.co-side { width: 230px; flex: none; display: flex; flex-direction: column; gap: 14px; }
+.co-stat { border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.co-stat-value { font-size: 22px; font-weight: 700; }
+
+.co-providers { display: flex; gap: 12px; }
+.co-provider { flex: 1; min-width: 0; background: var(--surface); border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.co-provider-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.adm .co-provider-name { font-family: var(--font-body); font-size: 17px; font-weight: 700; letter-spacing: 0; }
+.co-provider-meta { display: flex; gap: 20px; font-size: 13px; color: var(--muted); }
+.co-provider-use { display: flex; flex-direction: column; gap: 6px; }
+
+.co-model { font-family: ui-monospace, monospace; font-size: 13px; }
+.co-share { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.co-share-bar { width: 80px; height: 6px; border-radius: 999px; background: var(--field); overflow: hidden; display: inline-block; }
+.co-share-bar > span { display: block; height: 100%; background: var(--text); }
+.co-total td { font-weight: 700; }
+
+@media (max-width: 1100px) {
+  .co-daily { flex-direction: column; }
+  .co-side { width: auto; flex-direction: row; }
+  .co-side > * { flex: 1; }
+  .co-providers { flex-direction: column; }
+}
+@media (max-width: 860px) {
+  .co-side { flex-direction: column; }
+}

@@ -98,7 +98,7 @@
 .a-table td { text-align: left; padding: 12px; font-size: 14px; border-top: 1px solid var(--line); vertical-align: middle; }
 .a-table .a-c { text-align: center; }
 .a-table .a-r { text-align: right; }
-.a-table .a-nw { white-space: nowrap; }
+.a-table .a-nw, .a-table.a-nw td, .a-table.a-nw th { white-space: nowrap; }
 
 /* Key/value rows with a status chip (System health) */
 .a-rows > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
@@ -107,8 +107,8 @@
 /* Bars */
 .a-meter { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
 .a-meter > div { height: 100%; background: var(--onInk); }
-.a-meter-light { background: var(--line); }
-.a-meter-light > div { background: var(--ink); }
+.a-meter-light { background: var(--field); }
+.a-meter-light > div { background: var(--text); border-radius: 999px; }
 .a-bars { display: flex; align-items: flex-end; gap: 5px; border-bottom: 1px solid var(--track); }
 .a-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
 .a-bar-fill { width: 16px; max-width: 100%; border-radius: 4px 4px 0 0; background: var(--onInk); opacity: .42; }
