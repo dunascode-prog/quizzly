@@ -232,3 +232,32 @@ def test_nobody_but_the_server_reads_the_waitlist(conn):
         with pytest.raises(errors.InsufficientPrivilege):
             conn.execute("select * from waitlist")
         conn.execute("rollback to savepoint s")
+
+
+def test_a_course_member_can_still_delete_their_account(conn):
+    """Supabase Auth deletes users as supabase_auth_admin; the cascade into course_members must
+    not fail on the member-count trigger (FR-AUTH-05)."""
+    owner, member = _profile(conn, "Ada Okafor"), _profile(conn, "Tolu Adebayo")
+    course = conn.execute(
+        "insert into courses (user_id, code) values (%s, 'CSC 225') returning id", (owner,)
+    ).fetchone()[0]
+    share = conn.execute(
+        "insert into course_shares (course_id, owner_id, code) values (%s, %s, 'ABCD2345') "
+        "returning id",
+        (course, owner),
+    ).fetchone()[0]
+    conn.execute(
+        "insert into course_members (share_id, user_id, source, status) "
+        "values (%s, %s, 'link', 'active')",
+        (share, member),
+    )
+    # Tests can't switch to supabase_auth_admin; what matters is that the trigger runs as its
+    # owner, whoever deletes the row.
+    definer = conn.execute(
+        "select prosecdef from pg_proc where proname = 'course_members_count'"
+    ).fetchone()
+    assert definer == (True,)
+    conn.execute("delete from auth.users where id = %s", (member,))
+    assert conn.execute(
+        "select member_count from course_shares where id = %s", (share,)
+    ).fetchone() == (0,)

@@ -24,6 +24,7 @@ class NotificationOut(BaseModel):
     target: dict[str, Any]
     read_at: datetime | None
     created_at: datetime
+    actor_id: UUID | None  # for "Block" (FR-SHARE-09)
     actor_name: str | None  # display name only ("Ada O.")
 
 

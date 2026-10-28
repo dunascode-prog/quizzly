@@ -1,7 +1,8 @@
-"""Outline, source pages, explanations and feedback for a student's own documents.
+"""Outline, source pages, explanations and feedback for documents a student may study.
 
 Topics and explanations belong to the shared source file (FR-EXPL-04); a student reaches them
-only through a document of theirs that points at that file.
+only through a document they own, or one in a course shared with them (FR-SHARE-05), checked by
+the `can_read_document` database function.
 """
 
 from typing import Any
@@ -11,16 +12,18 @@ from psycopg import AsyncConnection
 
 _DOC = """
 select d.id, d.title, d.source_file_id, c.code as course_code, sf.page_count,
-       sf.low_ocr_pages
+       sf.low_ocr_pages, d.user_id <> %(user)s as shared
 from documents d
 join source_files sf on sf.id = d.source_file_id and sf.status = 'ready'
 left join courses c on c.id = d.course_id
-where d.id = %s and d.user_id = %s and d.deleted_at is null and d.status = 'ready'
+where d.id = %(doc)s and d.status = 'ready' and can_read_document(d.id, %(user)s)
 """
 
 
 async def ready_document(conn: AsyncConnection, user_id: UUID, document_id: UUID) -> dict | None:
-    return await (await conn.execute(_DOC, (document_id, user_id))).fetchone()
+    """A ready document the student may study. `shared` is true when it came through a shared
+    course: then original pages stay private (FR-SHARE-02)."""
+    return await (await conn.execute(_DOC, {"doc": document_id, "user": user_id})).fetchone()
 
 
 async def topics(conn: AsyncConnection, source_file_id: UUID) -> list[dict[str, Any]]:
@@ -92,7 +95,7 @@ async def can_see_explanation(conn: AsyncConnection, user_id: UUID, explanation_
     row = await (
         await conn.execute(
             "select 1 from explanations e join documents d on d.source_file_id = e.source_file_id "
-            "where e.id = %s and d.user_id = %s and d.deleted_at is null limit 1",
+            "where e.id = %s and can_read_document(d.id, %s) limit 1",
             (explanation_id, user_id),
         )
     ).fetchone()
@@ -104,7 +107,7 @@ async def can_see_question(conn: AsyncConnection, user_id: UUID, question_id: UU
         await conn.execute(
             "select 1 from questions qn join question_sets s on s.id = qn.question_set_id "
             "join documents d on d.source_file_id = s.source_file_id "
-            "where qn.id = %s and d.user_id = %s and d.deleted_at is null limit 1",
+            "where qn.id = %s and can_read_document(d.id, %s) limit 1",
             (question_id, user_id),
         )
     ).fetchone()
