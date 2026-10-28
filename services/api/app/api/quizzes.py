@@ -164,7 +164,7 @@ def _notice(row: dict) -> str | None:
 
 async def _quiz_out(conn, row: dict, user_id: UUID) -> QuizOut:
     qs = (
-        await quizzes.questions_for(conn, row["question_set_id"])
+        await quizzes.questions_for(conn, row["question_set_id"], row.get("question_ids"))
         if row["status"] == "ready"
         else []
     )

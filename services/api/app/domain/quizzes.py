@@ -70,7 +70,11 @@ async def get_quiz(conn: AsyncConnection, user_id: UUID, quiz_id: UUID) -> dict 
         await conn.execute(
             """
             select z.id, z.title, z.document_id, z.mode_default::text as mode, z.question_set_id,
-                   z.time_limit_sec, s.status::text as status, s.requested_count, s.generated_count,
+                   z.question_ids, z.kind, z.time_limit_sec,
+                   -- A Daily 5 is ready at once: its questions already exist (FR-HAB-01).
+                   case when z.kind = 'daily5' then 'ready' else s.status::text end as status,
+                   coalesce(cardinality(z.question_ids), s.requested_count) as requested_count,
+                   coalesce(cardinality(z.question_ids), s.generated_count) as generated_count,
                    (select progress from jobs where dedupe_key = 'questions:' || s.id::text
                     order by created_at desc limit 1) as progress,
                    coalesce((select j.status = 'queued' and j.error = 'busy' from jobs j
@@ -96,16 +100,30 @@ async def has_submitted(conn: AsyncConnection, user_id: UUID, quiz_id: UUID) -> 
     return row is not None
 
 
-async def questions_for(conn: AsyncConnection, set_id: UUID) -> list[dict[str, Any]]:
+_QUESTION_COLUMNS = """
+select qn.id, qn.ordinal, qn.type::text as type, qn.difficulty::text as difficulty,
+       qn.stem, qn.options, qn.answer, qn.explanation, qn.source_pages, qn.marks,
+       qn.rubric, qn.topic_id, t.title as topic_title
+from questions qn left join topics t on t.id = qn.topic_id
+"""
+
+
+async def questions_for(
+    conn: AsyncConnection, set_id: UUID, question_ids: list[UUID] | None = None
+) -> list[dict[str, Any]]:
+    """A quiz's questions: its whole set, or for a Daily 5 the picked ones in their order."""
+    if question_ids is not None:
+        return await (
+            await conn.execute(
+                _QUESTION_COLUMNS + "where qn.id = any(%s) and not qn.hidden "
+                "order by array_position(%s, qn.id)",
+                (question_ids, question_ids),
+            )
+        ).fetchall()
     return await (
         await conn.execute(
-            """
-            select qn.id, qn.ordinal, qn.type::text as type, qn.difficulty::text as difficulty,
-                   qn.stem, qn.options, qn.answer, qn.explanation, qn.source_pages, qn.marks,
-                   qn.rubric, qn.topic_id, t.title as topic_title
-            from questions qn left join topics t on t.id = qn.topic_id
-            where qn.question_set_id = %s and not qn.hidden order by qn.ordinal
-            """,
+            _QUESTION_COLUMNS
+            + "where qn.question_set_id = %s and not qn.hidden order by qn.ordinal",
             (set_id,),
         )
     ).fetchall()
@@ -130,7 +148,8 @@ async def get_attempt(conn: AsyncConnection, user_id: UUID, attempt_id: UUID) ->
             select a.id, a.user_id, a.quiz_id, a.mode::text as mode, a.status::text as status,
                    a.started_at,
                    a.submitted_at, a.current_index, a.score, a.max_score, a.topic_breakdown,
-                   z.question_set_id, z.title, z.document_id, z.time_limit_sec
+                   z.question_set_id, z.question_ids, z.kind, z.title, z.document_id,
+                   z.time_limit_sec
             from quiz_attempts a join quizzes z on z.id = a.quiz_id
             where a.id = %s and a.user_id = %s
             """,
@@ -148,7 +167,10 @@ async def save_answers(
 ) -> dict[UUID, bool | None]:
     """Upserts answers. Objective ones are re-marked here so the score can't be tampered with;
     written ones keep their LLM marks unless the text changed (a resend mustn't re-mark)."""
-    qs = {row["id"]: row for row in await questions_for(conn, attempt["question_set_id"])}
+    qs = {
+        row["id"]: row
+        for row in await questions_for(conn, attempt["question_set_id"], attempt["question_ids"])
+    }
     marks: dict[UUID, bool | None] = {}
     async with conn.transaction():
         for a in answers:
@@ -288,7 +310,7 @@ async def record_marking(
 
 
 async def _score(conn: AsyncConnection, attempt: dict) -> tuple[float, float, list[dict]]:
-    questions = await questions_for(conn, attempt["question_set_id"])
+    questions = await questions_for(conn, attempt["question_set_id"], attempt["question_ids"])
     return breakdown(questions, await answers_for(conn, attempt["id"]))
 
 
@@ -323,7 +345,7 @@ async def finish_if_marked(conn: AsyncConnection, attempt_id: UUID) -> None:
     """Called after each marking: completes a submitted attempt once nothing is left to mark."""
     attempt = await (
         await conn.execute(
-            "select a.id, a.user_id, a.status::text as status, z.question_set_id "
+            "select a.id, a.user_id, a.status::text as status, z.question_set_id, z.question_ids "
             "from quiz_attempts a "
             "join quizzes z on z.id = a.quiz_id where a.id = %s",
             (attempt_id,),
@@ -347,7 +369,8 @@ async def list_attempts(conn: AsyncConnection, user_id: UUID, limit: int = 30) -
             """
             select a.id, a.quiz_id, z.title, z.document_id, a.mode::text as mode,
                    a.status::text as status, a.started_at, a.submitted_at, a.current_index,
-                   a.score, a.max_score, s.generated_count as question_count
+                   a.score, a.max_score,
+                   coalesce(cardinality(z.question_ids), s.generated_count) as question_count
             from quiz_attempts a
             join quizzes z on z.id = a.quiz_id
             join question_sets s on s.id = z.question_set_id

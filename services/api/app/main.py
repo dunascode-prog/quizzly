@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import chat, courses, documents, quizzes, study
+from app.api import chat, courses, documents, home, notifications, quizzes, study
 from app.api.routes import router
 from app.core import db
 from app.core.config import get_settings
@@ -90,6 +90,8 @@ def create_app() -> FastAPI:
     app.include_router(documents.router)
     app.include_router(study.router)
     app.include_router(quizzes.router)
+    app.include_router(home.router)
+    app.include_router(notifications.router)
     app.include_router(chat.router)
     return app
 
