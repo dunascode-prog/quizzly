@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.api.deps import AppSettings, Conn, StorageDep, User
 from app.core import auth_admin
 from app.core.auth import CurrentUser
-from app.domain import accounts
+from app.domain import accounts, invites
 from app.worker import queue
 
 log = logging.getLogger("quizzly.api")
@@ -110,7 +110,9 @@ async def update_me(
     elif fields.get("institution_other"):
         fields["institution_id"] = None
     terms_version = settings.terms_version if body.accept_terms else None
-    return _me(user, await accounts.update_profile(conn, user.id, fields, terms_version))
+    profile = await accounts.update_profile(conn, user.id, fields, terms_version)
+    await invites.check(conn, user.id)  # finishing onboarding may credit their inviter
+    return _me(user, profile)
 
 
 @router.delete("/v1/me", status_code=status.HTTP_204_NO_CONTENT, tags=["account"])

@@ -42,6 +42,12 @@ class PageOut(BaseModel):
     page_number: int
     page_count: int | None
     text: str
+    # In a course shared with the student, only a short quoted passage (FR-SHARE-02).
+    quote: bool = False
+
+
+QUOTE_CHARS = 600
+PAGES_NOT_SHARED = "Original pages aren't shared. You can read the quoted passage."
 
 
 class PageImageOut(BaseModel):
@@ -121,6 +127,10 @@ async def source_page(document_id: UUID, number: int, user: User, conn: Conn) ->
     row = await study.page(conn, doc["source_file_id"], number)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Page not found")
+    if doc.get("shared"):
+        text = row["text"].strip()
+        quote = text if len(text) <= QUOTE_CHARS else text[:QUOTE_CHARS].rsplit(" ", 1)[0] + " …"
+        return PageOut(page_number=number, page_count=doc["page_count"], text=quote, quote=True)
     return PageOut(page_number=number, page_count=doc["page_count"], text=row["text"])
 
 
@@ -130,6 +140,8 @@ async def source_page_image(
 ) -> PageImageOut:
     """The page as the student uploaded it, for the source viewer (FR-DOC-10)."""
     doc = await _document(conn, user.id, document_id)
+    if doc.get("shared"):  # members never get a storage URL (FR-SHARE-02)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, PAGES_NOT_SHARED)
     if not 1 <= number <= (doc["page_count"] or 0):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Page not found")
     source = await study.source_file(conn, doc["source_file_id"])

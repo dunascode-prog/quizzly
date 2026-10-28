@@ -11,6 +11,8 @@ from app.worker import cleanup, queue
 
 router = APIRouter(tags=["documents"])
 
+READ_ONLY = "This course was shared with you, so its notes can't be changed."
+
 
 class DocumentOut(BaseModel):
     id: UUID
@@ -26,6 +28,8 @@ class DocumentOut(BaseModel):
     topic_count: int
     low_ocr_page_count: int
     created_at: datetime
+    # A document in a course shared with the student: study only (FR-DOC-12).
+    read_only: bool = False
 
     @classmethod
     def of(cls, row: dict) -> "DocumentOut":
@@ -82,7 +86,16 @@ async def _found(conn, user_id: UUID, document_id: UUID) -> dict:
 
 async def _check_course(conn, user_id: UUID, course_id: UUID | None) -> None:
     if course_id and not await documents.course_belongs_to(conn, user_id, course_id):
+        if await documents.is_course_member(conn, user_id, course_id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown course")
+
+
+def _owned(doc: dict) -> dict:
+    """Documents in a course shared with the student can be studied, not changed (FR-DOC-12)."""
+    if doc.get("read_only"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY)
+    return doc
 
 
 async def _upload_urls(conn, storage, doc: dict, user_id: UUID) -> list[str]:
@@ -203,9 +216,9 @@ async def update_document(
         fields["title"] = fields["title"].strip() or None
         if not fields["title"]:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Title is required")
+    _owned(await _found(conn, user.id, document_id))
     if "course_id" in fields:
         await _check_course(conn, user.id, fields["course_id"])
-    await _found(conn, user.id, document_id)
     return DocumentOut.of(await documents.update_document(conn, user.id, document_id, fields))
 
 
@@ -214,6 +227,7 @@ async def delete_document(
     document_id: UUID, user: User, conn: Conn, storage: StorageDep, settings: AppSettings
 ) -> Response:
     """Also gives back today's upload if the document was uploaded today."""
+    _owned(await _found(conn, user.id, document_id))
     paths = await documents.delete_document(conn, user.id, document_id, settings.timezone)
     if paths is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")

@@ -33,7 +33,7 @@ FAILURE_MESSAGES = {
 _SELECT = """
 select d.id, d.title, d.original_filename, d.course_id, d.status::text as status,
        d.failure_reason, d.upload_path, d.source_file_id, d.created_at, d.image_count,
-       d.upload_url_issued_at,
+       d.upload_url_issued_at, d.user_id <> %(user)s as read_only,
        sf.page_count, coalesce(cardinality(sf.low_ocr_pages), 0) as low_ocr_page_count,
        (select count(*) from topics t
          where t.source_file_id = d.source_file_id and t.parent_id is null) as topic_count,
@@ -44,7 +44,7 @@ left join lateral (
   select progress from jobs where dedupe_key = 'ingest:' || d.id::text
   order by created_at desc limit 1
 ) j on true
-where d.user_id = %(user)s and d.deleted_at is null
+where d.deleted_at is null and d.id in (select readable_documents(%(user)s))
 """
 
 
@@ -66,7 +66,7 @@ async def list_documents(
     if course_id:
         where, params["course"] = " and d.course_id = %(course)s", course_id
     elif unfiled:
-        where = " and d.course_id is null"
+        where = " and d.course_id is null and d.user_id = %(user)s"
     sql = _SELECT + where + " order by d.created_at desc"
     return await (await conn.execute(sql, params)).fetchall()
 
@@ -74,6 +74,19 @@ async def list_documents(
 async def get_document(conn: AsyncConnection, user_id: UUID, document_id: UUID) -> dict | None:
     sql = _SELECT + " and d.id = %(id)s"
     return await (await conn.execute(sql, {"user": user_id, "id": document_id})).fetchone()
+
+
+async def is_course_member(conn: AsyncConnection, user_id: UUID, course_id: UUID) -> bool:
+    """An active member of an active share of this course (it's read-only for them)."""
+    row = await (
+        await conn.execute(
+            "select 1 from course_shares s join course_members m on m.share_id = s.id "
+            "where s.course_id = %s and s.status = 'active' and m.user_id = %s "
+            "and m.status = 'active'",
+            (course_id, user_id),
+        )
+    ).fetchone()
+    return row is not None
 
 
 async def course_belongs_to(conn: AsyncConnection, user_id: UUID, course_id: UUID) -> bool:

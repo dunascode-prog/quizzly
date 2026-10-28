@@ -35,17 +35,19 @@ async def enqueue(
     *,
     user_id: UUID | None = None,
     dedupe_key: str | None = None,
+    run_after: timedelta | None = None,
 ) -> UUID | None:
-    """Insert a job. Returns None if an active job with the same dedupe_key already exists."""
+    """Insert a job, optionally to run later. Returns None if an active job with the same
+    dedupe_key already exists."""
     row = await (
         await conn.execute(
             """
-            insert into jobs (type, user_id, payload, dedupe_key)
-            values (%s, %s, %s, %s)
+            insert into jobs (type, user_id, payload, dedupe_key, run_after)
+            values (%s, %s, %s, %s, now() + %s)
             on conflict (dedupe_key) where status in ('queued', 'running') do nothing
             returning id
             """,
-            (job_type, user_id, json.dumps(payload), dedupe_key),
+            (job_type, user_id, json.dumps(payload), dedupe_key, run_after or timedelta()),
         )
     ).fetchone()
     return row["id"] if row else None

@@ -36,6 +36,40 @@ async def list_courses(conn: AsyncConnection, user_id: UUID) -> list[dict[str, A
     return await (await conn.execute(_LIST_SQL, (user_id,))).fetchall()
 
 
+async def joined_courses(conn: AsyncConnection, user_id: UUID) -> list[dict[str, Any]]:
+    """Courses shared with the student and added to their library (FR-SHARE-05): read-only,
+    "Shared by Ada O.", counting only ready documents (FR-SHARE-08)."""
+    return await (
+        await conn.execute(
+            """
+            select c.id, c.code, c.title, c.created_at, c.accent::text as accent,
+                   null::date as exam_date, p.display_name as shared_by, m.id as member_id,
+                   (select count(*) from documents d where d.course_id = c.id
+                      and d.status = 'ready' and d.deleted_at is null) as document_count
+            from course_members m
+            join course_shares s on s.id = m.share_id and s.status = 'active'
+            join courses c on c.id = s.course_id
+            join profiles p on p.id = c.user_id
+            where m.user_id = %s and m.status = 'active'
+            order by c.code
+            """,
+            (user_id,),
+        )
+    ).fetchall()
+
+
+async def shared_course_ids(conn: AsyncConnection, user_id: UUID) -> dict[UUID, int]:
+    """The student's own courses that are shared, with their member counts."""
+    rows = await (
+        await conn.execute(
+            "select course_id, member_count from course_shares "
+            "where owner_id = %s and status = 'active'",
+            (user_id,),
+        )
+    ).fetchall()
+    return {r["course_id"]: r["member_count"] for r in rows}
+
+
 async def get_course(conn: AsyncConnection, user_id: UUID, course_id: UUID) -> dict | None:
     rows = await (
         await conn.execute(

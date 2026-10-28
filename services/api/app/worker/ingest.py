@@ -15,6 +15,8 @@ from psycopg import AsyncConnection
 
 from app.core.config import get_settings
 from app.core.storage import Storage
+from app.domain import notifications, sharing
+from app.domain.documents import FAILURE_MESSAGES
 from app.llm.config import load_models_config
 from app.llm.gateway import AllProvidersBusy, LLMGateway
 from app.rag import embed, extract, ocr, outline, text
@@ -75,21 +77,57 @@ async def _fail(
     if source_file_id and reason not in PERMANENT_REASONS:
         await _release_source_file(conn, source_file_id)
         source_file_id = None
+    failed: list[dict] = []
     if source_file_id:
         await conn.execute(
             "update source_files set status = 'failed', failure_reason = %s where id = %s",
             (reason, source_file_id),
         )
+        failed += await (
+            await conn.execute(
+                "update documents set status = 'failed', failure_reason = %s "
+                "where source_file_id = %s and status in ('uploaded', 'processing') "
+                "returning id, user_id, title",
+                (reason, source_file_id),
+            )
+        ).fetchall()
+    failed += await (
         await conn.execute(
-            "update documents set status = 'failed', failure_reason = %s "
-            "where source_file_id = %s and status in ('uploaded', 'processing')",
-            (reason, source_file_id),
+            "update documents set status = 'failed', failure_reason = %s where id = %s "
+            "and status <> 'failed' returning id, user_id, title",
+            (reason, document_id),
         )
-    await conn.execute(
-        "update documents set status = 'failed', failure_reason = %s where id = %s",
-        (reason, document_id),
-    )
+    ).fetchall()
+    await _tell(conn, failed, reason)
     log.info("document %s failed: %s", document_id, reason)
+
+
+async def _tell(conn: AsyncConnection, docs: list[dict], failure: str | None = None) -> None:
+    """FR-DOC-11: an inbox row (toast in the app, push in the background) per document."""
+    for d in docs:
+        target = {"route": "/document/[id]", "params": {"id": str(d["id"])}}
+        if failure is None:
+            await sharing.document_ready_in_shared_course(conn, d["id"])  # FR-SHARE-06
+            await notifications.notify(
+                conn,
+                d["user_id"],
+                "document_ready",
+                "Your notes are ready",
+                f"{d['title']} is ready to study.",
+                target,
+                dedupe_key=f"document:{d['id']}",
+            )
+        else:
+            message = FAILURE_MESSAGES.get(failure, FAILURE_MESSAGES["internal"])
+            await notifications.notify(
+                conn,
+                d["user_id"],
+                "document_failed",
+                "We couldn't process your notes",
+                f"{d['title']}: {message}",
+                target,
+                dedupe_key=f"document:{d['id']}",
+            )
 
 
 async def _claim_source_file(
@@ -338,11 +376,14 @@ async def _link_ready(
     shared = await (
         await conn.execute("select storage_path from source_files where id = %s", (source_file_id,))
     ).fetchone()
-    await conn.execute(
-        "update documents set source_file_id = %s, status = 'ready', failure_reason = null "
-        "where id = %s",
-        (source_file_id, document_id),
-    )
+    ready = await (
+        await conn.execute(
+            "update documents set source_file_id = %s, status = 'ready', failure_reason = null "
+            "where id = %s returning id, user_id, title",
+            (source_file_id, document_id),
+        )
+    ).fetchall()
+    await _tell(conn, ready)
     if shared and shared["storage_path"] != upload_path:
         await storage().remove([upload_path])
     log.info("document %s reused processed file %s", document_id, source_file_id)
@@ -447,8 +488,12 @@ async def _save(
             ),
         )
         # Every document waiting on this file becomes ready together.
-        await conn.execute(
-            "update documents set status = 'ready', failure_reason = null "
-            "where source_file_id = %s and status in ('uploaded', 'processing')",
-            (source_file_id,),
-        )
+        ready = await (
+            await conn.execute(
+                "update documents set status = 'ready', failure_reason = null "
+                "where source_file_id = %s and status in ('uploaded', 'processing') "
+                "returning id, user_id, title",
+                (source_file_id,),
+            )
+        ).fetchall()
+        await _tell(conn, ready)

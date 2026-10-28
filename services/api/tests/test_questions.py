@@ -260,7 +260,7 @@ def fake(client, monkeypatch):
         s = next(s for s in state["sets"].values() if s["id"] == z["question_set_id"])
         return z | {k: s[k] for k in ("status", "requested_count", "generated_count")}
 
-    async def questions_for(conn, set_id):
+    async def questions_for(conn, set_id, question_ids=None):
         return []
 
     for mod, name, fn in [
@@ -366,7 +366,7 @@ QUESTION = {
 def test_exam_answers_stay_hidden_until_the_attempt_is_submitted(
     client, fake, monkeypatch, mode, submitted, shown
 ):
-    async def questions_for(conn, set_id):
+    async def questions_for(conn, set_id, question_ids=None):
         return [dict(QUESTION)]
 
     async def has_submitted(conn, user_id, quiz_id):

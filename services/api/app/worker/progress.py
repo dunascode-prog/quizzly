@@ -11,7 +11,7 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
-from app.domain import progress
+from app.domain import invites, progress
 
 log = logging.getLogger("quizzly.progress")
 
@@ -41,7 +41,8 @@ async def update_mastery(conn: AsyncConnection, job: dict) -> None:
     today: date = profile["today"]
     attempt = await (
         await conn.execute(
-            "select a.status::text as status, a.score, a.max_score, d.course_id "
+            "select a.status::text as status, a.score, a.max_score, d.course_id, z.kind, "
+            "z.daily5_day "
             "from quiz_attempts a "
             "join quizzes z on z.id = a.quiz_id join documents d on d.id = z.document_id "
             "where a.id = %s and a.user_id = %s",
@@ -56,10 +57,20 @@ async def update_mastery(conn: AsyncConnection, job: dict) -> None:
 
     newly_mastered = await _topics(conn, user_id, attempt["course_id"], answered)
     await _review_queue(conn, user_id, answered)
-    await _study_days(conn, user_id, {a["day"] for a in answered})
+    days = {a["day"] for a in answered}
+    if attempt["kind"] == "daily5" and attempt["status"] == "completed":
+        # Finishing the Daily 5 makes it a study day (FR-HAB-02).
+        await conn.execute(
+            "insert into study_days (user_id, day, daily5_done) values (%s, %s, true) "
+            "on conflict (user_id, day) do update set daily5_done = true",
+            (user_id, attempt["daily5_day"]),
+        )
+        days.add(attempt["daily5_day"])
+    await _study_days(conn, user_id, days)
     if attempt["course_id"]:
         await snapshot(conn, user_id, attempt["course_id"], today)
     await _achievements(conn, user_id, attempt_id, attempt, profile, newly_mastered)
+    await invites.check(conn, user_id)  # their 5th answer may credit whoever invited them
 
 
 async def _topics(
@@ -167,11 +178,10 @@ async def course_readiness(conn: AsyncConnection, user_id: UUID, course_id: UUID
             select distinct t.id, t.token_count, coalesce(m.mastery, 0) as mastery
             from documents d
             join topics t on t.source_file_id = d.source_file_id and t.parent_id is null
-            left join topic_mastery m on m.user_id = d.user_id and m.topic_id = t.id
-            where d.user_id = %s and d.course_id = %s and d.status = 'ready'
-              and d.deleted_at is null
+            left join topic_mastery m on m.user_id = %s and m.topic_id = t.id
+            where d.course_id = %s and d.status = 'ready' and can_read_document(d.id, %s)
             """,
-            (user_id, course_id),
+            (user_id, course_id, user_id),
         )
     ).fetchall()
     return progress.readiness((r["token_count"], float(r["mastery"])) for r in rows)

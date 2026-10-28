@@ -7,7 +7,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.core import auth
-from app.domain import accounts
+from app.domain import accounts, invites
 from tests.conftest import JWT_SECRET, SUPABASE_URL
 
 ISSUER = f"{SUPABASE_URL}/auth/v1"
@@ -63,6 +63,11 @@ def profiles(monkeypatch):
 
     monkeypatch.setattr(accounts, "get_profile", get_profile)
     monkeypatch.setattr(accounts, "update_profile", update_profile)
+
+    async def no_referral(conn, user_id):
+        return None
+
+    monkeypatch.setattr(invites, "check", no_referral)
     monkeypatch.setattr(accounts, "institution_exists", institution_exists)
     monkeypatch.setattr(accounts, "search_institutions", search_institutions)
     return calls
