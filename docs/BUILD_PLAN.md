@@ -6,17 +6,6 @@
 | **Baseline** | `main` at `b47bc3d` (Merge PR #19 `claude/account`): screens 01–13 built with Inter, API for documents, courses, study, quizzes and chat; 118 API tests passing; `tsc` clean |
 | **Related** | [PRD](PRD.md) · [FRD](FRD.md) · [Design](DESIGN.md) · [Data models](DATA_MODELS.md) |
 
-### Status when this plan was added (2026-10-26)
-
-Checked against the code, not just the baseline line above:
-
-- **Open PRs that belong to A15:** #20 `claude/offline-sync` (FR-OFF-01/02: persisted cache, quiz outbox through the API, offline banner) and #21 `claude/faster-questions` (FR-QGEN-08: `questions` model profile, per-call progress; 30 questions in ~20 s). Review and merge them first; #20 will need a small rebase after A1/A9.
-- **`claude/ui-foundation`** was merged long ago as PR #5; only the leftover branch needs deleting.
-- **Already built:** FR-AUTH-05 deletion is synchronous with a `delete_account` job retrying storage removal (A15 still needs the "type DELETE" confirmation and the shared-course note from DESIGN 13); chat has its own "High demand" message; reports and thumbs are stored (no admin view yet).
-- **Confirmed gaps:** `for all` write policies on user tables (A1), session in plain storage (A9), answers included in exam-mode quiz payloads (A12), nothing writes `llm_calls` (A8), nothing sets `questions.hidden` (A15 / FR-MOD-02), source viewer shows page text rather than the page image (A15 / FR-DOC-10).
-- **Agreed (2026-10-26):** A5 replaces PR #14's rule: only uploads that were never processed are given back.
-- **Fonts:** the v0.2 `theme.ts` isn't applied yet, because the app doesn't load Bricolage Grotesque or Manrope; B1 applies it together with the fonts.
-
 Work top to bottom. One PR per task (or a small group of tasks), on its own branch, with the FR IDs in the description. Tick the box in the PR that completes it. **Phase A must be finished before Phase C starts**, because sharing and notifications build on the read-only data model.
 
 ---
@@ -65,8 +54,13 @@ From the v0.1 code review. Each task needs a regression test.
 - [ ] **D3. Realtime notifications** (FR-NOTIF-02, 04, 07): `useNotificationsChannel` (foreground only, `AppState`), global `Toast`, bell badge, **22** inbox with filters and inline actions, catch-up fetch, push registration and tap routing with `expo-notifications`.
 - [ ] **D4. Sharing UI**: **19** share sheet (`PrivacyList`, `MateChip`, `LinkCard`), members screen, **20** join screen, joined-course states in 03/05/07/08 (tag, read-only, quote view), leave/report, privacy and blocking settings.
 - [ ] **D5. Deep links and invites**: `app.json` Android `intentFilters` (`autoVerify`) for `INVITE_DOMAIN` paths `/i/*`, `/c/*`; routes `i/[code]`, `c/[code]`; pending code kept in secure storage through sign-up (FR-AUTH-07); Play Install Referrer on first launch (`react-native-device-info` `getInstallReferrer()`, development build); **23** invite screen with QR (`react-native-qrcode-svg`).
-- [ ] **D6. Link service** (separate folder `apps/links`, Cloudflare Pages): `/i/{code}`, `/c/{code}` routing by user agent, `/.well-known/assetlinks.json` (package name + release SHA-256), landing page **24** using the same tokens and fonts, iPhone waitlist form with double opt-in, rate limiting. Domain from env `INVITE_DOMAIN` (PRD Q4).
+- [ ] **D6. Website + link routes** (`apps/web`, see [WEB.md](WEB.md)): Next.js on Cloudflare Pages at `INVITE_DOMAIN`. Landing page (31) from the real screenshots, `/i/{code}` and `/c/{code}` routing (FR-INV-02) with the landing page **24**, `/.well-known/assetlinks.json`, iPhone waitlist with double opt-in, privacy/terms/copyright pages.
 - [ ] **D7. Celebrations** (16), **Recap** (17, `react-native-view-shot` + `expo-sharing`), **Themes** (18, accent applied through a theme context), **Reminders** (21).
+- [x] **D8a. Original page viewer** (screen 29, FR-DOC-10, P0 — done in A15, #41; check it against the new 29 image in D8).
+- [ ] **D8b. Flashcards** (screen 25, FR-QGEN-10, P1): generation job per topic (front/back/source pages, cached like question sets), self-rating feeds `review_queue`.
+- [ ] **D8c. Rename / merge topics** (screen 27, FR-TOP-03, P1): `topic_overrides` writes through the API (title override, merged_into, split), outline endpoint applies overrides for the requesting user only.
+- [ ] **D8d. Save course for offline** (screen 28, FR-OFF-03, P1): offline manifest endpoint (items + byte size), background download into the SQLite cache with per-part progress, "Saved for offline" state and auto-update while on.
+- [ ] **D8e. Past-question mode** (screen 26, FR-QGEN-09, P1): past-paper upload (same pipeline, `kind = past_paper`, never shared or used as answers), style extraction job (types, wording patterns, marks), `style` option on `POST /quizzes`.
 - [ ] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens.
 
 ## Phase E — Beta readiness (M5)
@@ -74,7 +68,7 @@ From the v0.1 code review. Each task needs a regression test.
 - [ ] E1. Eval set and CI run on prompt changes (NFR-11).
 - [ ] E2. Sentry in app and API; job metrics (NFR-09).
 - [ ] E3. Play Store internal testing track; store listing; privacy policy and terms updated for sharing, notifications and invites (NDPA).
-- [ ] E4. Admin views: reports queue, takedowns, daily LLM cost, notification volume.
+- [ ] E4. **Admin app** at `/admin` in `apps/web` (screens 30a–30h, WEB.md §3): team sign-in with 2FA and `role = admin`, Overview, AI costs, Reports (fix answer / regenerate / keep hidden / dismiss), Takedowns, Limits and plans (`app_config` + audit log), Students, System. Admin API endpoints under `/admin/*` in FastAPI with role checks and `admin_audit_log`.
 
 ## Decisions still open (don't block on them)
 
