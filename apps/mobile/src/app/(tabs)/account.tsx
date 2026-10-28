@@ -16,6 +16,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { signOut } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { type Allowance, useUsage } from '@/lib/library';
+import { unregisterPush } from '@/lib/notifications';
 import { useMe } from '@/lib/profile';
 
 /** One allowance on the ink card: what's left today out of the daily limit. */
@@ -74,7 +75,10 @@ export default function AccountScreen() {
 
   const onSignOut = () => {
     setError(null);
-    signOut().catch((e) => setError(friendlyError(e)));
+    // Stop this phone's pushes first, while we can still prove who we are.
+    unregisterPush()
+      .then(signOut)
+      .catch((e) => setError(friendlyError(e)));
   };
 
   return (
