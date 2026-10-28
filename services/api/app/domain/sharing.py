@@ -42,8 +42,14 @@ def new_code() -> str:
 
 
 def normalise_code(code: str) -> str:
-    """Codes are read aloud and typed: case doesn't matter, and O/I/L read as 0/1/1."""
+    """Share codes are read aloud and typed: case doesn't matter, and O/I/L read as 0/1/1 (they
+    never appear in Crockford base32)."""
     return code.strip().upper().translate(str.maketrans("OIL", "011"))
+
+
+def normalise_invite_code(code: str) -> str:
+    """Invite codes are a first name plus digits ("TOLU7"): only case is ignored."""
+    return code.strip().upper()
 
 
 async def _owned_course(conn: AsyncConnection, owner: UUID, course_id: UUID) -> dict | None:
@@ -176,7 +182,7 @@ async def share_course(
             await conn.execute(
                 "select id, share_permission::text as share_permission from profiles "
                 "where upper(invite_code) = any(%s) and deleted_at is null",
-                ([normalise_code(c) for c in codes],),
+                ([normalise_invite_code(c) for c in codes],),
             )
         ).fetchall():
             recipients[r["id"]] = r

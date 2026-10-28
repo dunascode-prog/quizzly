@@ -26,6 +26,7 @@ from app.worker import (
     crashed,
     explain,
     ingest,
+    invites,
     marking,
     progress,
     push,
@@ -48,6 +49,7 @@ HANDLERS: dict[str, Handler] = {
     "update_mastery": progress.update_mastery,
     "send_push": push.send_push,
     "fan_out_share_update": sharing.fan_out_share_update,
+    "credit_referral": invites.credit_referral,
 }
 
 POLL_INTERVAL = 2.0
