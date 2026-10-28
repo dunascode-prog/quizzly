@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Play } from '@/components/icons';
-import { Radius, Size, Spacing } from '@/constants/theme';
+import { FontFamily, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { Text } from './text';
@@ -52,18 +52,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    padding: Spacing.two,
+    padding: Spacing.twoHalf,
     paddingRight: Spacing.four,
-    borderRadius: Radius.card,
-    minHeight: Size.minTouch,
+    borderRadius: Radius.option,
+    minHeight: 64,
   },
   circle: {
-    width: Size.iconButton,
-    height: Size.iconButton,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   text: { flex: 1, gap: 2 },
-  title: { fontSize: 17 },
+  title: { fontSize: 17, fontFamily: FontFamily.bold },
 });

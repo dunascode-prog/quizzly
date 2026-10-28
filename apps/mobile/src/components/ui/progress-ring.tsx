@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -24,7 +24,11 @@ type Props = {
   /** Always shown inside determinate rings ("6/10", "45%"). */
   label?: string;
   color?: ThemeColor;
+  /** A course accent (DESIGN.md §3.2) instead of a theme colour. */
+  accent?: string;
   trackColor?: ThemeColor;
+  /** Custom content in the middle instead of `label` (the label still names it for TalkBack). */
+  children?: ReactNode;
 };
 
 export function ProgressRing({
@@ -33,7 +37,9 @@ export function ProgressRing({
   value,
   label,
   color = 'onInk',
+  accent,
   trackColor = 'track',
+  children,
 }: Props) {
   const theme = useTheme();
   const r = (size - strokeWidth) / 2;
@@ -64,7 +70,7 @@ export function ProgressRing({
             cx={size / 2}
             cy={size / 2}
             r={r}
-            stroke={theme[color]}
+            stroke={accent ?? theme[color]}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             fill="none"
@@ -74,7 +80,11 @@ export function ProgressRing({
           />
         </Svg>
       </Animated.View>
-      {label ? (
+      {children ? (
+        <View style={[StyleSheet.absoluteFill, styles.center]} importantForAccessibility="no-hide-descendants">
+          {children}
+        </View>
+      ) : label ? (
         <View style={[StyleSheet.absoluteFill, styles.center]}>
           <Text
             variant={size > 100 ? 'number' : 'caption'}
