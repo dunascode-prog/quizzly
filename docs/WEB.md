@@ -6,7 +6,7 @@
 | **Date** | 2026-10-27 |
 | **Applies to** | `apps/web` (new): the public site, the invite/share link pages and the admin app, on one domain |
 | **Related** | [DESIGN.md](DESIGN.md) (tokens, type, components) · [FRD](FRD.md) · [Architecture](ARCHITECTURE.md) · [Build plan](BUILD_PLAN.md) |
-| **Images** | `docs/design/31-landing-desktop.jpg`, `31-landing-mobile.jpg` (+ `-dark`), `30a`–`30h-admin-*.png` (+ `-dark`) |
+| **Images** | `docs/design/web/`: `31-landing-desktop.jpg`, `31-landing-mobile.jpg` (+ `-dark`), `30a`–`30h-admin-*.png` (+ `-dark`), `24-invite-landing.png`. Working HTML of each page: `docs/reference/*.html` |
 
 The website and the admin share one codebase and one domain (placeholder `quizzly.app`, the same `INVITE_DOMAIN` used for `/i/` and `/c/` links). Same tokens and fonts as the app (DESIGN.md §3–4); Bricolage Grotesque and Manrope load from Google Fonts on the web.
 
@@ -35,15 +35,16 @@ The website and the admin share one codebase and one domain (placeholder `quizzl
 Desktop 1440 and mobile 390 are the same page (container/media queries: 2–4 columns → 1, side phones hidden on mobile). Sections in order:
 
 1. **Header:** logo + "Quizzly"; links How it works · Features · Study together · FAQ; small "Team" link (→ `/admin/sign-in`); ink "Get the app" pill. Mobile: logo + "Get the app" only.
-2. **Hero:** eyebrow "Made for Nigerian university students"; headline "Your notes, **exam‑ready.**" (84/84 desktop, 46/48 mobile); one-paragraph pitch; "Get it on Google Play" ink pill (shows "Free during beta") + "iPhone: join the waitlist"; three facts with icons (Runs on 2 GB Android phones · Works offline · Every answer cites the page). Right: three phones (Explanation, **Today**, Question), the outer two tilted ±7°, with the three sign-in stickers. Mobile: Today phone only.
+2. **Hero — the core promise: practise on the go, without waiting for past questions.** Eyebrow "Practise anywhere, anytime"; headline "Practise on the go⏎until it **clicks.**" (74/78 desktop, 46/48 mobile); pitch: "Don't wait for past questions. Upload your lecture notes and Quizzly writes fresh exam-style questions from them, round after round. Practise on the bus, in traffic or between lectures until you understand the principles, not just memorise answers."; "Get it on Google Play" ink pill ("Free during beta") + "iPhone: join the waitlist"; three facts with icons (New questions every round · Works offline on the road · Every answer explains why). Right: three phones — **Practice question** in the middle, Today (left, −7°) and Results (right, +7°) — with stickers "In traffic · 5 min", "Round 4 · new questions", "9 / 10 · you've got it". Mobile: the practice-question phone only.
+2b. **Practice loop (ink band):** "Don't wait for **past questions.**" + why (past questions are hard to find, outdated, rarely answered; Quizzly makes as many rounds as you need, each with new questions on the same principles) + pill "Repeat until you score 80% on every topic" (the mastery bar from FR-HOME-03). Right: four numbered steps — Upload your notes · Get fresh questions · Practise anywhere · See why, then go again. Bottom row: "Practise wherever you are:" chips On the bus · In traffic · Between lectures · In the queue · Before bed.
 3. **Schools strip:** "Launching at UNILAG · Coming next to UI, OAU, ABU, UNN and polytechnics · Any PDF, PPTX or photo of notes". No made-up logos or numbers.
-4. **How it works (`#how`):** "From slides to **exam practice** in minutes": three cards (Upload / Understand / Practise), each with a cropped phone (upload sheet anchored to the bottom).
+4. **How it works (`#how`):** "From slides to **exam practice** in minutes": three cards (Upload / Understand / Practise, again and again), each with a cropped phone (upload sheet anchored to the bottom).
 5. **Citations (ink band):** "Every answer shows its **page**" + three ticks; Chat and Page viewer phones.
 6. **Features bento (`#features`):** "Everything you need for **exam week**": Theory answers marked · Flashcards · Past questions · Study offline · Topics, not 60 slides · Easy on your eyes (dark screenshot).
 7. **Habits:** "A little, **every day**": Daily 5 · Weekly goal (no streak) · Exam countdown · Kind reminders; Daily 5 done and Celebration phones.
 8. **Sharing (`#share`):** "One upload. **Whole class.**" with They get / Stays private cards and Share + Join phones.
 9. **Built for our realities:** four fact cards: Light on your phone · Offline · Low-data mode · Your files stay yours (no AI training on notes, delete anytime).
-10. **FAQ (`#faq`):** `<details>` accordion, first open: free? schools? handwriting? correctness? cheating? iPhone?
+10. **FAQ (`#faq`):** `<details>` accordion, first open: Do I need past questions? · free? · schools? · handwriting? · correctness? · cheating? · Can I practise without data?
 11. **Final CTA (`#get`, ink):** "Start with this week's **slides.**" + Play/waitlist + **real** QR code to the Play listing (the canvas shows a placeholder pattern — generate the real one).
 12. **Footer:** product/company/team links, "© 2026 Quizzly. Not affiliated with any university.", NDPA line.
 
