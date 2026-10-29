@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks a deployed API from outside, through Caddy and TLS. CI rolls back when this fails.
-#   smoke.sh <base url> [expected release]   e.g. smoke.sh https://staging-api.quizzly.app sha-1a2b3c4d5e6f
+#   smoke.sh <base url> [expected release]   e.g. smoke.sh https://staging-api.quizzly.app sha-<12-char commit>
 set -euo pipefail
 
 base=${1:?usage: smoke.sh <base url> [expected release]}

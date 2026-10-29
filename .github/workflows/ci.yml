@@ -102,6 +102,9 @@ jobs:
         env: { PGPASSWORD: postgres }
         run: |
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role service_role nologin;
           create schema auth;
           create table auth.users (id uuid primary key, raw_user_meta_data jsonb);
           create function auth.uid() returns uuid language sql as 'select null::uuid';
