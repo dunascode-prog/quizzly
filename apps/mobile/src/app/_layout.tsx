@@ -108,6 +108,7 @@ function RootNavigator() {
           <Stack.Screen name="course/new" options={SHEET} />
           <Stack.Screen name="course/[id]/edit" options={SHEET} />
           <Stack.Screen name="document/[id]/edit" options={SHEET} />
+          <Stack.Screen name="document/[id]/topic-menu" options={SHEET} />
         </Stack.Protected>
         <Stack.Screen name="auth-callback" />
         {/* Readable before signing in too (sign-in footer, FR-AUTH-03). */}

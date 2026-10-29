@@ -24,6 +24,31 @@ const STYLES: { value: Style; label: string }[] = [
   { value: 'exam', label: 'Exam' },
 ];
 
+type PartProps = { documentId: string; topicId: string; title: string; n: number; style: Style; onCite: (page: number) => void };
+
+/** One of the original topics inside a merged topic (FR-TOP-03): its own explanation, in order. */
+function MergedPart({ documentId, topicId, title, n, style, onCite }: PartProps) {
+  const explanation = useExplanation(documentId, topicId, style);
+  const ex = explanation.data;
+  return (
+    <View style={styles.gap}>
+      <Text variant="small" color="textSecondary" accessibilityRole="header">
+        Part {n} · {title}
+      </Text>
+      {explanation.isError || ex?.status === 'failed' ? (
+        <View style={styles.gap}>
+          <Banner message={explanation.isError ? friendlyError(explanation.error) : "We couldn't write this part. Try again; it won't use up your daily limit."} />
+          <ActionPill label="Try again" icon={RotateCw} variant="light" onPress={() => explanation.refetch()} />
+        </View>
+      ) : ex?.status === 'ready' && ex.content_md ? (
+        <Markdown content={ex.content_md} onCite={onCite} />
+      ) : (
+        <Writing busy={ex?.busy} />
+      )}
+    </View>
+  );
+}
+
 function Writing({ busy }: { busy?: boolean }) {
   const theme = useTheme();
   return (
@@ -48,15 +73,18 @@ export default function ExplanationScreen() {
   const me = useMe();
   const [style, setStyle] = useState<Style>(me.data?.explanation_style ?? 'standard');
   const outline = useOutline(id);
-  const explanation = useExplanation(id, topicId, style);
+  const topics = outline.data?.topics ?? [];
+  // A topic the student merged covers its parts; a part's own id opens the merged topic.
+  const index = topics.findIndex((t) => t.id === topicId || t.parts?.includes(topicId));
+  const topic = topics[index];
+  const parts = topic?.parts?.length ? topic.parts : [topicId];
+  const merged = parts.length > 1;
+  const explanation = useExplanation(id, parts[0], style);
   const rate = useRateExplanation();
   const [rated, setRated] = useState<Record<string, 1 | -1>>({});
   const [quizBusy, setQuizBusy] = useState(false);
   const [quizError, setQuizError] = useState<string | null>(null);
 
-  const topics = outline.data?.topics ?? [];
-  const index = topics.findIndex((t) => t.id === topicId);
-  const topic = topics[index];
   const next = index >= 0 ? topics[index + 1] : undefined;
   const ex = explanation.data;
   const ready = ex?.status === 'ready' && ex.content_md;
@@ -74,7 +102,7 @@ export default function ExplanationScreen() {
     setQuizError(null);
     try {
       const quiz = await createQuiz(id, {
-        topic_ids: [topicId],
+        topic_ids: parts,
         types: ['mcq', 'true_false', 'fill_blank'],
         difficulty: 'mixed',
         count: 5,
@@ -93,7 +121,7 @@ export default function ExplanationScreen() {
     setQuizBusy(true);
     setQuizError(null);
     try {
-      const round = await createFlashcards(id, topicId);
+      const round = await createFlashcards(id, parts[0]);
       router.push({ pathname: '/flashcards/[id]', params: { id: round.id } });
     } catch (e) {
       setQuizError(friendlyError(e));
@@ -148,6 +176,11 @@ export default function ExplanationScreen() {
         </View>
       ) : ready ? (
         <>
+          {merged ? (
+            <Text variant="small" color="textSecondary" accessibilityRole="header">
+              Part 1 · {topic?.part_titles?.[0]}
+            </Text>
+          ) : null}
           <Markdown content={ex.content_md!} onCite={openPage} />
           <View style={[styles.feedback, { borderColor: theme.line }]}>
             <Text variant="small" color="textSecondary" style={styles.feedbackText}>
@@ -170,6 +203,19 @@ export default function ExplanationScreen() {
       ) : (
         <Writing busy={ex?.busy} />
       )}
+      {merged
+        ? parts.slice(1).map((pid, i) => (
+            <MergedPart
+              key={pid}
+              documentId={id}
+              topicId={pid}
+              title={topic?.part_titles?.[i + 1] ?? ''}
+              n={i + 2}
+              style={style}
+              onCite={openPage}
+            />
+          ))
+        : null}
       {quizError ? <Banner message={quizError} /> : null}
     </Screen>
   );

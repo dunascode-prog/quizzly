@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 from app.domain import study, usage
+from app.domain import topics as topic_overrides
 from app.rag import explain
 from app.worker import queue
 from tests.conftest import JWT_SECRET
@@ -125,7 +126,11 @@ def fake(client, monkeypatch):
     async def report(conn, user_id, t, eid, reason, note):
         state["reports"].append((reason, note))
 
+    async def no_overrides(conn, user_id, sf):
+        return {}
+
     for mod, name, fn in [
+        (topic_overrides, "overrides", no_overrides),
         (study, "ready_document", ready_document),
         (study, "topics", topics),
         (study, "explanation", explanation),

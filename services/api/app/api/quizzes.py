@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 from app.api.deps import AppSettings, Conn, User
-from app.domain import quizzes, study, usage
+from app.domain import quizzes, study, topics, usage
 from app.rag import questions as q
 from app.worker import marking as marking_worker
 from app.worker import queue
@@ -289,7 +289,10 @@ async def create_quiz(
         body.count,
         body.new_questions,
     )
-    title = chosen[0]["title"] if len(chosen) == 1 and len(all_topics) > 1 else doc["title"]
+    # The student's own name for the topic, or for a merged topic its parts (FR-TOP-03).
+    mine = await topics.outline(conn, user.id, doc["source_file_id"], all_topics)
+    group = next((t for t in mine if sorted(t["parts"]) == topic_ids), None)
+    title = group["title"] if group and len(mine) > 1 else doc["title"]
     limit_sec = body.time_limit_min * 60 if body.mode == "exam" and body.time_limit_min else None
     quiz_id = await quizzes.create_quiz(
         conn, user.id, document_id, existing["id"], title, body.mode, limit_sec
@@ -313,10 +316,11 @@ async def create_flashcards(
     doc = await study.ready_document(conn, user.id, document_id)
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found or not ready yet")
-    topic = next(
-        (t for t in await study.topics(conn, doc["source_file_id"]) if t["id"] == body.topic_id),
-        None,
+    # A topic the student merged covers all its parts, under their name for it (FR-TOP-03).
+    mine = await topics.outline(
+        conn, user.id, doc["source_file_id"], await study.topics(conn, doc["source_file_id"])
     )
+    topic = next((t for t in mine if body.topic_id in t["parts"]), None)
     if topic is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown topic")
     existing = await _question_set(
@@ -324,7 +328,7 @@ async def create_flashcards(
         user.id,
         settings,
         doc["source_file_id"],
-        [topic["id"]],
+        sorted(topic["parts"]),
         [q.FLASHCARD],
         "mixed",
         FLASHCARDS_PER_TOPIC,
