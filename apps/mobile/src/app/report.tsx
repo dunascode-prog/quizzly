@@ -11,24 +11,30 @@ import { Text } from '@/components/ui/text';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import { friendlyError } from '@/lib/errors';
-import { useReport } from '@/lib/study';
+import { type ReportTarget, useReport } from '@/lib/study';
 
-type Reason = 'wrong' | 'unclear' | 'inappropriate';
+type Reason = 'wrong' | 'unclear' | 'inappropriate' | 'other';
 
-const TARGET_NAMES = { explanation: 'explanation', question: 'question', chat_message: 'answer' };
+const TARGET_NAMES = { explanation: 'explanation', question: 'question', chat_message: 'answer', avatar: 'photo' };
 
 const REASONS: { value: Reason; label: string }[] = [
   { value: 'wrong', label: 'Wrong' },
   { value: 'unclear', label: 'Unclear' },
   { value: 'inappropriate', label: 'Inappropriate' },
 ];
+// A photo isn't wrong or unclear: offensive, or something else (someone else, a logo).
+const PHOTO_REASONS: { value: Reason; label: string }[] = [
+  { value: 'inappropriate', label: 'Inappropriate' },
+  { value: 'other', label: 'Something else' },
+];
 
-// Report sheet (DESIGN.md §7 "not drawn", FR-MOD-01).
+// Report sheet (DESIGN.md §7 "not drawn", FR-MOD-01; a coursemate's photo: FR-MOD-06).
 export default function ReportSheet() {
   const { targetId, targetType = 'explanation' } = useLocalSearchParams<{
     targetId: string;
-    targetType?: 'explanation' | 'question' | 'chat_message';
+    targetType?: ReportTarget;
   }>();
+  const reasons = targetType === 'avatar' ? PHOTO_REASONS : REASONS;
   const report = useReport();
   const [reason, setReason] = useState<Reason | null>(null);
   const [note, setNote] = useState('');
@@ -52,7 +58,7 @@ export default function ReportSheet() {
         Tell us what&apos;s wrong with this {TARGET_NAMES[targetType]}. We read every report.
       </Text>
       <View style={styles.pills} accessibilityRole="radiogroup" accessibilityLabel="Reason">
-        {REASONS.map((r) => (
+        {reasons.map((r) => (
           <Pill key={r.value} label={r.label} role="radio" selected={reason === r.value} onPress={() => setReason(r.value)} />
         ))}
       </View>

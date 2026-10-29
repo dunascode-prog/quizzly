@@ -4,7 +4,7 @@ import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChevronLeft } from '@/components/icons';
-import { initials } from '@/components/profile-header';
+import { Avatar } from '@/components/ui/avatar';
 import { Banner } from '@/components/ui/banner';
 import { IconButton } from '@/components/ui/icon-button';
 import { Pill } from '@/components/ui/pill';
@@ -81,11 +81,7 @@ function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
         accessibilityHint="Opens it. Long-press for more options"
         style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
         {n.actor_name ? (
-          <View style={[styles.avatar, { backgroundColor: theme.text }]}>
-            <Text variant="label" color="onInk">
-              {initials(n.actor_name)}
-            </Text>
-          </View>
+          <Avatar name={n.actor_name} uri={n.actor_avatar_url} size={48} tone="ink" />
         ) : (
           <View style={[styles.avatar, { borderWidth: 1.5, borderColor: theme.line }]}>
             <Text variant="label">Q</Text>
