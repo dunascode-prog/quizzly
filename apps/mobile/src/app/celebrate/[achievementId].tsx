@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 
@@ -15,7 +15,7 @@ import { ProgressRing } from '@/components/ui/progress-ring';
 import { Text } from '@/components/ui/text';
 import { Accent, type AccentName, Colors, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useAccent } from '@/lib/appearance';
+import { useAccent, useCalmMotion } from '@/lib/appearance';
 import { type Celebration, useCelebration } from '@/lib/celebrate';
 import { friendlyError } from '@/lib/errors';
 
@@ -42,9 +42,13 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 /** Eight short rays around the ring; they fade in after it (DESIGN.md §5: no confetti). */
 function Rays() {
   const theme = useTheme();
+  const calm = useCalmMotion();
   const c = RAYS / 2;
   return (
-    <Animated.View entering={FadeIn.delay(250).duration(500)} style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Animated.View
+      entering={calm ? undefined : FadeIn.delay(250).duration(500).reduceMotion(ReduceMotion.System)}
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none">
       <Svg width={RAYS} height={RAYS}>
         {Array.from({ length: 8 }, (_, i) => {
           const a = (i * Math.PI) / 4;

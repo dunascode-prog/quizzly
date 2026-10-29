@@ -1,10 +1,11 @@
 import { type ReactNode, useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Check, RotateCw, X } from '@/components/icons';
 import { Radius, Size, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useCalmMotion } from '@/lib/appearance';
 
 import { Text } from './text';
 
@@ -25,7 +26,7 @@ type Props = {
  * page it comes from. */
 export function Flashcard({ front, back, extra, page, flipped, onFlip, onPage }: Props) {
   const theme = useTheme();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useCalmMotion();
   const turn = useSharedValue(flipped ? 1 : 0);
 
   useEffect(() => {

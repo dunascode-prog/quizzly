@@ -11,11 +11,15 @@ import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { ThemeRow } from '@/components/ui/theme-row';
 import { ToggleRow } from '@/components/ui/toggle-row';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Accent, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
+import { useDataUsage } from '@/lib/data-usage';
 import { useHome } from '@/lib/home';
+import { size } from '@/lib/offline';
 import { type Theme, useSettings, useUpdateSettings } from '@/lib/settings';
+import { useOnline } from '@/lib/network';
 
 const THEMES: { key: Theme; name: string; unlocked: string; locked: string }[] = [
   { key: 'ink', name: 'Ink', unlocked: 'Default', locked: 'Default' },
@@ -33,6 +37,8 @@ export default function ThemesScreen() {
   const update = useUpdateSettings();
   const readiness = useHome().data?.countdown?.readiness ?? 0;
   const s = settings.data;
+  const dataUsed = useDataUsage((u) => u.bytes);
+  const online = useOnline();
   const chosen = THEMES.find((t) => t.key === s?.accent) ?? THEMES[0];
   const swatch = (key: Theme) => (key === 'ink' ? theme.text : Accent[key]);
 
@@ -41,6 +47,7 @@ export default function ThemesScreen() {
       <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
       <HighlightText highlight="yours">Make it yours</HighlightText>
       {settings.isError || update.isError ? <Banner message={friendlyError(settings.error ?? update.error)} /> : null}
+      {!online && !s ? <NeedsInternet what="Your themes" /> : null}
 
       <HeroCard style={styles.preview}>
         <ProgressRing size={96} strokeWidth={8} value={readiness} label={`${Math.round(readiness * 100)}%`} />
@@ -80,7 +87,7 @@ export default function ThemesScreen() {
         />
         <ToggleRow
           label="Low-data mode"
-          helper="No page images in citations: you see the page text instead"
+          helper={`No page images or background downloads. This week: ${size(dataUsed)} used`}
           value={s?.low_data_mode ?? false}
           onChange={(v) => update.mutate({ low_data_mode: v })}
         />
