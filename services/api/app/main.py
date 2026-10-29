@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import (
+    auth_bridge,
     chat,
     courses,
     documents,
@@ -133,6 +134,7 @@ def create_app() -> FastAPI:
         async with db.get_pool().connection() as conn:
             return await job_metrics(conn)
 
+    app.include_router(auth_bridge.router)
     app.include_router(router)
     app.include_router(courses.router)
     app.include_router(documents.router)

@@ -149,8 +149,8 @@ def test_a_paper_style_allows_its_own_theory_marks():
             {"criterion": "Items are added and removed at the top", "marks": 5},
             {"criterion": "It follows Last In, First Out", "marks": 5},
         ],
-        "answer": "A stack is a linear data structure where items are added and removed at the top, "
-        "so it follows Last In, First Out.",
+        "answer": "A stack is a linear data structure where items are added and removed at the "
+        "top, so it follows Last In, First Out.",
         "explanation": "From the notes on stacks.",
         "pages": [3],
     }
