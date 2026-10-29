@@ -215,7 +215,7 @@ def fake(client, monkeypatch):
     ]
 
     async def ready_document(conn, user_id, document_id):
-        return doc if document_id == DOC else None
+        return doc | {"course_id": state.get("doc_course")} if document_id == DOC else None
 
     async def topics_for(conn, sf):
         return topics
@@ -223,7 +223,9 @@ def fake(client, monkeypatch):
     async def find_set(conn, key):
         return state["sets"].get(key)
 
-    async def create_set(conn, sf, key, topic_ids, types, difficulty, count, variant):
+    async def create_set(
+        conn, sf, key, topic_ids, types, difficulty, count, variant, style_id=None
+    ):
         state["sets"][key] = {
             "id": uuid.uuid4(),
             "status": "pending",

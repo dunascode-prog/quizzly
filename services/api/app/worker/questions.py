@@ -13,7 +13,7 @@ from psycopg import AsyncConnection
 
 from app.core.config import get_settings
 from app.llm.gateway import AllProvidersBusy
-from app.rag import embed, text
+from app.rag import embed, style, text
 from app.rag import questions as q
 from app.worker import ingest, queue
 
@@ -52,10 +52,17 @@ async def _chunk_pages(conn: AsyncConnection, source_file_id: UUID) -> list[tupl
 
 
 async def _ask(
-    batch: list[q.TopicSource], types: list[str], difficulty: str, template: str
+    batch: list[q.TopicSource],
+    types: list[str],
+    difficulty: str,
+    template: str,
+    extra: str = "",
+    max_marks: int = 10,
 ) -> list[q.Draft]:
     """One LLM call for a batch of topics; validated questions, at most each topic's count."""
     prompt = q.build_prompt(template, batch, types, difficulty, over_ask=OVER_ASK)
+    if extra:  # a past paper's format (FR-QGEN-09); never its questions
+        prompt += "\n\n" + extra
     completion = await ingest.gateway().complete(
         "questions",
         [{"role": "user", "content": prompt}],
@@ -70,7 +77,7 @@ async def _ask(
         d = (
             q.validate_flashcard(item, by_label)
             if types == [q.FLASHCARD]
-            else q.validate(item, by_label, types, difficulty)
+            else q.validate(item, by_label, types, difficulty, max_marks)
         )
         if d is not None and sum(x.topic_id == d.topic_id for x in drafts) < wanted[d.topic_id]:
             drafts.append(d)
@@ -98,7 +105,7 @@ async def generate_questions(conn: AsyncConnection, job: dict) -> None:
     qs = await (
         await conn.execute(
             "select id, source_file_id, topic_ids, question_types::text[] as types, "
-            "difficulty::text as difficulty, requested_count, status::text as status "
+            "difficulty::text as difficulty, requested_count, status::text as status, style_id "
             "from question_sets where id = %s",
             (set_id,),
         )
@@ -154,6 +161,18 @@ async def generate_questions(conn: AsyncConnection, job: dict) -> None:
         template = (q.FLASHCARD_PROMPT_PATH if flashcards else q.PROMPT_PATH).read_text(
             encoding="utf-8"
         )
+        extra = ""
+        max_marks = 10
+        if qs["style_id"]:
+            paper = await (
+                await conn.execute(
+                    "select style, year from paper_styles where id = %s and status = 'ready'",
+                    (qs["style_id"],),
+                )
+            ).fetchone()
+            if paper and paper["style"]:
+                extra = style.guidance(paper["style"], paper["year"])
+                max_marks = style.max_theory_marks(paper["style"])
 
         drafts: list[q.Draft] = []
         vectors: list[list[float]] = []
@@ -174,7 +193,7 @@ async def generate_questions(conn: AsyncConnection, job: dict) -> None:
             for i, batch in enumerate(
                 groups, start=1
             ):  # one call at a time: free tiers limit bursts
-                drafts += await _ask(batch, types, qs["difficulty"], template)
+                drafts += await _ask(batch, types, qs["difficulty"], template, extra, max_marks)
                 # The first round is most of the work (10–80%); top-ups are short (85%, 95%).
                 if round_ == 0:
                     await queue.set_progress(conn, job["id"], 10 + round(70 * i / len(groups)))

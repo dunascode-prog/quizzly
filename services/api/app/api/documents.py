@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
@@ -12,6 +12,7 @@ from app.worker import cleanup, queue
 router = APIRouter(tags=["documents"])
 
 READ_ONLY = "This course was shared with you, so its notes can't be changed."
+PAST_PAPER_COURSE = "Pick the course this past paper is for."
 
 
 class DocumentOut(BaseModel):
@@ -30,6 +31,9 @@ class DocumentOut(BaseModel):
     created_at: datetime
     # A document in a course shared with the student: study only (FR-DOC-12).
     read_only: bool = False
+    # "past_paper": only its style is used, for quizzes; never studied or shared (FR-QGEN-09).
+    kind: str = "notes"
+    paper_year: str | None = None
 
     @classmethod
     def of(cls, row: dict) -> "DocumentOut":
@@ -55,6 +59,9 @@ class DocumentCreate(BaseModel):
     course_id: UUID | None = None
     # 1–30 photos combined into one document, in order (FR-DOC-01).
     image_count: int | None = Field(default=None, ge=1, le=documents.MAX_IMAGES)
+    # A past question paper for one of the student's courses (FR-QGEN-09, screen 26a).
+    kind: Literal["notes", "past_paper"] = "notes"
+    paper_year: Annotated[str, Field(pattern=r"^(\d{4}|older)$")] | None = None
 
 
 class DocumentUpdate(BaseModel):
@@ -149,6 +156,8 @@ async def create_document(
             status.HTTP_422_UNPROCESSABLE_CONTENT, documents.FAILURE_MESSAGES["too_large"]
         )
     await _check_course(conn, user.id, body.course_id)
+    if body.kind == "past_paper" and body.course_id is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, PAST_PAPER_COURSE)
     limit = settings.daily_uploads
     if await usage.take(conn, user.id, "upload", limit, settings.timezone) is None:
         raise HTTPException(
@@ -156,7 +165,13 @@ async def create_document(
             f"You've used today's {limit} uploads. Resets at 12:00 AM.",
         )
     doc = await documents.create_document(
-        conn, user.id, body.filename.strip(), body.course_id, body.image_count
+        conn,
+        user.id,
+        body.filename.strip(),
+        body.course_id,
+        body.image_count,
+        body.kind,
+        body.paper_year if body.kind == "past_paper" else None,
     )
     urls = await _upload_urls(conn, storage, doc, user.id)
     return UploadOut(document=DocumentOut.of(doc), upload_urls=urls)

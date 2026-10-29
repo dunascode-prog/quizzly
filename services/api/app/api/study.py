@@ -40,6 +40,7 @@ class TopicMerge(BaseModel):
 class OutlineDocument(BaseModel):
     id: UUID
     title: str
+    course_id: UUID | None = None
     course_code: str | None
     page_count: int | None
     topic_count: int

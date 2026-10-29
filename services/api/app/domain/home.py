@@ -43,7 +43,7 @@ select distinct on (qn.id) qn.id, qn.topic_id, qn.question_set_id, d.id as docum
 from questions qn
 join question_sets s on s.id = qn.question_set_id
 join documents d on d.source_file_id = s.source_file_id
-where d.status = 'ready' and d.id in (select readable_documents(%(user)s))
+where d.status = 'ready' and d.kind = 'notes' and d.id in (select readable_documents(%(user)s))
   and not qn.hidden and qn.type::text = any(%(types)s)
 """
 
@@ -202,7 +202,7 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
     """FR-HOME-05: up to 3 rows (about 15 min)."""
     has_notes = await (
         await conn.execute(
-            "select 1 from documents d where d.status = 'ready' "
+            "select 1 from documents d where d.status = 'ready' and d.kind = 'notes' "
             "and d.id in (select readable_documents(%s)) limit 1",
             (user_id,),
         )
@@ -224,7 +224,7 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
             join topics t on t.id = m.topic_id
             left join topic_overrides o on o.topic_id = t.id and o.user_id = m.user_id
             join documents d on d.source_file_id = t.source_file_id and d.status = 'ready'
-              and d.id in (select readable_documents(m.user_id))
+              and d.kind = 'notes' and d.id in (select readable_documents(m.user_id))
             where m.user_id = %s and m.answered >= %s and m.mastery < %s
             order by m.mastery, m.topic_id, d.created_at desc
             limit 1
@@ -251,7 +251,8 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
             from documents d
             join topics t on t.source_file_id = d.source_file_id and t.parent_id is null
             left join topic_overrides o on o.topic_id = t.id and o.user_id = %(u)s
-            where d.status = 'ready' and d.id in (select readable_documents(%(u)s))
+            where d.status = 'ready' and d.kind = 'notes'
+              and d.id in (select readable_documents(%(u)s))
               and not exists (select 1 from topic_reads r where r.user_id = %(u)s
                               and r.topic_id = t.id)
               and not exists (select 1 from topic_mastery m where m.user_id = %(u)s

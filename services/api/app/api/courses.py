@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import courses, documents, offline, sharing
+from app.domain import courses, documents, offline, sharing, styles
+from app.rag import style as paper_style
 from app.worker import cleanup
 
 router = APIRouter(prefix="/v1/courses", tags=["courses"])
@@ -183,3 +184,41 @@ async def offline_manifest(course_id: UUID, user: User, conn: Conn) -> OfflineMa
     if data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
     return OfflineManifest(**data)
+
+
+class PaperStyleOut(BaseModel):
+    """A past paper's style for quiz setup (FR-QGEN-09, screen 26b). Only its format, never its
+    questions."""
+
+    id: UUID
+    document_id: UUID
+    title: str
+    year: str | None
+    # pending/generating while it's being learnt; ready or failed after.
+    status: str
+    types: dict[str, float] = {}
+    marks: dict[str, int] = {}
+    # The question types a quiz in this style uses ("Matches the paper: Theory, Short answer").
+    question_types: list[str] = []
+
+
+@router.get("/{course_id}/paper-styles")
+async def paper_styles(course_id: UUID, user: User, conn: Conn) -> list[PaperStyleOut]:
+    """The student's own past papers for this course; nobody else's, even in a shared course."""
+    rows = await styles.list_styles(conn, user.id, course_id)
+    out = []
+    for r in rows:
+        found = r["style"] or {}
+        out.append(
+            PaperStyleOut(
+                id=r["id"],
+                document_id=r["document_id"],
+                title=r["title"],
+                year=r["year"],
+                status=r["status"],
+                types=found.get("types", {}),
+                marks=found.get("marks", {}),
+                question_types=paper_style.question_types(found) if found.get("types") else [],
+            )
+        )
+    return out

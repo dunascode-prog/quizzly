@@ -93,19 +93,22 @@ def cache_key(
     difficulty: str,
     count: int,
     variant: int,
+    style_id: str | None = None,
 ) -> str:
-    """Same file, topics, types, difficulty, count and prompt version → same set (FR-QGEN-07)."""
-    raw = json.dumps(
-        [
-            source_file_id,
-            sorted(topic_ids),
-            sorted(types),
-            difficulty,
-            count,
-            variant,
-            prompt_version(types),
-        ]
-    )
+    """Same file, topics, types, difficulty, count and prompt version → same set (FR-QGEN-07).
+    A past-paper style (FR-QGEN-09) makes its own set."""
+    parts: list = [
+        source_file_id,
+        sorted(topic_ids),
+        sorted(types),
+        difficulty,
+        count,
+        variant,
+        prompt_version(types),
+    ]
+    if style_id:
+        parts.append(style_id)
+    raw = json.dumps(parts)
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -240,8 +243,10 @@ def validate(
     topics_by_label: dict[str, TopicSource],
     allowed_types: list[str],
     default_difficulty: str,
+    max_theory_marks: int = 10,
 ) -> Draft | None:
-    """A Draft if the item passes every check, else None (it's dropped and topped up later)."""
+    """A Draft if the item passes every check, else None (it's dropped and topped up later).
+    A past paper's style may allow bigger theory questions (FR-QGEN-09)."""
     kind = item.get("type")
     if kind not in allowed_types:
         return None
@@ -307,7 +312,7 @@ def validate(
         except (KeyError, TypeError, ValueError):
             return None
         # FR-QGEN-06: the rubric's marks add up to the question's total.
-        if not 4 <= marks <= 10 or not 2 <= len(rubric) <= 5 or len(answer) < 40:
+        if not 4 <= marks <= max_theory_marks or not 2 <= len(rubric) <= 5 or len(answer) < 40:
             return None
         if any(not r["criterion"] or r["marks"] < 1 for r in rubric):
             return None

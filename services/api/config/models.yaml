@@ -38,4 +38,5 @@ tasks:
   marking: fast
   outline: quality
   explanation: quality
+  style: quality       # past-paper style (FR-QGEN-09)
   questions: questions

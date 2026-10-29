@@ -128,7 +128,9 @@ def fake(client, monkeypatch):
     async def is_course_member(conn, user_id, course_id):
         return course_id in state.get("joined", set())
 
-    async def create_document(conn, user_id, filename, course_id, image_count=None):
+    async def create_document(
+        conn, user_id, filename, course_id, image_count=None, kind="notes", paper_year=None
+    ):
         doc_id = uuid.uuid4()
         ext = None if image_count else "." + filename.rsplit(".", 1)[-1].lower()
         d = doc_row(

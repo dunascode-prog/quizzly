@@ -42,7 +42,7 @@ async def manifest(conn: AsyncConnection, user_id: UUID, course_id: UUID) -> dic
                      as bytes
             from documents d
             where d.course_id = %(c)s and d.status = 'ready' and d.deleted_at is null
-              and d.id in (select readable_documents(%(u)s))
+              and d.kind = 'notes' and d.id in (select readable_documents(%(u)s))
             order by d.created_at
             """,
             params,
