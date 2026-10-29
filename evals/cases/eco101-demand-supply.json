@@ -1,0 +1,74 @@
+{
+  "course": "ECO 101 Principles of Economics",
+  "pages": [
+    [
+      "ECO 101: Principles of Economics",
+      "Week 3: Demand and Supply"
+    ],
+    [
+      "The law of demand",
+      "Other things being equal, as the price of a good rises, the quantity demanded falls.",
+      "The demand curve slopes downward from left to right."
+    ],
+    [
+      "Determinants of demand",
+      "Income, the prices of related goods, tastes and expectations shift the demand curve.",
+      "Substitutes: a rise in the price of one raises demand for the other.",
+      "Complements are goods used together."
+    ],
+    [
+      "The law of supply",
+      "As price rises, the quantity supplied rises.",
+      "The supply curve slopes upward from left to right.",
+      "Cost of production and technology shift supply."
+    ],
+    [
+      "Market equilibrium",
+      "Equilibrium price is where quantity demanded equals quantity supplied.",
+      "Above equilibrium there is a surplus; below it there is a shortage."
+    ],
+    [
+      "Price controls",
+      "A price ceiling is a legal maximum price, often causing shortages.",
+      "A price floor is a legal minimum price, such as a minimum wage."
+    ]
+  ],
+  "expected": {
+    "topics": [
+      4,
+      6
+    ],
+    "topic_keywords": [
+      "demand",
+      "supply",
+      "equilibrium"
+    ],
+    "must_cover": [
+      [
+        "quantity demanded",
+        "law of demand",
+        "downward"
+      ],
+      [
+        "substitutes",
+        "substitute",
+        "complements",
+        "complement"
+      ],
+      [
+        "supply curve",
+        "quantity supplied",
+        "upward"
+      ],
+      [
+        "equilibrium",
+        "surplus",
+        "shortage"
+      ],
+      [
+        "ceiling",
+        "floor"
+      ]
+    ]
+  }
+}

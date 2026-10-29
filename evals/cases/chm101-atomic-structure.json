@@ -1,0 +1,63 @@
+{
+  "course": "CHM 101 General Chemistry",
+  "pages": [
+    [
+      "CHM 101: General Chemistry",
+      "Lecture 2: Atomic Structure"
+    ],
+    [
+      "Subatomic particles",
+      "Protons are positive and found in the nucleus.",
+      "Neutrons have no charge and are also in the nucleus.",
+      "Electrons are negative and move around the nucleus."
+    ],
+    [
+      "Atomic number and mass number",
+      "The atomic number is the number of protons.",
+      "The mass number is the number of protons plus neutrons."
+    ],
+    [
+      "Isotopes",
+      "Isotopes are atoms of the same element with different numbers of neutrons.",
+      "Carbon-12 and carbon-14 are isotopes of carbon."
+    ],
+    [
+      "Electron configuration",
+      "Electrons fill shells in order of increasing energy.",
+      "The first shell holds at most two electrons and the second shell at most eight."
+    ]
+  ],
+  "expected": {
+    "topics": [
+      3,
+      5
+    ],
+    "topic_keywords": [
+      "subatomic",
+      "isotopes",
+      "electron"
+    ],
+    "must_cover": [
+      [
+        "protons",
+        "proton"
+      ],
+      [
+        "neutrons",
+        "neutron"
+      ],
+      [
+        "atomic number",
+        "mass number"
+      ],
+      [
+        "isotopes",
+        "isotope"
+      ],
+      [
+        "shell",
+        "electron configuration"
+      ]
+    ]
+  }
+}

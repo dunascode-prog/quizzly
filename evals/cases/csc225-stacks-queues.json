@@ -1,0 +1,73 @@
+{
+  "course": "CSC 225 Data Structures",
+  "pages": [
+    [
+      "CSC 225: Data Structures",
+      "Lecture 4: Stacks and Queues"
+    ],
+    [
+      "What is a stack?",
+      "A stack is a linear data structure.",
+      "Items are added and removed at one end, called the top.",
+      "It follows Last In, First Out (LIFO)."
+    ],
+    [
+      "Stack operations",
+      "push(x) adds x to the top.",
+      "pop() removes and returns the top item.",
+      "peek() returns the top item without removing it.",
+      "Popping an empty stack is an error called underflow."
+    ],
+    [
+      "Applications of stacks",
+      "Function calls are tracked on a call stack.",
+      "Undo in a text editor uses a stack of changes.",
+      "Balanced brackets are checked with a stack."
+    ],
+    [
+      "What is a queue?",
+      "A queue is a linear data structure.",
+      "Items join at the rear and leave from the front.",
+      "It follows First In, First Out (FIFO)."
+    ],
+    [
+      "Queue operations",
+      "enqueue(x) adds x at the rear.",
+      "dequeue() removes and returns the front item.",
+      "A circular array reuses freed slots: rear = (rear + 1) mod n."
+    ]
+  ],
+  "expected": {
+    "topics": [
+      3,
+      6
+    ],
+    "topic_keywords": [
+      "stack",
+      "queue",
+      "operations"
+    ],
+    "must_cover": [
+      [
+        "LIFO",
+        "last in first out",
+        "last in, first out"
+      ],
+      [
+        "FIFO",
+        "first in first out",
+        "first in, first out"
+      ],
+      "push",
+      [
+        "pop",
+        "underflow"
+      ],
+      [
+        "enqueue",
+        "dequeue",
+        "circular"
+      ]
+    ]
+  }
+}

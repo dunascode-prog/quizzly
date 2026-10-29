@@ -41,3 +41,7 @@ supabase/.temp/
 
 # Eval data (real course files are private)
 evals/data/
+
+# Evaluation reports (written by evals/run.py)
+evals/report.json
+evals/report.md
