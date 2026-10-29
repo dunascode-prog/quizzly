@@ -1,0 +1,42 @@
+name: Rollback
+
+# Manual escape hatch for the API and worker. Deploys already roll back by themselves when their
+# checks fail; use this when a problem shows up later. App updates: see docs/CI_CD.md §5.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [staging, production]
+        required: true
+      image:
+        description: "Image to run, e.g. ghcr.io/dunascode-prog/quizzly-api:sha-1a2b3c4d5e6f. Blank: the one before the current."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.API_URL }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/remote-deploy
+        with:
+          environment: ${{ inputs.environment }}
+          target: ${{ inputs.image || 'rollback' }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          user: ${{ secrets.DEPLOY_USER }}
+          ssh-key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          registry-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Smoke test through the public URL
+        run: bash infra/smoke.sh "${{ vars.API_URL }}"
