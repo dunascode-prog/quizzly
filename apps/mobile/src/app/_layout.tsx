@@ -69,17 +69,23 @@ function RootNavigator() {
 
   if (loading) return null;
 
+  // Where each guarded group sends someone it no longer admits (Expo Router 58 otherwise falls back
+  // to the first screen that's still open, which was the legal page): after signing in, to
+  // onboarding or Today; after signing out, to sign-in.
+  const home = onboarded ? '/' : '/onboarding';
+  const start = signedIn ? home : '/sign-in';
+
   return (
     <>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
         {/* FR-PROF-01: signed-in students can't reach the tabs until onboarding is done. */}
-        <Stack.Protected guard={!signedIn}>
+        <Stack.Protected guard={!signedIn} redirectTo={home}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
-        <Stack.Protected guard={signedIn && !onboarded}>
+        <Stack.Protected guard={signedIn && !onboarded} redirectTo={start}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
-        <Stack.Protected guard={signedIn && onboarded}>
+        <Stack.Protected guard={signedIn && onboarded} redirectTo={start}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="course/[id]/index" />
           <Stack.Screen name="document/[id]/index" />
