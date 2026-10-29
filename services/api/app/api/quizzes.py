@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 from app.api.deps import AppSettings, Conn, User
-from app.domain import quizzes, study, topics, usage
+from app.domain import quizzes, study, styles, topics, usage
 from app.rag import questions as q
 from app.worker import marking as marking_worker
 from app.worker import queue
@@ -14,6 +14,7 @@ from app.worker import queue
 router = APIRouter(tags=["quizzes"])
 
 ID_IN_USE = "That ID is already used by something else. Start again."
+STYLE_NOT_READY = "We're still learning that past paper's style. Try again in a minute."
 
 QuestionType = Literal["mcq", "true_false", "fill_blank", "short_answer", "theory"]
 
@@ -29,6 +30,8 @@ class QuizCreate(BaseModel):
     new_questions: bool = False
     # Exam mode only: unanswered questions score zero when time runs out (FR-QUIZ-02).
     time_limit_min: int | None = Field(default=None, ge=1, le=180)
+    # Copy the format of one of the student's past papers for this course (FR-QGEN-09).
+    style_id: UUID | None = None
 
 
 class QuestionOut(BaseModel):
@@ -227,13 +230,22 @@ async def _question_set(
     difficulty: str,
     count: int,
     new_questions: bool = False,
+    style_id: UUID | None = None,
 ) -> dict:
     """The cached set for these choices (FR-QGEN-07), or a new one from today's allowance; queues
     generation when it isn't written yet."""
     sf = str(source_file_id)
 
     def key(variant: int) -> str:
-        return q.cache_key(sf, [str(t) for t in topic_ids], types, difficulty, count, variant)
+        return q.cache_key(
+            sf,
+            [str(t) for t in topic_ids],
+            types,
+            difficulty,
+            count,
+            variant,
+            str(style_id) if style_id else None,
+        )
 
     variant = 0
     existing = await quizzes.find_set(conn, key(0))
@@ -249,7 +261,15 @@ async def _question_set(
                 f"You've used today's {limit} quiz generations. Resets at 12:00 AM.",
             )
         existing = await quizzes.create_set(
-            conn, source_file_id, key(variant), topic_ids, types, difficulty, count, variant
+            conn,
+            source_file_id,
+            key(variant),
+            topic_ids,
+            types,
+            difficulty,
+            count,
+            variant,
+            style_id,
         )
     elif existing["status"] == "failed":
         await quizzes.retry_set(conn, existing["id"])  # our failure: retry without using another
@@ -281,6 +301,13 @@ async def create_quiz(
     if body.topic_ids and len(chosen) != len(set(body.topic_ids)):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown topic")
     topic_ids = sorted(t["id"] for t in chosen)
+    if body.style_id:
+        # Only the student's own, finished style for this document's course.
+        found = await styles.get_style(conn, user.id, body.style_id)
+        if found is None or found["course_id"] != doc["course_id"]:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Past-paper style not found")
+        if found["status"] != "ready":
+            raise HTTPException(status.HTTP_409_CONFLICT, STYLE_NOT_READY)
     existing = await _question_set(
         conn,
         user.id,
@@ -291,6 +318,7 @@ async def create_quiz(
         body.difficulty,
         body.count,
         body.new_questions,
+        body.style_id,
     )
     # The student's own name for the topic, or for a merged topic its parts (FR-TOP-03).
     mine = await topics.outline(conn, user.id, doc["source_file_id"], all_topics)

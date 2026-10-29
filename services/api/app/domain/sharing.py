@@ -145,14 +145,17 @@ async def _counts(conn: AsyncConnection, course_id: UUID) -> dict[str, int]:
             select count(distinct d.id) as notes,
                    (select count(*) from topics t where t.parent_id is null and t.source_file_id
                       in (select source_file_id from documents where course_id = %(c)s
-                          and status = 'ready' and deleted_at is null)) as topics,
+                          and status = 'ready' and deleted_at is null
+                          and kind = 'notes')) as topics,
                    (select count(*) from questions q
                     join question_sets s on s.id = q.question_set_id
                     where not q.hidden and s.source_file_id
                       in (select source_file_id from documents where course_id = %(c)s
-                          and status = 'ready' and deleted_at is null)) as questions
+                          and status = 'ready' and deleted_at is null
+                          and kind = 'notes')) as questions
             from documents d
             where d.course_id = %(c)s and d.status = 'ready' and d.deleted_at is null
+              and d.kind = 'notes'
             """,
             {"c": course_id},
         )

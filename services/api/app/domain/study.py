@@ -11,12 +11,13 @@ from uuid import UUID
 from psycopg import AsyncConnection
 
 _DOC = """
-select d.id, d.title, d.source_file_id, c.code as course_code, sf.page_count,
+select d.id, d.title, d.source_file_id, d.course_id, c.code as course_code, sf.page_count,
        sf.low_ocr_pages, d.user_id <> %(user)s as shared
 from documents d
 join source_files sf on sf.id = d.source_file_id and sf.status = 'ready'
 left join courses c on c.id = d.course_id
 where d.id = %(doc)s and d.status = 'ready' and can_read_document(d.id, %(user)s)
+  and d.kind = 'notes'  -- a past paper is never studied from or used as answers (FR-QGEN-09)
 """
 
 

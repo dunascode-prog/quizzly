@@ -87,14 +87,14 @@ async def _fail(
             await conn.execute(
                 "update documents set status = 'failed', failure_reason = %s "
                 "where source_file_id = %s and status in ('uploaded', 'processing') "
-                "returning id, user_id, title",
+                "returning id, user_id, title, kind::text as kind",
                 (reason, source_file_id),
             )
         ).fetchall()
     failed += await (
         await conn.execute(
             "update documents set status = 'failed', failure_reason = %s where id = %s "
-            "and status <> 'failed' returning id, user_id, title",
+            "and status <> 'failed' returning id, user_id, title, kind::text as kind",
             (reason, document_id),
         )
     ).fetchall()
@@ -106,7 +106,9 @@ async def _tell(conn: AsyncConnection, docs: list[dict], failure: str | None = N
     """FR-DOC-11: an inbox row (toast in the app, push in the background) per document."""
     for d in docs:
         target = {"route": "/document/[id]", "params": {"id": str(d["id"])}}
-        if failure is None:
+        if failure is None and d.get("kind") == "past_paper":
+            await _learn_style(conn, d)
+        elif failure is None:
             await sharing.document_ready_in_shared_course(conn, d["id"])  # FR-SHARE-06
             await notifications.notify(
                 conn,
@@ -128,6 +130,25 @@ async def _tell(conn: AsyncConnection, docs: list[dict], failure: str | None = N
                 target,
                 dedupe_key=f"document:{d['id']}",
             )
+
+
+async def _learn_style(conn: AsyncConnection, d: dict) -> None:
+    """A past paper is ready: learn its style (FR-QGEN-09). It's never shared with coursemates."""
+    row = await (
+        await conn.execute(
+            "insert into paper_styles (user_id, course_id, document_id, year) "
+            "select user_id, course_id, id, paper_year from documents where id = %s "
+            "on conflict (document_id) do update set status = 'pending' returning id",
+            (d["id"],),
+        )
+    ).fetchone()
+    await queue.enqueue(
+        conn,
+        "extract_style",
+        {"style_id": str(row["id"])},
+        user_id=d["user_id"],
+        dedupe_key=f"style:{row['id']}",
+    )
 
 
 async def _claim_source_file(
@@ -379,7 +400,7 @@ async def _link_ready(
     ready = await (
         await conn.execute(
             "update documents set source_file_id = %s, status = 'ready', failure_reason = null "
-            "where id = %s returning id, user_id, title",
+            "where id = %s returning id, user_id, title, kind::text as kind",
             (source_file_id, document_id),
         )
     ).fetchall()
@@ -492,7 +513,7 @@ async def _save(
             await conn.execute(
                 "update documents set status = 'ready', failure_reason = null "
                 "where source_file_id = %s and status in ('uploaded', 'processing') "
-                "returning id, user_id, title",
+                "returning id, user_id, title, kind::text as kind",
                 (source_file_id,),
             )
         ).fetchall()

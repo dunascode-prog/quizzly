@@ -103,7 +103,31 @@ export type QuizSettings = {
   new_questions?: boolean;
   /** Exam mode only (FR-QUIZ-02). */
   time_limit_min?: number;
+  /** Copy one of the student's past papers for this course (FR-QGEN-09). */
+  style_id?: string;
 };
+
+/** A past paper's style: its format only, never its questions (FR-QGEN-09, screen 26b). */
+export type PaperStyle = {
+  id: string;
+  document_id: string;
+  title: string;
+  year: string | null;
+  status: 'pending' | 'generating' | 'ready' | 'failed';
+  types: Partial<Record<QuestionType, number>>;
+  marks: Partial<Record<QuestionType, number>>;
+  question_types: QuestionType[];
+};
+
+/** The student's own past-paper styles for a course; polls while one is being learnt. */
+export function usePaperStyles(courseId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['paper-styles', courseId],
+    queryFn: () => apiFetch<PaperStyle[]>(`/v1/courses/${courseId}/paper-styles`),
+    enabled: useSignedIn() && Boolean(courseId),
+    refetchInterval: (q) => (q.state.data?.some((s) => s.status === 'pending' || s.status === 'generating') ? 4000 : false),
+  });
+}
 
 function useSignedIn() {
   return Boolean(useAuth((s) => s.session));

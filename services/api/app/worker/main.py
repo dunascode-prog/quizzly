@@ -36,6 +36,7 @@ from app.worker import (
     queue,
     reminders,
     sharing,
+    style,
 )
 
 log = logging.getLogger("quizzly.worker")
@@ -53,6 +54,7 @@ HANDLERS: dict[str, Handler] = {
     "send_push": push.send_push,
     "fan_out_share_update": sharing.fan_out_share_update,
     "credit_referral": invites.credit_referral,
+    "extract_style": style.extract_style,
 }
 
 POLL_INTERVAL = 2.0
