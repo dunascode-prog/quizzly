@@ -11,6 +11,7 @@ from app.core.db import get_conn
 from app.core.storage import Storage
 
 _storage: Storage | None = None
+_avatars: Storage | None = None
 
 
 def get_storage(settings: Annotated[Settings, Depends(get_settings)]) -> Storage:
@@ -21,7 +22,16 @@ def get_storage(settings: Annotated[Settings, Depends(get_settings)]) -> Storage
     return _storage
 
 
+def get_avatar_storage(settings: Annotated[Settings, Depends(get_settings)]) -> Storage:
+    """The private avatars bucket (FR-PROF-04)."""
+    global _avatars
+    if _avatars is None:
+        _avatars = Storage(settings, bucket=settings.avatars_bucket)
+    return _avatars
+
+
 User = Annotated[CurrentUser, Depends(get_current_user)]
 Conn = Annotated[AsyncConnection, Depends(get_conn)]
 AppSettings = Annotated[Settings, Depends(get_settings)]
 StorageDep = Annotated[Storage, Depends(get_storage)]
+AvatarStorageDep = Annotated[Storage, Depends(get_avatar_storage)]

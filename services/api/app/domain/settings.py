@@ -87,6 +87,8 @@ async def update_notification_settings(
         fields["types"] = json.dumps(current["types"] | fields["types"])
     allowed = {"daily_reminder", "daily_reminder_time", "quiet_start", "quiet_end", "types"}
     fields = {k: v for k, v in fields.items() if k in allowed}
+    if "daily_reminder_time" in fields:
+        fields["daily_reminder_custom"] = True  # their own choice now beats practice times
     if fields:
         sets = ", ".join(f"{k} = %s" for k in fields)
         await conn.execute(
