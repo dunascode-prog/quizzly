@@ -13,6 +13,7 @@ import { Toast } from '@/components/ui/toast';
 import { ProfileLoadError } from '@/components/profile-load-error';
 import { useTheme } from '@/hooks/use-theme';
 import { startAuthListener, useAuth } from '@/lib/auth';
+import { useApplyPendingCode, useLinkCapture } from '@/lib/links';
 import { startNetworkListener } from '@/lib/network';
 import { useNotificationsChannel, usePushRouting } from '@/lib/notifications';
 import { flush, startOutbox } from '@/lib/outbox';
@@ -48,6 +49,9 @@ function RootNavigator() {
   const signedIn = Boolean(session);
   const loading = (!fontsLoaded && !fontError) || !ready || (signedIn && me.isPending);
   const onboarded = me.data?.onboarded ?? false;
+  // Invite and share links survive sign-up and onboarding (FR-AUTH-07).
+  useLinkCapture();
+  useApplyPendingCode(signedIn && onboarded);
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync();
@@ -89,6 +93,8 @@ function RootNavigator() {
           <Stack.Screen name="course/[id]/members" />
           <Stack.Screen name="shares/[memberId]" />
           <Stack.Screen name="c/[code]" />
+          <Stack.Screen name="i/[code]" />
+          <Stack.Screen name="invite" />
           <Stack.Screen name="settings/privacy" />
           <Stack.Screen name="quiz/[id]/review" />
           <Stack.Screen name="upload" options={SHEET} />

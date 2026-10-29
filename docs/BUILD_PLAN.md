@@ -53,7 +53,7 @@ From the v0.1 code review. Each task needs a regression test.
 - [x] **D2. Daily 5** play (reuses `play.tsx`) and **15** done screen with `StudyGrid`.
 - [x] **D3. Realtime notifications** (FR-NOTIF-02, 04, 07): `useNotificationsChannel` (foreground only, `AppState`), global `Toast`, bell badge, **22** inbox with filters and inline actions, catch-up fetch, push registration and tap routing with `expo-notifications`.
 - [x] **D4. Sharing UI**: **19** share sheet (`PrivacyList`, `MateChip`, `LinkCard`), members screen, **20** join screen, joined-course states in 03/05/07/08 (tag, read-only, quote view), leave/report, privacy and blocking settings.
-- [ ] **D5. Deep links and invites**: `app.json` Android `intentFilters` (`autoVerify`) for `INVITE_DOMAIN` paths `/i/*`, `/c/*`; routes `i/[code]`, `c/[code]`; pending code kept in secure storage through sign-up (FR-AUTH-07); Play Install Referrer on first launch (`react-native-device-info` `getInstallReferrer()`, development build); **23** invite screen with QR (`react-native-qrcode-svg`).
+- [x] **D5. Deep links and invites**: `app.json` Android `intentFilters` (`autoVerify`) for `INVITE_DOMAIN` paths `/i/*`, `/c/*`; routes `i/[code]`, `c/[code]`; pending code kept in secure storage through sign-up (FR-AUTH-07); Play Install Referrer on first launch (`react-native-device-info` `getInstallReferrer()`, development build); **23** invite screen with QR (`react-native-qrcode-svg`).
 - [ ] **D6. Website + link routes** (`apps/web`, see [WEB.md](WEB.md)): Next.js on Cloudflare Pages at `INVITE_DOMAIN`. Landing page (31) from the real screenshots, `/i/{code}` and `/c/{code}` routing (FR-INV-02) with the landing page **24**, `/.well-known/assetlinks.json`, iPhone waitlist with double opt-in, privacy/terms/copyright pages.
 - [ ] **D7. Celebrations** (16), **Recap** (17, `react-native-view-shot` + `expo-sharing`), **Themes** (18, accent applied through a theme context), **Reminders** (21).
 - [x] **D8a. Original page viewer** (screen 29, FR-DOC-10, P0 — done in A15, #41; check it against the new 29 image in D8).
@@ -74,6 +74,6 @@ From the v0.1 code review. Each task needs a regression test.
 
 | Question | Default to build with |
 |---|---|
-| Invite/share domain (PRD Q4) | `INVITE_DOMAIN` env var; placeholder `quizzly.example` in dev |
+| Invite/share domain (PRD Q4) | `INVITE_DOMAIN` env var; placeholder `quizzly.app` (the app, the API and apps/web use the same default) |
 | Paid plan contents (PRD Q3) | Build everything free; keep limits and unlocks in config |
 | iOS timing | iPhone users see the waitlist on the landing page |

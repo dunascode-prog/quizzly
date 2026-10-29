@@ -101,6 +101,8 @@ export function openTarget(n: Pick<Notification, 'id' | 'target' | 'read_at'>) {
       return router.push({ pathname: '/document/[id]', params: { id: p.id } });
     case '/course/[id]':
       return router.push({ pathname: '/course/[id]', params: { id: p.id } });
+    case '/invite':
+      return router.push('/invite');
     case '/shares/[memberId]':
       return router.push({ pathname: '/shares/[memberId]', params: { memberId: p.memberId } });
     case '/course/[id]/members':
