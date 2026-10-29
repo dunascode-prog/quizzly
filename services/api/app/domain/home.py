@@ -341,6 +341,153 @@ async def mark_achievements_seen(conn: AsyncConnection, user_id: UUID, ids: list
     )
 
 
+# --- Celebration (FR-HAB-05) ---------------------------------------------------------------------
+
+
+def _fraction_mastery(rows: list[dict]) -> tuple[float, int]:
+    fractions = [
+        f
+        for r in rows
+        if (f := progress.answer_fraction(r["score"], r["is_correct"], r["marks"])) is not None
+    ]
+    return progress.topic_mastery(fractions), len(fractions)
+
+
+async def _course_readiness(
+    conn: AsyncConnection, user_id: UUID, course_id: UUID | None, monday: date
+) -> dict | None:
+    """The course's readiness before this week and now, from the daily snapshots."""
+    if course_id is None:
+        return None
+    row = await (
+        await conn.execute(
+            """
+            select c.code,
+              (select readiness from readiness_snapshots where user_id = %(u)s
+               and course_id = c.id and day < %(m)s order by day desc limit 1) as before,
+              (select readiness from readiness_snapshots where user_id = %(u)s
+               and course_id = c.id order by day desc limit 1) as now
+            from courses c where c.id = %(c)s
+            """,
+            {"u": user_id, "c": course_id, "m": monday},
+        )
+    ).fetchone()
+    if row is None or row["now"] is None:
+        return None
+    return {
+        "code": row["code"],
+        "before": None if row["before"] is None else float(row["before"]),
+        "now": float(row["now"]),
+    }
+
+
+async def achievement(conn: AsyncConnection, user_id: UUID, achievement_id: UUID) -> dict | None:
+    """What screen 16 shows for one of the student's own achievements: the ring value, a
+    subtitle, "since last Monday" before and now bars and the course readiness change."""
+    ctx = await context(conn, user_id)
+    if ctx is None:
+        return None
+    a = await (
+        await conn.execute(
+            "select id, kind::text as kind, ref from achievements where id = %s and user_id = %s",
+            (achievement_id, user_id),
+        )
+    ).fetchone()
+    if a is None:
+        return None
+    monday = progress.week_start(ctx["today"])
+    ref: dict = a["ref"] or {}
+    out: dict[str, Any] = {
+        "id": a["id"],
+        "kind": a["kind"],
+        "ref": ref,
+        "ring": 1.0,
+        "ring_label": None,
+        "subtitle": None,
+        "before": None,
+        "now": None,
+        "readiness": None,
+    }
+    course_id: UUID | None = None
+
+    if a["kind"] == "topic_mastered" and ref.get("topic_id"):
+        topic = await (
+            await conn.execute(
+                "select t.title, m.course_id, m.mastery, c.code from topic_mastery m "
+                "join topics t on t.id = m.topic_id left join courses c on c.id = m.course_id "
+                "where m.user_id = %s and m.topic_id = %s",
+                (user_id, ref["topic_id"]),
+            )
+        ).fetchone()
+        if topic:
+            rows = await (
+                await conn.execute(
+                    progress_job._ANSWERS + " and q.topic_id = %s"
+                    " and (aa.answered_at at time zone p.timezone)::date < %s",
+                    (user_id, ref["topic_id"], monday),
+                )
+            ).fetchall()
+            before, _ = _fraction_mastery(rows)
+            now = float(topic["mastery"])
+            course_id = topic["course_id"]
+            out |= {
+                "ring": now,
+                "subtitle": " · ".join(x for x in (topic["title"], topic["code"]) if x),
+                "before": before,
+                "now": now,
+            }
+    elif a["kind"] == "personal_best" and ref.get("attempt_id"):
+        row = await (
+            await conn.execute(
+                """
+                select a.score / nullif(a.max_score, 0) as pct, d.course_id, c.code,
+                  (select max(b.score / b.max_score) from quiz_attempts b
+                   where b.user_id = a.user_id and b.id <> a.id and b.status = 'completed'
+                     and b.max_score > 0 and b.started_at < a.started_at) as best
+                from quiz_attempts a
+                join quizzes z on z.id = a.quiz_id join documents d on d.id = z.document_id
+                left join courses c on c.id = d.course_id
+                where a.id = %s and a.user_id = %s
+                """,
+                (ref["attempt_id"], user_id),
+            )
+        ).fetchone()
+        if row and row["pct"] is not None:
+            course_id = row["course_id"]
+            out |= {
+                "ring": float(row["pct"]),
+                "subtitle": f"Your best quiz score{' · ' + row['code'] if row['code'] else ''}",
+                "before": None if row["best"] is None else float(row["best"]),
+                "now": float(row["pct"]),
+            }
+    elif a["kind"] == "readiness_up" and ref.get("course_id"):
+        course_id = UUID(ref["course_id"])
+    elif a["kind"] == "weekly_goal":
+        counted = await _counted_days(conn, user_id, ctx["today"])
+        goal = ctx["weekly_goal_days"]
+        days = progress.days_this_week(counted, ctx["today"])
+        in_a_row = progress.weeks_in_a_row(counted, goal, ctx["today"])
+        out |= {
+            "ring": min(1.0, days / goal) if goal else 1.0,
+            "ring_label": f"{days}/{goal}",
+            "subtitle": f"{days} of {goal} days"
+            + (f" · {in_a_row} weeks in a row" if in_a_row > 1 else ""),
+        }
+
+    readiness = await _course_readiness(conn, user_id, course_id, monday)
+    out["readiness"] = readiness
+    if a["kind"] == "readiness_up" and readiness:
+        out |= {
+            "ring": readiness["now"],
+            "subtitle": f"{readiness['code']} readiness",
+            "before": readiness["before"],
+            "now": readiness["now"],
+        }
+    if out["ring_label"] is None:
+        out["ring_label"] = f"{round(out['ring'] * 100)}%"
+    return out
+
+
 # --- Daily 5 (FR-HAB-01) -------------------------------------------------------------------------
 
 

@@ -17,6 +17,7 @@ import { WeekStrip } from '@/components/ui/week-strip';
 import { Accent, BottomTabInset, Colors, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAccent } from '@/lib/appearance';
+import { useCelebrateOnce } from '@/lib/celebrate';
 import { friendlyError } from '@/lib/errors';
 import { getDaily5, type PlanItem, useHome, useJoinByCode } from '@/lib/home';
 import { useMe } from '@/lib/profile';
@@ -111,6 +112,7 @@ export default function TodayScreen() {
   const [error, setError] = useState<string | null>(null);
   const firstName = me.data?.full_name?.split(' ')[0];
   const data = home.data;
+  useCelebrateOnce(data?.achievements); // at most one celebration a session (FR-HAB-05)
 
   // Back from a quiz or a reading: show the new progress.
   const { refetch } = home;
