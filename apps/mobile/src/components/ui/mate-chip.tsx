@@ -1,16 +1,17 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { initials } from '@/components/profile-header';
+import { Avatar } from '@/components/ui/avatar';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { Text } from './text';
 
-type Props = { name: string; selected: boolean; onPress: () => void };
+type Props = { name: string; selected: boolean; onPress: () => void; avatarUrl?: string | null };
 
 /** A coursemate to send the course to (DESIGN.md §6, screen 19): 52 pill, initials + first name;
  * selected is ink. Multi-select. */
-export function MateChip({ name, selected, onPress }: Props) {
+export function MateChip({ name, selected, onPress, avatarUrl }: Props) {
   const theme = useTheme();
   return (
     <Pressable
@@ -22,11 +23,15 @@ export function MateChip({ name, selected, onPress }: Props) {
         styles.chip,
         { backgroundColor: selected ? theme.text : theme.backgroundSelected, opacity: pressed ? 0.85 : 1 },
       ]}>
-      <View style={[styles.avatar, { backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement }]}>
-        <Text variant="caption" color="text">
-          {initials(name)}
-        </Text>
-      </View>
+      {avatarUrl ? (
+        <Avatar name={name} uri={avatarUrl} size={40} />
+      ) : (
+        <View style={[styles.avatar, { backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement }]}>
+          <Text variant="caption" color="text">
+            {initials(name)}
+          </Text>
+        </View>
+      )}
       <Text variant="label" color={selected ? 'onInk' : 'text'}>
         {name.split(' ')[0]}
       </Text>

@@ -85,6 +85,11 @@ function RootNavigator() {
         <Stack.Protected guard={signedIn && !onboarded} redirectTo={start}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
+        {/* The photo sheet and crop open from onboarding step 1 and from Account (FR-PROF-04). */}
+        <Stack.Protected guard={signedIn} redirectTo={start}>
+          <Stack.Screen name="profile/photo" options={SHEET} />
+          <Stack.Screen name="profile/crop" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
+        </Stack.Protected>
         <Stack.Protected guard={signedIn && onboarded} redirectTo={start}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="course/[id]/index" />
