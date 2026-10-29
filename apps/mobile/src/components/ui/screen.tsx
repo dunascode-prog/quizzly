@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -22,7 +22,7 @@ type Props = {
 /** Ground background, safe areas, 20 px gutters and a scrollable body (DESIGN.md §5). */
 export function Screen({ children, footer, bottomInset = 0, fit = false }: Props) {
   const theme = useTheme();
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   // The tallest the scroll area has been is its height with the keyboard closed (portrait only).
   const [fitHeight, setFitHeight] = useState(0);
 

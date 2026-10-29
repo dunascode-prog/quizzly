@@ -56,7 +56,7 @@ export default function LegalScreen() {
   const theme = useTheme();
   return (
     <Screen>
-      <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
+      <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
       <HighlightText highlight="privacy">Your privacy</HighlightText>
       {SECTIONS.map((s) => (
         <View key={s.title} style={[styles.card, { backgroundColor: theme.backgroundElement }]}>

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { StyleSheet, type TextInput, useWindowDimensions, View } from 'react-native';
 
 import { ArrowRight, ArrowUp, ArrowUpRight, BookOpen, Check } from '@/components/icons';
@@ -55,7 +55,7 @@ export default function SignInScreen() {
   const [busy, setBusy] = useState<'email' | 'code' | 'google' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
-  const codeRef = useRef<TextInput>(null);
+  const codeRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [art, setArt] = useState<{ width: number; stickers: boolean }>();
   const window = useWindowDimensions();
   const compact = window.height < COMPACT_BELOW;
