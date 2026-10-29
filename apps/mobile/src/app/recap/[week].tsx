@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useRef, useState } from 'react';
+import { type ComponentRef, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
@@ -31,7 +31,7 @@ export default function RecapScreen() {
   const { week } = useLocalSearchParams<{ week: string }>();
   const monday = week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? week : mondayOf();
   const recap = useRecap(monday);
-  const card = useRef<View>(null);
+  const card = useRef<ComponentRef<typeof View>>(null);
   const [menu, setMenu] = useState(false);
   const [hidden, setHidden] = useState<boolean | null>(null); // null: follow the privacy setting
   const [message, setMessage] = useState<string | null>(null);

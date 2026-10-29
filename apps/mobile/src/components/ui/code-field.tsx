@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { type ComponentRef, forwardRef } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Radius, Size, Spacing } from '@/constants/theme';
@@ -16,7 +16,7 @@ type Props = {
  * One hidden input drawn as separate digit boxes, so paste and SMS/email autofill
  * ("one-time-code") fill every box at once.
  */
-export const CodeField = forwardRef<TextInput, Props>(function CodeField({ value, onChangeText, length = 6 }, ref) {
+export const CodeField = forwardRef<ComponentRef<typeof TextInput>, Props>(function CodeField({ value, onChangeText, length = 6 }, ref) {
   const theme = useTheme();
   const focus = () => (ref && typeof ref === 'object' ? ref.current?.focus() : undefined);
 

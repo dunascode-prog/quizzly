@@ -122,7 +122,7 @@ export function InstitutionPicker({ visible, onClose, onPick }: Props) {
               </Pressable>
             )}
             ListEmptyComponent={
-              results.isFetching ? null : (
+              results.isFetching ? undefined : (
                 <Text variant="small" color="textSecondary" style={styles.empty}>
                   No school matches &quot;{query.trim()}&quot;.
                 </Text>
