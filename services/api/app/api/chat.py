@@ -63,6 +63,7 @@ def _event(name: str, data: dict) -> str:
 
 @router.get("/v1/documents/{document_id}/chat")
 async def get_chat(document_id: UUID, user: User, conn: Conn) -> ChatOut:
+    """The saved chat for this document; `thread_id` is null until the first question."""
     await _document(conn, user.id, document_id)
     thread = await chat.thread_for(conn, user.id, document_id)
     rows = await chat.messages(conn, thread["id"]) if thread else []
@@ -71,7 +72,28 @@ async def get_chat(document_id: UUID, user: User, conn: Conn) -> ChatOut:
     )
 
 
-@router.post("/v1/documents/{document_id}/chat/messages")
+SSE_EXAMPLE = (
+    'event: token\ndata: {"text": "Osmosis is "}\n\n'
+    'event: token\ndata: {"text": "the movement of water (p. 4)."}\n\n'
+    'event: done\ndata: {"thread_id": "…", "question": {…}, "answer": {…}}\n\n'
+)
+
+
+@router.post(
+    "/v1/documents/{document_id}/chat/messages",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "A Server-Sent Events stream: `token` events with `{text}`, then one "
+            "`done` event with `{thread_id, question, answer}` (each a MessageOut), or one "
+            "`error` event with `{detail}`.",
+            "content": {
+                "text/event-stream": {"schema": {"type": "string"}, "example": SSE_EXAMPLE}
+            },
+        },
+        429: {"description": "Today's chat messages are used up."},
+    },
+)
 async def ask(
     document_id: UUID, body: AskIn, user: User, settings: AppSettings
 ) -> StreamingResponse:

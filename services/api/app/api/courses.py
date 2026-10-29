@@ -93,6 +93,8 @@ async def _not_member(conn, user_id: UUID, course_id: UUID) -> None:
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_course(body: CourseCreate, user: User, conn: Conn) -> CourseOut:
+    """Adds a course. A code the student already uses is a 409; the exam date must be
+    today or later (FR-CRS-04)."""
     if not body.code:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Course code is required")
     await _check_exam_date(conn, user.id, body.exam_date)
@@ -108,6 +110,7 @@ async def create_course(body: CourseCreate, user: User, conn: Conn) -> CourseOut
 
 @router.patch("/{course_id}")
 async def update_course(course_id: UUID, body: CourseUpdate, user: User, conn: Conn) -> CourseOut:
+    """Changes only the fields sent. A course shared with the student is a 403 (FR-DOC-12)."""
     fields = body.model_dump(exclude_unset=True)
     if "code" in fields and not fields["code"]:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Course code is required")

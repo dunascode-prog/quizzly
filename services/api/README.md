@@ -23,6 +23,11 @@ The API starts without a database (it logs a warning), so `/healthz` works befor
 On Windows, keep `--reload` or add `--loop asyncio:SelectorEventLoop`: without either, uvicorn uses the
 Proactor event loop, which psycopg's async mode can't use, and every database call fails.
 
+## API docs
+
+Swagger is at `/docs` when running locally. The exported spec and how to keep it current are in
+[`docs/api/`](../../docs/api/README.md); after changing a route, run `uv run python -m app.api.openapi`.
+
 ## Checks
 
 ```bash

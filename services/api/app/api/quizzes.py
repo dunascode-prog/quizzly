@@ -289,6 +289,9 @@ async def _question_set(
 async def create_quiz(
     document_id: UUID, body: QuizCreate, user: User, conn: Conn, settings: AppSettings
 ) -> QuizOut:
+    """A quiz on the chosen topics (all of them when none are given). The same choices reuse
+    a cached question set (FR-QGEN-07); otherwise today's allowance is used (429 when it's gone)
+    and the questions are written in the background, so poll `GET /v1/quizzes/{quiz_id}`."""
     doc = await study.ready_document(conn, user.id, document_id)
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found or not ready yet")
@@ -378,6 +381,8 @@ async def get_quiz(quiz_id: UUID, user: User, conn: Conn) -> QuizOut:
 
 @router.post("/v1/quizzes/{quiz_id}/attempts", status_code=status.HTTP_201_CREATED)
 async def start_attempt(quiz_id: UUID, body: AttemptStart, user: User, conn: Conn) -> AttemptOut:
+    """Starts an attempt with an id the app chose, so a resent request doesn't start a
+    second one. 409 if the quiz isn't ready or the id is already used (FR-SEC-18)."""
     quiz = await quizzes.get_quiz(conn, user.id, quiz_id)
     if quiz is None or quiz["status"] != "ready":
         raise HTTPException(status.HTTP_409_CONFLICT, "This quiz isn't ready yet")
@@ -503,4 +508,5 @@ async def practice(user: User, conn: Conn) -> PracticeOut:
 
 @router.get("/v1/attempts/{attempt_id}")
 async def get_attempt(attempt_id: UUID, user: User, conn: Conn) -> AttemptOut:
+    """One of the student's attempts, to resume it or show its results."""
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))

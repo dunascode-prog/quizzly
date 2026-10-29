@@ -230,6 +230,7 @@ async def get_achievement(achievement_id: UUID, user: User, conn: Conn) -> Celeb
 
 @router.post("/v1/achievements/seen", status_code=status.HTTP_204_NO_CONTENT)
 async def achievements_seen(body: SeenIn, user: User, conn: Conn) -> Response:
+    """Marks celebrations as shown so they don't appear again."""
     await home.mark_achievements_seen(conn, user.id, body.ids)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -264,6 +265,7 @@ async def get_recap(week: date, user: User, conn: Conn) -> RecapOut:
 
 @router.get("/v1/me/settings", tags=["account"])
 async def get_settings(user: User, conn: Conn) -> SettingsOut:
+    """Weekly goal, theme, night and low-data modes, share permission, identity on links."""
     data = await settings.get_settings(conn, user.id)
     if data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile not found")
@@ -285,6 +287,7 @@ async def update_settings(body: SettingsIn, user: User, conn: Conn) -> SettingsO
 
 @router.get("/v1/me/notification-settings", tags=["account"])
 async def get_notification_settings(user: User, conn: Conn) -> NotificationSettingsOut:
+    """Daily reminder and its time, quiet hours, and per-type toggles (FR-HAB-08)."""
     return NotificationSettingsOut(**await settings.get_notification_settings(conn, user.id))
 
 

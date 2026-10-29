@@ -11,7 +11,18 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import chat, courses, documents, home, invites, notifications, quizzes, sharing, study
+from app.api import (
+    chat,
+    courses,
+    documents,
+    home,
+    invites,
+    notifications,
+    openapi,
+    quizzes,
+    sharing,
+    study,
+)
 from app.api.routes import router
 from app.core import db
 from app.core.config import get_settings
@@ -46,7 +57,9 @@ def create_app() -> FastAPI:
     docs = settings.env in ("local", "test", "staging")
     app = FastAPI(
         title="Quizzly API",
-        version="0.1.0",
+        version=openapi.VERSION,
+        description=openapi.DESCRIPTION,
+        openapi_tags=openapi.TAGS,
         lifespan=lifespan,
         docs_url="/docs" if docs else None,
         redoc_url="/redoc" if docs else None,
@@ -130,6 +143,7 @@ def create_app() -> FastAPI:
     app.include_router(sharing.router)
     app.include_router(invites.router)
     app.include_router(chat.router)
+    openapi.install(app)
     return app
 
 

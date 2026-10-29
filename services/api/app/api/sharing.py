@@ -127,6 +127,7 @@ def _out(share: dict, settings, sent: int | None = None) -> ShareOut:
 
 @router.get("/v1/courses/{course_id}/share")
 async def get_share(course_id: UUID, user: User, conn: Conn, settings: AppSettings) -> ShareOut:
+    """The owner's share link for this course; 404 when it isn't shared."""
     try:
         share = await sharing.get_share(conn, user.id, course_id)
     except LookupError as exc:
@@ -160,6 +161,7 @@ async def share_course(
 
 @router.post("/v1/courses/{course_id}/share/regenerate")
 async def regenerate(course_id: UUID, user: User, conn: Conn, settings: AppSettings) -> ShareOut:
+    """A new share link; the old one stops working. Members keep access (FR-SHARE-07)."""
     share = await sharing.regenerate(conn, user.id, course_id)
     if share is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
@@ -168,6 +170,7 @@ async def regenerate(course_id: UUID, user: User, conn: Conn, settings: AppSetti
 
 @router.post("/v1/courses/{course_id}/share/stop", status_code=status.HTTP_204_NO_CONTENT)
 async def stop_sharing(course_id: UUID, user: User, conn: Conn) -> Response:
+    """Stops sharing the course; members lose access and are told."""
     if not await sharing.stop(conn, user.id, course_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not shared")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -175,6 +178,7 @@ async def stop_sharing(course_id: UUID, user: User, conn: Conn) -> Response:
 
 @router.get("/v1/courses/{course_id}/members")
 async def members(course_id: UUID, user: User, conn: Conn) -> list[MemberOut]:
+    """Who joined the owner's shared course, as display names only (FR-SHARE-07)."""
     try:
         return [MemberOut(**m) for m in await sharing.members(conn, user.id, course_id)]
     except LookupError as exc:
@@ -185,6 +189,7 @@ async def members(course_id: UUID, user: User, conn: Conn) -> list[MemberOut]:
     "/v1/courses/{course_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT
 )
 async def remove_member(course_id: UUID, member_id: UUID, user: User, conn: Conn) -> Response:
+    """Removes someone from the owner's shared course."""
     if not await sharing.remove_member(conn, user.id, course_id, member_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not shared")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -200,6 +205,8 @@ async def report_course(course_id: UUID, body: CourseReportIn, user: User, conn:
 
 @router.get("/v1/coursemates")
 async def coursemates(user: User, conn: Conn) -> list[CoursemateOut]:
+    """People who already share a course with the student, as quick picks on screen 19.
+    Blocked people never appear (FR-SHARE-09)."""
     return [CoursemateOut(**m) for m in await sharing.coursemates(conn, user.id)]
 
 
@@ -261,6 +268,7 @@ async def blocked(user: User, conn: Conn) -> list[BlockedOut]:
 
 @router.delete("/v1/blocks/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def unblock(user_id: UUID, user: User, conn: Conn) -> Response:
+    """Undoes a block."""
     await sharing.unblock(conn, user.id, user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
