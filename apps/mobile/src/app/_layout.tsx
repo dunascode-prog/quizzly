@@ -21,6 +21,7 @@ import { flush, startOutbox } from '@/lib/outbox';
 import { useMe } from '@/lib/profile';
 import { persistOptions, queryClient } from '@/lib/query-client';
 import { useSettings } from '@/lib/settings';
+import { setSentryUser, wrapRoot } from '@/lib/sentry';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -46,6 +47,8 @@ function RootNavigator() {
     Manrope_700Bold,
   });
   const { session, ready } = useAuth();
+  const userId = session?.user.id ?? null;
+  useEffect(() => setSentryUser(userId), [userId]);
   const me = useMe();
 
   const signedIn = Boolean(session);
@@ -143,7 +146,7 @@ function Live() {
   return <Toast />;
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
@@ -154,3 +157,6 @@ export default function RootLayout() {
     </PersistQueryClientProvider>
   );
 }
+
+// NFR-09: crash reports when EXPO_PUBLIC_SENTRY_DSN is set.
+export default wrapRoot(RootLayout);

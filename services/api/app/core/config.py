@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     # Websites allowed to call the API from a browser (CORS). Native apps aren't subject to CORS.
     cors_origins: list[str] = []
     log_level: str = "info"
+    # NFR-09: error tracking (Sentry free tier); off when empty. A release name (e.g. the git sha)
+    # groups errors by deploy; traces are off unless a sample rate is set.
+    sentry_dsn: str = ""
+    sentry_traces_rate: float = 0.0
+    release: str = ""
+    # GET /internal/metrics needs this token in X-Metrics-Token; the route is off when empty.
+    metrics_token: str = ""
     timezone: str = "Africa/Lagos"
     # Optional: Expo push security token (FR-NOTIF-03). Pushes work without it unless the
     # Expo project requires one.
