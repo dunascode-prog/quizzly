@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Platform, StyleSheet, Switch, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ChevronLeft } from '@/components/icons';
 import { Banner } from '@/components/ui/banner';
@@ -9,6 +9,7 @@ import { Pill } from '@/components/ui/pill';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
+import { ToggleRow } from '@/components/ui/toggle-row';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
@@ -62,23 +63,12 @@ export default function PrivacyScreen() {
         </Text>
       </View>
 
-      <View style={[styles.toggleRow, { backgroundColor: theme.backgroundSelected }]}>
-        <View style={styles.flex}>
-          <Text variant="label">Show my name on invite links and recaps</Text>
-          <Text variant="small" color="textSecondary">
-            Your first name, school and level. Turn off to stay anonymous.
-          </Text>
-        </View>
-        <Switch
-          value={s?.show_identity_on_links ?? true}
-          onValueChange={(v) => update.mutate({ show_identity_on_links: v })}
-          accessibilityLabel="Show my name on invite links and recaps"
-          trackColor={{ false: theme.line, true: theme.text }}
-          thumbColor={theme.backgroundSelected}
-          // react-native-web colours the "on" thumb itself; accents aren't for toggles (§3.2).
-          {...(Platform.OS === 'web' ? { activeThumbColor: theme.backgroundSelected } : {})}
-        />
-      </View>
+      <ToggleRow
+        label="Show my name on invite links and recaps"
+        helper="Your first name, school and level. Turn off to stay anonymous."
+        value={s?.show_identity_on_links ?? true}
+        onChange={(v) => update.mutate({ show_identity_on_links: v })}
+      />
 
       <View style={styles.section}>
         <Text variant="heading" accessibilityRole="header">

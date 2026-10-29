@@ -118,6 +118,8 @@ export default function AccountScreen() {
           </Text>
           <ChevronRight size={22} color={theme.onInk} strokeWidth={2} />
         </Pressable>
+        <Row label="Themes and study modes" icon={ChevronRight} onPress={() => router.push('/settings/themes')} />
+        <Row label="Reminders" icon={ChevronRight} onPress={() => router.push('/settings/reminders')} />
         <Row label="Privacy and blocking" icon={ChevronRight} onPress={() => router.push('/settings/privacy')} />
         <Row label="Privacy Policy and Terms" icon={ChevronRight} onPress={() => router.push('/legal')} />
         <Row label="Sign out" icon={LogOut} onPress={onSignOut} hint={me.data?.email ? `Signed in as ${me.data.email}` : undefined} />

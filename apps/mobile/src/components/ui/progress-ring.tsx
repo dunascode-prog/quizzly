@@ -13,6 +13,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAccent } from '@/lib/appearance';
 
 import { Text } from './text';
 
@@ -42,6 +43,7 @@ export function ProgressRing({
   children,
 }: Props) {
   const theme = useTheme();
+  const chosen = useAccent(); // the student's theme (FR-HAB-07)
   const r = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * r;
   const indeterminate = value === undefined;
@@ -70,7 +72,7 @@ export function ProgressRing({
             cx={size / 2}
             cy={size / 2}
             r={r}
-            stroke={accent ?? theme[color]}
+            stroke={accent ?? (color === 'onInk' && chosen ? chosen : theme[color])}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             fill="none"

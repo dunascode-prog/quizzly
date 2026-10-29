@@ -8,6 +8,7 @@ import { X } from '@/components/icons';
 import { initials } from '@/components/profile-header';
 import { Accent, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAccent } from '@/lib/appearance';
 import { openTarget, useToast } from '@/lib/notifications';
 
 import { IconButton } from './icon-button';
@@ -24,6 +25,7 @@ export function Toast() {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const { current: n, hide } = useToast();
+  const dot = useAccent() ?? Accent.lagoon;
   const y = useSharedValue(-200);
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export function Toast() {
             </Text>
             <View style={styles.meta}>
               {/* The live dot is one of the places an accent may appear (DESIGN.md §3.2). */}
-              <View style={[styles.dot, { backgroundColor: Accent.lagoon }]} />
+              <View style={[styles.dot, { backgroundColor: dot }]} />
               <Text variant="small" color="mutedOnInk" numberOfLines={2} style={styles.flex}>
                 Just now{n.body ? ` · ${n.body}` : ''}
               </Text>
