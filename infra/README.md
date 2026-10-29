@@ -25,7 +25,7 @@ Then merge to `main` (staging) or publish a `v*` release (production); the pipel
 
 ```bash
 cd /opt/quizzly/production
-bash deploy.sh production ghcr.io/dunascode-prog/quizzly-api:sha-1a2b3c4d5e6f   # needs `docker login ghcr.io` for a private package
+bash deploy.sh production ghcr.io/dunascode-prog/quizzly-api:sha-<12-char commit>   # needs `docker login ghcr.io` for a private package
 bash deploy.sh production rollback
 ```
 
