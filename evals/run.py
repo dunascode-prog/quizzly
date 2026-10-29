@@ -89,12 +89,25 @@ def _texts(d) -> list[str]:
     return [d.stem, answer, *(d.options or [])]
 
 
-async def run_case(gateway: LLMGateway, case: dict) -> CaseResult:
+def _document(case: dict) -> tuple[bytes, str] | None:
+    """A real file from evals/data/ (git-ignored: copyrighted material), or the case's own sample
+    pages. None when the file isn't on this machine (e.g. in CI)."""
+    if "file" in case:
+        path = EVALS / "data" / case["file"]
+        if not path.exists():
+            return None
+        data = path.read_bytes()
+        return data, extract.sniff(data)
+    return make_pdf(case["pages"]), extract.PDF_MIME
+
+
+async def run_case(gateway: LLMGateway, case: dict) -> CaseResult | None:
     result = CaseResult(case["name"])
+    document = _document(case)
+    if document is None:
+        return None  # skipped: its file isn't here
     try:
-        pages = text.guess_headings(
-            text.clean_pages(extract.extract(make_pdf(case["pages"]), extract.PDF_MIME))
-        )
+        pages = text.guess_headings(text.clean_pages(extract.extract(*document)))
         topics = outline.outline_from_headings(pages) or await outline.outline_with_llm(
             gateway, pages
         )
@@ -165,9 +178,13 @@ async def main(names: list[str]) -> int:
     cases = load_cases(names)
     started = time.time()
     results = []
+    skipped = []
     for case in cases:  # one at a time: free tiers limit bursts
-        results.append(await run_case(gateway, case))
-        r = results[-1]
+        r = await run_case(gateway, case)
+        if r is None:
+            skipped.append(case["name"])
+            continue
+        results.append(r)
         done = f"{r.topic_count} topics, {r.questions_valid}/{r.questions_asked} questions"
         print(f"{r.name}: {r.error or done}")
     summary = summarise(results)
@@ -181,6 +198,8 @@ async def main(names: list[str]) -> int:
         encoding="utf-8",
     )
     md = report(results, summary, problems, time.time() - started)
+    if skipped:
+        md += f"\nSkipped (file not in evals/data/): {', '.join(skipped)}\n"
     (EVALS / "report.md").write_text(md, encoding="utf-8")
     print(md)
     return 1 if problems else 0

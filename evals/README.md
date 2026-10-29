@@ -33,12 +33,13 @@ them the job warns and skips.
 
 ## Add a case
 
-Add `cases/<course>-<topic>.json`:
+A case is `cases/<course>-<topic>.json`. **Real course documents** are copyrighted, so the file
+itself goes in `evals/data/` (git-ignored) and only the case's expectations are committed:
 
 ```json
 {
   "course": "CSC 225 Data Structures",
-  "pages": [["Page heading", "A line of text", "..."], ["Next page heading", "..."]],
+  "file": "csc225-week5-stacks.pdf",
   "expected": {
     "topics": [3, 6],
     "topic_keywords": ["stack", "queue"],
@@ -48,9 +49,11 @@ Add `cases/<course>-<topic>.json`:
 }
 ```
 
-Each `pages` item becomes one PDF page. A `must_cover` entry can list alternative wordings.
+A case whose file isn't on the machine (as in CI) is skipped and listed in the report. A case can
+instead carry its own sample `pages` (`[["Page heading", "A line of text"], ...]`, one PDF page
+each); the six cases committed here are original sample notes written for this set, so CI always
+has something to run. A `must_cover` entry can list alternative wordings.
 
-**NFR-11 asks for at least 30 real course documents.** The six cases here are original sample notes
-written for this set; replace and extend them with real lecture notes that lecturers or students have
-agreed to share. Keep them in plain text as above, never the original files, and never add anything
-the uploader didn't agree to share.
+**NFR-11 asks for at least 30 real course documents.** Add real lecture notes (PDF or PPTX) that
+lecturers or students agreed to use for testing, with a case file each. To run them in CI too, the
+files would need to come from private storage at run time; they must never be committed.
