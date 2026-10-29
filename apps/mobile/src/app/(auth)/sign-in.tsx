@@ -174,7 +174,10 @@ export default function SignInScreen() {
     );
 
   return (
-    <Screen footer={footer} fit>
+    // Welcome has no input, so it never scrolls: the illustration takes only the height that is
+    // left after the logo and the full card, and the card can't slide under the footer. Very large
+    // font sizes still get a scrolling body so nothing is cut.
+    <Screen footer={footer} fit fixed={step === 'welcome' && window.fontScale <= NO_ART_FONT_SCALE}>
       <View style={[styles.logo, { backgroundColor: theme.text }]}>
         <Logo size={30} color={theme.onInk} />
       </View>
@@ -251,6 +254,7 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   logo: {
+    flexShrink: 0,
     width: 52,
     height: 52,
     borderRadius: Radius.full,
@@ -268,7 +272,7 @@ const styles = StyleSheet.create({
   topLeft: { top: 0, left: 0 },
   topRight: { top: 0, right: 0 },
   bottomRight: { bottom: 0, right: 0 },
-  hero: { borderRadius: Radius.hero, paddingTop: Spacing.four, paddingHorizontal: 22, paddingBottom: 20 },
+  hero: { flexShrink: 0, borderRadius: Radius.hero, paddingTop: Spacing.four, paddingHorizontal: 22, paddingBottom: 20 },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
   heroTitle: { flex: 1 },
   heroCompact: { padding: 20 },
