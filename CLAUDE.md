@@ -8,6 +8,7 @@ AI study app for Nigerian university students. Monorepo: Expo app in `apps/mobil
 - Product and requirements: `docs/PRD.md` (v0.2), `docs/FRD.md` (v0.2, requirement IDs like `FR-SHARE-03`).
 - Architecture and data: `docs/ARCHITECTURE.md`, `docs/DATA_MODELS.md` (incl. §5 access rules), `docs/DATA_FLOWS.md`.
 - Website and admin (`apps/web`): `docs/WEB.md`.
+- CI/CD, deploys and rollback: `docs/CI_CD.md`. Migrations must be safe to roll the code back over (§4).
 - **Any UI work: follow `docs/DESIGN.md` (v0.4) exactly.** It defines tokens, type, components and all 30 app screens (light and dark). Screen images are in `docs/design/`, numbered to match DESIGN.md §7.
 - Mobile app rules: `apps/mobile/AGENTS.md` (check versioned Expo docs, use `npx expo install`).
 

@@ -259,8 +259,10 @@ Storage watch: 384-dim vectors are about 1.5 KB each. 100k chunks (about 2,500 d
 | Env | Database | Deploy |
 |---|---|---|
 | local | Supabase CLI (`supabase start`, Docker) | `docker compose up` + `npx expo start` |
-| staging | Free Supabase project #2 | GitHub Actions on merge to `main` |
-| production | Supabase project | Manual release tag; EAS build for the app |
+| staging | Free Supabase project #2 | GitHub Actions on merge to `main`; EAS Update `preview` channel |
+| production | Supabase project | `v*` release tag + approval; EAS Update or build on the `production` channel |
+
+Both run on the same VM and roll back automatically when their checks fail. Pipeline, rollback and setup: [CI_CD.md](CI_CD.md).
 
 ## 9. Observability
 

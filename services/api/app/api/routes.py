@@ -90,6 +90,14 @@ async def healthz() -> dict:
     return {"status": "ok"}
 
 
+@router.get("/readyz", tags=["ops"])
+async def readyz(conn: Conn, settings: AppSettings) -> dict:
+    """Readiness check for deploys: the database answers. The deploy script rolls back when this
+    isn't 200 (503 when the API has no database)."""
+    await conn.execute("select 1")
+    return {"status": "ok", "release": settings.release}
+
+
 @router.get("/v1/me", tags=["account"])
 async def me(user: User, conn: Conn) -> MeOut:
     """The signed-in student's profile. The app keeps them in onboarding until it's complete

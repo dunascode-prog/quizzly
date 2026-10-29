@@ -1,0 +1,3 @@
+# Known false positives (gitleaks fingerprints). Real secrets get rotated, never listed here.
+# A dummy HS256 key used only by the API tests.
+08816f45311e40174a38a53451098503d3cde250:services/api/tests/conftest.py:generic-api-key:8
