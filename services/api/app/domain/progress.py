@@ -13,6 +13,10 @@ LEITNER_GAPS = {1: 1, 2: 3, 3: 7, 4: 14}  # days until a question is due again, 
 STUDY_DAY_QUESTIONS = 5
 STUDY_DAY_READING_SECONDS = 120
 OBJECTIVE_TYPES = ("mcq", "true_false", "fill_blank")  # what the Daily 5 can ask
+# Flashcards come back in the Daily 5 only when due for review, never as new questions. They're
+# self-rated, so they never count towards topic mastery or readiness (FR-QGEN-10).
+FLASHCARD = "flashcard"
+REVIEW_TYPES = (*OBJECTIVE_TYPES, FLASHCARD)
 READINESS_UP = 0.10  # "readiness up 10 points" celebration (FR-HAB-05)
 
 

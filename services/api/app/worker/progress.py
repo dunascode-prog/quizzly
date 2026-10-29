@@ -78,7 +78,9 @@ async def _topics(
 ) -> list[UUID]:
     """Recomputes mastery for the topics this attempt touched; returns the newly mastered ones."""
     newly: list[UUID] = []
-    for topic_id in {a["topic_id"] for a in answered if a["topic_id"]}:
+    for topic_id in {
+        a["topic_id"] for a in answered if a["topic_id"] and a["type"] != progress.FLASHCARD
+    }:
         rows = await (
             await conn.execute(
                 _ANSWERS + " and q.topic_id = %s order by aa.answered_at", (user_id, topic_id)
@@ -87,7 +89,8 @@ async def _topics(
         fractions = [
             f
             for r in rows
-            if (f := progress.answer_fraction(r["score"], r["is_correct"], r["marks"])) is not None
+            if r["type"] != progress.FLASHCARD
+            and (f := progress.answer_fraction(r["score"], r["is_correct"], r["marks"])) is not None
         ]
         mastery = progress.topic_mastery(fractions)
         mastered = progress.is_mastered(mastery, len(fractions))
@@ -115,10 +118,9 @@ async def _topics(
 
 
 async def _review_queue(conn: AsyncConnection, user_id: UUID, answered: list[dict]) -> None:
-    """Leitner state for each objective question answered (the Daily 5 only asks those)."""
-    for question_id in {
-        a["question_id"] for a in answered if a["type"] in progress.OBJECTIVE_TYPES
-    }:
+    """Leitner state for each objective question or flashcard answered (what the Daily 5 asks).
+    A missed card starts in box 1, due tomorrow."""
+    for question_id in {a["question_id"] for a in answered if a["type"] in progress.REVIEW_TYPES}:
         rows = await (
             await conn.execute(
                 _ANSWERS + " and aa.question_id = %s and aa.is_correct is not null "
@@ -244,12 +246,18 @@ async def _achievements(
         await _achievement(conn, user_id, "topic_mastered", {"topic_id": str(topic_id)})
 
     # Personal best: a better score than every earlier completed quiz (needs one to beat).
-    if attempt["status"] == "completed" and attempt["max_score"]:
+    # Flashcard rounds are self-rated, so they're not a score to beat.
+    if (
+        attempt["status"] == "completed"
+        and attempt["max_score"]
+        and attempt["kind"] != "flashcards"
+    ):
         pct = float(attempt["score"] or 0) / float(attempt["max_score"])
         best = await (
             await conn.execute(
                 "select max(score / max_score) as best from quiz_attempts "
-                "where user_id = %s and id <> %s and status = 'completed' and max_score > 0",
+                "where user_id = %s and id <> %s and status = 'completed' and max_score > 0 "
+                "and quiz_id not in (select id from quizzes where kind = 'flashcards')",
                 (user_id, attempt_id),
             )
         ).fetchone()
