@@ -71,7 +71,7 @@
           "account"
         ],
         "summary": "Delete Me",
-        "description": "Deletes the account and everything only this student owns (FR-AUTH-05, NDPA). Files\nStorage can't remove right now are retried by the worker, well within the 24 h allowed.",
+        "description": "Deletes the account and everything only this student owns (FR-AUTH-05, NDPA), including\nthe profile photo. Files Storage can't remove right now are retried by the worker, well within\nthe 24 h allowed.",
         "operationId": "delete_me_v1_me_delete",
         "responses": {
           "204": {
@@ -128,6 +128,78 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/me/avatar": {
+      "put": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Put Avatar",
+        "description": "Sets the profile photo (FR-PROF-04). The body is the cropped 512x512 WebP the app made\n(`Content-Type: image/webp`, at most 300 KB). The server checks and re-encodes it, which\nstrips EXIF and GPS data, and names the file itself; the old photo is deleted.",
+        "operationId": "put_avatar_v1_me_avatar_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Delete Avatar",
+        "description": "Removes the profile photo and deletes the file (FR-PROF-04). Initials show again.",
+        "operationId": "delete_avatar_v1_me_avatar_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
                 }
               }
             }
@@ -3295,7 +3367,7 @@
           "sharing"
         ],
         "summary": "Members",
-        "description": "Who joined the owner's shared course, as display names only (FR-SHARE-07).",
+        "description": "Who joined the owner's shared course: display names, and photos only where the student\nchose to show theirs (FR-SHARE-07, FR-PROF-05).",
         "operationId": "members_v1_courses__course_id__members_get",
         "security": [
           {
@@ -5161,6 +5233,17 @@
               }
             ],
             "title": "Display Name"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
           }
         },
         "type": "object",
@@ -5945,6 +6028,41 @@
             "type": "boolean",
             "title": "Onboarded",
             "default": false
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "avatar_visible": {
+            "type": "boolean",
+            "title": "Avatar Visible",
+            "default": false
+          },
+          "practice_times": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "commute",
+                "lectures",
+                "evening",
+                "night"
+              ]
+            },
+            "type": "array",
+            "title": "Practice Times",
+            "default": []
+          },
+          "weekly_goal_days": {
+            "type": "integer",
+            "title": "Weekly Goal Days",
+            "default": 4
           }
         },
         "type": "object",
@@ -5960,6 +6078,11 @@
             "type": "string",
             "format": "uuid",
             "title": "Member Id"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
           },
           "display_name": {
             "anyOf": [
@@ -5991,11 +6114,23 @@
               }
             ],
             "title": "Joined At"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
           }
         },
         "type": "object",
         "required": [
           "member_id",
+          "user_id",
           "display_name",
           "status",
           "joined_at"
@@ -6140,6 +6275,17 @@
               }
             ],
             "title": "Actor Name"
+          },
+          "actor_avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Avatar Url"
           }
         },
         "type": "object",
@@ -6974,6 +7120,67 @@
             "type": "boolean",
             "title": "Accept Terms",
             "default": false
+          },
+          "explanation_style": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "standard",
+                  "simple",
+                  "exam"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation Style"
+          },
+          "weekly_goal_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 7.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Goal Days"
+          },
+          "avatar_visible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Visible"
+          },
+          "practice_times": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "commute",
+                    "lectures",
+                    "evening",
+                    "night"
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice Times"
           }
         },
         "type": "object",
@@ -7579,7 +7786,8 @@
             "enum": [
               "explanation",
               "question",
-              "chat_message"
+              "chat_message",
+              "avatar"
             ],
             "title": "Target Type"
           },

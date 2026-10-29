@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import chat, page_images, study, topics, usage
+from app.domain import avatars, chat, page_images, study, topics, usage
 from app.rag.explain import PROMPT_VERSION
 from app.worker import queue
 
@@ -92,7 +92,8 @@ class FeedbackIn(BaseModel):
 
 
 class ReportIn(BaseModel):
-    target_type: Literal["explanation", "question", "chat_message"]
+    # "avatar": a coursemate's profile photo; target_id is that student's id (FR-MOD-06).
+    target_type: Literal["explanation", "question", "chat_message", "avatar"]
     target_id: UUID
     reason: Literal["wrong", "unclear", "inappropriate", "other"]
     note: str | None = Field(default=None, max_length=500)
@@ -281,6 +282,7 @@ async def _check_target(conn, user_id: UUID, target_id: UUID, kind: str = "expla
     can_see = {
         "question": study.can_see_question,
         "chat_message": chat.can_see_message,
+        "avatar": avatars.can_see,  # only a photo shown to them, of someone in a shared course
     }.get(kind, study.can_see_explanation)
     if not await can_see(conn, user_id, target_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")

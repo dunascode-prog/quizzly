@@ -46,9 +46,13 @@ This document says **what the system must do**, precisely enough to build and te
 
 | ID | Pri | Requirement | Acceptance criteria |
 |---|---|---|---|
-| FR-PROF-01 | P0 | On first sign-in the student sets full name, institution (searchable list), department, and level (100L–700L, or "Other"). | Can't reach the home screen until institution and level are set; values are editable later. |
+| FR-PROF-01 | P0 | *(updated, PROFILE_V2)* Onboarding is a 4-step flow: photo + name, school, how you practise, all set. | Can't reach Today until name, institution and level are set and terms are accepted. Steps 1 and 3 have **Skip**. Back keeps entered values. Progress shows "Step n of 4 · name". Values are editable later. |
 | FR-PROF-02 | P0 | The institution list is seeded with Nigerian universities, polytechnics and colleges of education. | Search matches name and short name ("UNILAG", "University of Lagos"). "My school isn't listed" stores free text. |
-| FR-PROF-03 | P1 | The student can set a preferred explanation style (standard / simple / exam-focused). | It becomes the default in FR-EXPL-02. |
+| FR-PROF-03 | P1 | *(moved into onboarding)* Explanation style Standard / Simple / Exam with a one-line description of each. | It becomes the default in FR-EXPL-02. |
+| FR-PROF-04 | P1 | **Profile photo.** Take a photo (front camera) or pick one from the gallery, move and zoom it inside a circle crop; change or remove it later. | 512×512 WebP (quality 0.8, ≤ 150 KB) made on the phone; EXIF/GPS stripped. Uploaded through the API (`PUT /me/avatar`), never straight to storage. Removing deletes the file. Initials while loading, on error and without a photo. Works offline (queued in the outbox, shown locally at once). |
+| FR-PROF-05 | P1 | **Photo visibility.** "Show my photo to classmates" (default **off**). | Off: other students see initials only. On: members of courses the student shares or joins see the photo next to "Tolu A.". Admins never see photos (except a reported one). Blocked users never see it. Takes effect on next load. |
+| FR-PROF-06 | P1 | **When you practise.** Multi-select: On my commute · Between lectures · Evenings · Late night. | Sets the Daily 5 reminder time: commute 06:45, lectures 11:50, evenings 17:45, late night 21:45, none 19:30; the earliest chosen wins, moved to the end of quiet hours if it falls inside them. A time chosen in Reminders (21) wins over it. |
+| FR-PROF-07 | P1 | **Weekly goal** in onboarding: 3 / 4 / 6 study days (Light / Steady / Serious). | Writes `profiles.weekly_goal_days` (default 4). |
 
 ### 2.3 Courses (FR-CRS)
 
@@ -159,6 +163,7 @@ This document says **what the system must do**, precisely enough to build and te
 | FR-MOD-03 | P0 | Thumbs up/down on explanations and chat answers. | Stored for quality analysis. |
 | FR-MOD-04 | P0 | **(v0.2, was P1)** Copyright takedown: admin can block a file hash or take down a shared course, deleting derived data and preventing re-processing. | Members of an affected shared course lose access within 1 min and get a "no longer available" notification. |
 | FR-MOD-05 | P0 | **(v0.2)** Any member can **report a shared course** (copyright, wrong content, spam). | A course reported by 5 different members is unshared pending review. |
+| FR-MOD-06 | P1 | **Report a profile photo.** A photo shown in a shared course can be reported (`reports.target_type = 'avatar'`, target = the student). | 3 different reporters hide it (back to initials) until an admin reviews it in Reports. Admin "Remove photo" deletes the file and notifies the student kindly. |
 
 ### 2.13 Notifications (FR-NOTIF) — rewritten in v0.2
 

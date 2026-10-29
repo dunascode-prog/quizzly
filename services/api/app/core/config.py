@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     database_url: str = ""
     storage_bucket: str = "documents"
+    # Profile photos (FR-PROF-04): a separate private bucket the API alone writes to.
+    avatars_bucket: str = "avatars"
     # Bump when the Terms or Privacy Policy change; stored on the profile at consent (FR-AUTH-03).
     terms_version: str = "2026-10-22"
 

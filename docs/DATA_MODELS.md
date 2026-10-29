@@ -97,6 +97,11 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | share_permission | enum `share_permission` | **v0.2** `coursemates`, `code` (default), `nobody` (FR-SHARE-09) |
 | show_identity_on_links | bool | **v0.2** show name/institution/level on invite landing and recap; default true |
 | invite_code | text unique | **v0.2** e.g. `TOLU7`, case-insensitive unique (`upper(invite_code)`) |
+| avatar_path | text null | **0018** `{user_id}/{uuid}.webp` in the private `avatars` bucket; named by the API, a new name per upload (FR-PROF-04) |
+| avatar_visible | bool | **0018** "Show my photo to classmates", default false (FR-PROF-05) |
+| avatar_updated_at | timestamptz null | **0018** |
+| avatar_hidden | bool | **0018** set when 3 students report the photo, or by an admin (FR-MOD-06) |
+| practice_times | text[] | **0018** subset of `commute`, `lectures`, `evening`, `night` (FR-PROF-06) |
 
 #### `institutions` (reference)
 | Column | Type | Notes |
@@ -516,6 +521,9 @@ Index `(user_id, created_at desc)`, partial index on unread. Table added to the 
 | daily_reminder_time | time | default 19:30 |
 | quiet_start, quiet_end | time | default 23:00 / 07:00 |
 | types | jsonb | per-type toggles: `exam`, `due`, `recap`, `mates` (default false), `ready` |
+| daily_reminder_custom | bool | **0018** true once the student picks a time in Reminders; then practice times no longer change it (FR-PROF-06) |
+
+**Storage bucket `avatars`** (0018): private, 300 KB limit, no client policies. Only the API writes (service role); the app reads through signed URLs (7 days). Other students get a URL only when `avatar_visible and not avatar_hidden` and neither has blocked the other (FR-PROF-05). Deleting the photo or the account deletes the file.
 
 ### 2.12 Invites (v0.2)
 

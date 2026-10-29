@@ -176,6 +176,7 @@ npx expo install expo-font @expo-google-fonts/bricolage-grotesque @expo-google-f
 | `ToggleRow` | Field row, radius 22, label + optional helper, 52×32 switch (on = ink track, white knob). `accessibilityRole="switch"`. | 18, 21 |
 | `ThemeRow` | Field row: 40 accent swatch, name + unlock rule, check (selected) or lock icon (locked; disabled, says how to unlock). Selected row has a 2 px ink border. | 18 |
 | `MateChip` | 52 pill: 40 initials circle + first name; selected = ink fill. Multi-select. | 19 |
+| `Avatar` | A student's photo (`expo-image`, disk cache keyed by path) or initials on `field` while loading, on error and without a photo. Sizes 28 / 40 / 52 / 76 / 156; optional ink camera badge; `accessibilityLabel` "Profile photo" / "Add profile photo". | 02, 13, 14, 03, members, toast |
 | `AvatarStack` | Up to 3 overlapping 32 initials circles + count text. Only shown when the count ≥ 3. | 20 |
 | `NotificationRow` | Field row, radius 22: 48 avatar (initials, or the Logo mark for system events), bold actor + text, time, Lagoon unread dot, optional inline pills ("Add to library" ink, "View" light). | 22 |
 | `FilterPills` | Row of `Pill`s (All / Shared with me / Study). | 22 |
@@ -243,7 +244,16 @@ Follows the reference: ground background, padding 24/20/22, no accent colours. *
 
 
 ### 02 Profile setup
-Back `IconButton`. Headline "Where do you **study?**". Fields: Full name, Institution (searchable; "My school isn't listed"), Department. "Level" pills: 100L–500L, Other. Terms checkbox. Ink `ActionPill` "Start studying". After this, a pending share/invite code is applied (FR-AUTH-07).
+A four-step flow (PROFILE_V2.md, images `02a`–`02i`). **Header:** Back `IconButton` + 4-segment progress bar (6 px bars, `text` done / `line` to do) with "Step 1 of 4 · Your photo" below; **Skip** text button on steps 1 and 3.
+- **02a Your photo:** "Make it **yours**", helper "Add a photo so your account feels like yours. It's optional, and only you see it unless you choose otherwise." 156 px `Avatar` (empty: dashed `muted` ring, initials in `field`, ink camera badge with a 4 px `bg` outline); ink pill "Take a photo" + light pill "Gallery"; Full name `TextField`; "Classmates see you as **Tolu A.**" with a 28 px mini avatar. CTA "Continue without photo" until a photo is added, then "Continue".
+- **02b Photo sheet:** `Sheet` "Profile **photo**": Take a photo (Uses the front camera) · Choose from gallery (JPG, PNG or HEIC) · **Remove photo** (danger, only with a photo); tip chips "Good light · Just you · Face the camera"; footnote "We crop it to a circle and shrink it to a small file. Photos of other people, logos or anything offensive can be removed."
+- **02c Move and scale:** full-screen black viewer: Cancel · "Move and scale" · rotate; 1:1 image with a white circle mask, rule-of-thirds grid, 55% black outside; zoom slider + "+"; hint "Drag to move. Pinch or use the slider to zoom."; light `ActionPill` "Use photo". Our own crop UI (gesture-handler + Reanimated), then `expo-image-manipulator` to a 512×512 WebP. No zoom animation under reduce motion.
+- **02d Photo added:** the photo in the circle, "Change photo" and "Remove" text buttons.
+- **02e/02f Your school:** Institution search (results in a `field` card, selected row with an ink check, "My school isn't listed"; Continue disabled while the list is open), then Institution (pencil to search again), Department, Level pills (100L–500L, Other; 600L/700L under Other).
+- **02g How you practise:** 2×2 selectable cards (bus / coffee / sun / moon: On my commute · Between lectures · Evenings · Late night) + helper "Pick any. We'll send your Daily 5 reminder just before these times."; Weekly goal 3 cards (3 days Light / 4 days Steady / 6 days Serious); Explanations 3 pills + live description. Selected = ink, others = `field`.
+- **02h All set:** ink profile card (72 px photo with a 3 px `onInk` ring, name in Bricolage 24, "UNILAG · 200L · Computer Science", ↗) and three ticked lines from the choices; `ToggleRow` "Show my photo to classmates" (default off); terms checkbox; ink `ActionPill` "Start studying" (disabled until terms are ticked).
+- **02i Your photo, everywhere:** `Avatar` replaces initials in the Today and Library headers (52), Account (76 with camera badge → 02b), shared-course members (40; photo only when that student opted in) and the share toast (40).
+- Edit profile (from Account) reuses steps 1–3 as one scrolling form.
 
 ### 03 Library (tab)
 Header: initials avatar, "Hello, Tolu" + "12 quizzes left today", ink `IconButton` "+" (opens 04). Headline "Revise your **courses**". `HeroCard` "Continue · CSC 225" with ring and "RESUME". `ListCard`s per course, with the course accent dot and, for joined courses, the tag "Shared by Ada". Floating tab bar (Library active). Empty: "Add your first course" + "Add notes", and a secondary "Join with a link" text button.
