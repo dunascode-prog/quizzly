@@ -10,11 +10,13 @@ import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
 import { ToggleRow } from '@/components/ui/toggle-row';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { type Settings, useSettings, useUpdateSettings } from '@/lib/settings';
 import { useBlocked, useUnblock } from '@/lib/sharing';
+import { useOnline } from '@/lib/network';
 
 const WHO: { key: Settings['share_permission']; label: string; hint: string }[] = [
   { key: 'coursemates', label: 'Coursemates only', hint: 'People who already share a course with you' },
@@ -31,6 +33,7 @@ export default function PrivacyScreen() {
   const blocked = useBlocked();
   const unblock = useUnblock();
   const s = settings.data;
+  const online = useOnline();
   const error = settings.error ?? update.error ?? blocked.error ?? unblock.error;
 
   return (
@@ -38,6 +41,7 @@ export default function PrivacyScreen() {
       <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
       <HighlightText highlight="blocking">Privacy and blocking</HighlightText>
       {error ? <Banner message={friendlyError(error)} /> : null}
+      {!online && !s ? <NeedsInternet what="Your privacy settings" /> : null}
 
       <View style={styles.section}>
         <Text variant="heading" accessibilityRole="header">

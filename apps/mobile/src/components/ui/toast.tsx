@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { X } from '@/components/icons';
 import { initials } from '@/components/profile-header';
 import { Accent, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useAccent } from '@/lib/appearance';
+import { useAccent, useCalmMotion } from '@/lib/appearance';
 import { openTarget, useToast } from '@/lib/notifications';
 
 import { IconButton } from './icon-button';
@@ -23,7 +23,7 @@ const SLIDE_MS = 250;
 export function Toast() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useCalmMotion();
   const { current: n, hide } = useToast();
   const dot = useAccent() ?? Accent.lagoon;
   const y = useSharedValue(-200);

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 
 import { apiFetch } from '@/lib/api';
+import { useAppearance } from '@/lib/appearance';
 import { useAuth } from '@/lib/auth';
 import { deviceStore } from '@/lib/device-store';
 import { queryClient } from '@/lib/query-client';
@@ -208,8 +209,10 @@ export function cancelDownload(courseId: string) {
 export function useAutoUpdate(courseId: string) {
   const saved = useOffline((s) => s.saved[courseId]);
   const signedIn = Boolean(useAuth((s) => s.session));
+  const lowData = useAppearance((s) => s.lowData);
   useEffect(() => {
-    if (!saved || !signedIn) return;
+    // Low-data mode: nothing downloads in the background; "Update" still works by hand.
+    if (!saved || !signedIn || lowData) return;
     let live = true;
     void apiFetch<Manifest>(`/v1/courses/${courseId}/offline`)
       .then((m) => {

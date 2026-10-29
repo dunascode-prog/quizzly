@@ -14,12 +14,14 @@ import { Sheet } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
 import { TextField } from '@/components/ui/text-field';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { plural } from '@/lib/format';
 import { useCourses, useDocuments } from '@/lib/library';
 import { useCoursemates, useShare, useShareCourse, useStopSharing } from '@/lib/sharing';
+import { useOnline } from '@/lib/network';
 
 // Screen 19 (DESIGN.md §7, FR-SHARE-01/02/07): what coursemates get and what stays private, send
 // in Quizzly (coursemates or a Quizzly code), the share link, and Stop sharing.
@@ -48,6 +50,7 @@ export default function ShareCourseSheet() {
 
   const topics = (docs.data ?? []).filter((d) => d.status === 'ready').reduce((n, d) => n + d.topic_count, 0);
   const link = share.data?.link ?? send.data?.link;
+  const online = useOnline();
   const recipients = picked.length + codes.length;
   const label = course?.code ?? 'this course';
 
@@ -155,12 +158,13 @@ export default function ShareCourseSheet() {
       </View>
 
       {send.isError || stop.isError ? <Banner message={friendlyError(send.error ?? stop.error)} /> : null}
+      {!online && !link ? <NeedsInternet what="Your share link" /> : null}
       <ActionPill
-        label={recipients ? `Send to ${recipients}` : 'Share to WhatsApp'}
+        label={!online ? 'Needs internet' : recipients ? `Send to ${recipients}` : 'Share to WhatsApp'}
         icon={Share2}
         onPress={primary}
         loading={send.isPending && recipients > 0}
-        disabled={!link && !recipients}
+        disabled={!online || (!link && !recipients)}
       />
 
       <View style={styles.footer}>

@@ -1,3 +1,4 @@
+import { useReducedMotion } from 'react-native-reanimated';
 import { create } from 'zustand';
 
 import { Accent, type AccentName } from '@/constants/theme';
@@ -45,4 +46,13 @@ export function useAccent(): string | null {
 /** Night study mode: dark from 9 PM to 6 AM, whatever the phone setting (FR-HAB-07). */
 export function useNightDark() {
   return useAppearance((s) => s.nightMode && s.night);
+}
+
+/** Calmer animations (DESIGN.md §5): the phone's reduce-motion setting, or night study mode while
+ * it's dark (FR-HAB-07, "Dark from 9 PM, calmer animations"). Flips become cross-fades and
+ * slides stop. */
+export function useCalmMotion() {
+  const reduce = useReducedMotion();
+  const night = useNightDark();
+  return reduce || night;
 }

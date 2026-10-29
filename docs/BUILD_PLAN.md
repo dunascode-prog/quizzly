@@ -61,7 +61,7 @@ From the v0.1 code review. Each task needs a regression test.
 - [x] **D8c. Rename / merge topics** (screen 27, FR-TOP-03, P1): `topic_overrides` writes through the API (title override, merged_into, split), outline endpoint applies overrides for the requesting user only.
 - [x] **D8d. Save course for offline** (screen 28, FR-OFF-03, P1): offline manifest endpoint (items + byte size), background download into the SQLite cache with per-part progress, "Saved for offline" state and auto-update while on.
 - [x] **D8e. Past-question mode** (screen 26, FR-QGEN-09, P1): past-paper upload (same pipeline, `kind = past_paper`, never shared or used as answers), style extraction job (types, wording patterns, marks), `style` option on `POST /quizzes`.
-- [ ] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens.
+- [x] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens.
 
 ## Phase E — Beta readiness (M5)
 
