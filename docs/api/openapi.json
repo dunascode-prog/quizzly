@@ -513,6 +513,69 @@
         }
       }
     },
+    "/v1/courses/{course_id}/paper-styles": {
+      "get": {
+        "tags": [
+          "courses"
+        ],
+        "summary": "Paper Styles",
+        "description": "The student's own past papers for this course; nobody else's, even in a shared course.",
+        "operationId": "paper_styles_v1_courses__course_id__paper_styles_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "course_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Course Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PaperStyleOut"
+                  },
+                  "title": "Response Paper Styles V1 Courses  Course Id  Paper Styles Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/usage": {
       "get": {
         "tags": [
@@ -5211,6 +5274,27 @@
               }
             ],
             "title": "Image Count"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "notes",
+              "past_paper"
+            ],
+            "title": "Kind",
+            "default": "notes"
+          },
+          "paper_year": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(\\d{4}|older)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Year"
           }
         },
         "type": "object",
@@ -5312,6 +5396,22 @@
             "type": "boolean",
             "title": "Read Only",
             "default": false
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "notes"
+          },
+          "paper_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Year"
           }
         },
         "type": "object",
@@ -6358,6 +6458,18 @@
             "type": "string",
             "title": "Title"
           },
+          "course_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Id"
+          },
           "course_code": {
             "anyOf": [
               {
@@ -6477,6 +6589,73 @@
           "text"
         ],
         "title": "PageOut"
+      },
+      "PaperStyleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "types": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Types",
+            "default": {}
+          },
+          "marks": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Marks",
+            "default": {}
+          },
+          "question_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Question Types",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "document_id",
+          "title",
+          "year",
+          "status"
+        ],
+        "title": "PaperStyleOut",
+        "description": "A past paper's style for quiz setup (FR-QGEN-09, screen 26b). Only its format, never its\nquestions."
       },
       "PlanRow": {
         "properties": {
@@ -7022,6 +7201,18 @@
               }
             ],
             "title": "Time Limit Min"
+          },
+          "style_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style Id"
           }
         },
         "type": "object",
