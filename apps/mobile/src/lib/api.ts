@@ -1,3 +1,4 @@
+import { recordBytes } from '@/lib/data-usage';
 import { env } from '@/lib/env';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
@@ -28,6 +29,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     const detail = Array.isArray(body?.detail) ? body.detail[0]?.msg : body?.detail;
     throw new ApiError(response.status, detail ?? response.statusText);
   }
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  const sent = typeof init.body === 'string' ? init.body.length : 0;
+  if (response.status === 204) {
+    recordBytes(sent);
+    return undefined as T;
+  }
+  const text = await response.text();
+  recordBytes(sent + text.length); // for "This week: … used" in low-data mode
+  return JSON.parse(text) as T;
 }

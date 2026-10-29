@@ -10,10 +10,12 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Pill } from '@/components/ui/pill';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Accent, FontFamily, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAccent } from '@/lib/appearance';
 import { friendlyError } from '@/lib/errors';
+import { useOnline } from '@/lib/network';
 import {
   blockUser,
   type InboxFilter,
@@ -130,6 +132,7 @@ export default function NotificationsScreen() {
   const [menu, setMenu] = useState<Notification | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inbox = useInbox(filter);
+  const online = useOnline();
   const markAll = useMarkAllRead();
   const rows = inbox.data?.pages.flatMap((p) => p.notifications) ?? [];
   const unread = inbox.data?.pages[0]?.unread ?? 0;
@@ -151,7 +154,7 @@ export default function NotificationsScreen() {
           <View style={styles.header}>
             <View style={styles.topBar}>
               <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
-              {unread ? <Pill label="Mark all read" onPress={() => markAll.mutate()} /> : null}
+              {unread && online ? <Pill label="Mark all read" onPress={() => markAll.mutate()} /> : null}
             </View>
             <View style={styles.titleRow}>
               <Text variant="display" accessibilityRole="header">
@@ -171,6 +174,7 @@ export default function NotificationsScreen() {
               ))}
             </View>
             {inbox.isError ? <Banner message={friendlyError(inbox.error)} /> : null}
+            {!online && !inbox.data ? <NeedsInternet what="Your notifications" /> : null}
             {error ? <Banner message={error} /> : null}
           </View>
         }

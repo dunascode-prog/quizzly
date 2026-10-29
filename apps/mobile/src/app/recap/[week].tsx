@@ -12,12 +12,14 @@ import { RecapCard } from '@/components/ui/recap-card';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { ToggleRow } from '@/components/ui/toggle-row';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { inviteLink } from '@/lib/links';
 import { mondayOf, useRecap, weekLabel } from '@/lib/recap';
 import { saveImage } from '@/lib/save-image';
+import { useOnline } from '@/lib/network';
 
 const SAVE_FAILED = "Couldn't save the image. Check that Quizzly can add to your photos.";
 const SHARE_FAILED = "Couldn't share the image. Try again.";
@@ -35,6 +37,7 @@ export default function RecapScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const r = recap.data;
+  const online = useOnline();
   const showIdentity = hidden === null ? (r?.show_identity ?? true) : !hidden;
 
   const capture = () => captureRef(card, { format: 'png', quality: 1, width: 1080, height: 1920, result: 'tmpfile' });
@@ -85,12 +88,13 @@ export default function RecapScreen() {
         />
       ) : null}
       {recap.isError ? <Banner message={friendlyError(recap.error)} /> : null}
+      {!online && !r ? <NeedsInternet what="Your week" /> : null}
 
       {r ? (
         <RecapCard ref={card} recap={r} showIdentity={showIdentity} link={r.invite_code ? inviteLink(r.invite_code) : null} />
-      ) : (
+      ) : online ? (
         <View style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} />
-      )}
+      ) : null}
 
       {message ? (
         <Text variant="small" color="textSecondary" style={styles.center} accessibilityLiveRegion="polite">

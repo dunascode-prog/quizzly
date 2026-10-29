@@ -11,11 +11,13 @@ import { Pill } from '@/components/ui/pill';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { useCourses } from '@/lib/library';
 import { useMembers, useRegenerateLink, useRemoveMember, useStopSharing } from '@/lib/sharing';
+import { useOnline } from '@/lib/network';
 
 // Members of a shared course (DESIGN.md §7, FR-SHARE-07): display names only, remove a member,
 // regenerate the link (the old one stops working), stop sharing.
@@ -24,6 +26,7 @@ export default function MembersScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const course = useCourses().data?.find((c) => c.id === id);
   const members = useMembers(id);
+  const online = useOnline();
   const remove = useRemoveMember(id);
   const regenerate = useRegenerateLink(id);
   const stop = useStopSharing(id);
@@ -38,9 +41,10 @@ export default function MembersScreen() {
       <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
       <HighlightText highlight="coursemates">{`${course?.code ?? 'Course'} coursemates`}</HighlightText>
       {error ? <Banner message={friendlyError(error)} /> : null}
+      {!online && !members.data ? <NeedsInternet what="Who's in this course" /> : null}
 
       {members.isPending ? (
-        <View style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} />
+        online ? <View style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} /> : null
       ) : active.length + pending.length === 0 ? (
         <Text variant="body" color="textSecondary">
           Nobody has joined yet. Share the link from the course&apos;s share button.

@@ -15,11 +15,13 @@ import { Pill } from '@/components/ui/pill';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Accent, Colors, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
+import { useOnline } from '@/lib/network';
 
 type Invite = {
   code: string;
@@ -42,6 +44,7 @@ export default function InviteScreen() {
     enabled: Boolean(useAuth((s) => s.session)),
   });
   const [copied, setCopied] = useState(false);
+  const online = useOnline();
   const i = invite.data;
   const message = i ? `I study with Quizzly: it turns lecture slides into explanations and exam questions. Join me: ${i.link}` : '';
   const goal = i?.next_reward?.at ?? 3;
@@ -59,6 +62,7 @@ export default function InviteScreen() {
       <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
       <HighlightText highlight="friends">Study with your friends</HighlightText>
       {invite.isError ? <Banner message={friendlyError(invite.error)} /> : null}
+      {!online && !invite.data ? <NeedsInternet what="Your invite link" /> : null}
 
       {i ? (
         <>
@@ -161,9 +165,9 @@ export default function InviteScreen() {
             </View>
           </View>
         </>
-      ) : (
+      ) : online ? (
         <View style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} />
-      )}
+      ) : null}
     </Screen>
   );
 }

@@ -11,10 +11,12 @@ import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { formatTime, TimePill } from '@/components/ui/time-pill';
 import { ToggleRow } from '@/components/ui/toggle-row';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { type NotificationSettings, useNotificationSettings, useUpdateNotificationSettings } from '@/lib/settings';
+import { useOnline } from '@/lib/network';
 
 const TYPES: { key: keyof NotificationSettings['types']; label: string; helper: string }[] = [
   { key: 'exam', label: 'Exam countdown', helper: '7, 3 and 1 days before an exam' },
@@ -45,12 +47,14 @@ export default function RemindersScreen() {
   const update = useUpdateNotificationSettings();
   const [editQuiet, setEditQuiet] = useState(false);
   const s = settings.data;
+  const online = useOnline();
 
   return (
     <Screen>
       <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
       <HighlightText highlight="kindly">Nudge me kindly</HighlightText>
       {settings.isError || update.isError ? <Banner message={friendlyError(settings.error ?? update.error)} /> : null}
+      {!online && !s ? <NeedsInternet what="Your reminder settings" /> : null}
 
       <HeroCard>
         <Text variant="small" color="mutedOnInk">
