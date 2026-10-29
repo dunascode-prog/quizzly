@@ -16,7 +16,8 @@ from psycopg import AsyncConnection
 
 from app.core import db
 from app.core.config import get_settings
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, job_id_var
+from app.core.observability import init_sentry
 from app.domain import notifications
 from app.llm import usage
 from app.llm.gateway import AllProvidersBusy, BudgetReached
@@ -28,6 +29,7 @@ from app.worker import (
     ingest,
     invites,
     marking,
+    metrics,
     progress,
     push,
     questions,
@@ -59,6 +61,7 @@ POLL_INTERVAL = 2.0
 HEARTBEAT_INTERVAL = 60.0
 SWEEP_INTERVAL = 60.0
 REMINDER_INTERVAL = 900.0  # FR-HAB-08: every 15 minutes
+METRICS_INTERVAL = 300.0  # NFR-09: a job-metrics log line every 5 minutes
 SNAPSHOT_INTERVAL = 3600.0  # daily readiness rows; each day's row is written once
 # FR-SEC-04: no job may run longer than this; a file that takes longer fails as too_large.
 JOB_TIMEOUT = timedelta(minutes=10)
@@ -72,36 +75,65 @@ async def run_one(conn: AsyncConnection, worker_id: str) -> bool:
     job = await queue.claim(conn, worker_id, list(HANDLERS))
     if job is None:
         return False
-    extra = {"job_id": str(job["id"])}
+    token = job_id_var.set(str(job["id"]))
+    started = time.perf_counter()
+    outcome = "failed"
+    try:
+        outcome = await _run(conn, job, {"job_id": str(job["id"])})
+    finally:
+        # NFR-09: one structured line per job, for duration and failure metrics in the logs.
+        wait = (
+            (job["locked_at"] - job["run_after"]).total_seconds() if job.get("locked_at") else None
+        )
+        log.info(
+            "job finished",
+            extra={
+                "job_type": job["type"],
+                "outcome": outcome,
+                "attempt": job["attempts"],
+                "ms": round((time.perf_counter() - started) * 1000, 1),
+                "wait_ms": round(wait * 1000) if wait is not None and wait >= 0 else None,
+            },
+        )
+        job_id_var.reset(token)
+    return True
+
+
+async def _run(conn: AsyncConnection, job: dict, extra: dict) -> str:
+    """Runs one claimed job; returns its outcome for the job line."""
     handler = HANDLERS.get(job["type"])
     if handler is None:
         await queue.fail(conn, job, f"no handler for {job['type']}", retry=False)
         log.error("no handler for job type %s", job["type"], extra=extra)
-        return True
+        return "failed"
     usage.for_job(job)  # llm_calls rows are tagged with this job and its student
     try:
         async with asyncio.timeout(JOB_TIMEOUT.total_seconds()):
             await handler(conn, job)
         await queue.succeed(conn, job["id"])
-        log.info("job %s succeeded", job["type"], extra=extra)
+        return "succeeded"
     except TimeoutError:
         # Retrying would only take as long again: fail it, and the work with it.
         await queue.fail(conn, job, "timeout", retry=False)
         await crashed.handle(conn, job, reason="too_large")
         log.error("job %s ran past %s", job["type"], JOB_TIMEOUT, extra=extra)
+        return "timeout"
     except queue.RetryLater as exc:
         await queue.requeue(conn, job, exc.delay)
         log.info("job %s waiting: %s", job["type"], exc, extra=extra)
+        return "requeued"
     except BudgetReached as exc:
         await queue.requeue(conn, job, BUDGET_REQUEUE_DELAY, reason="busy")
         log.warning("daily AI budget reached, requeued: %s", exc, extra=extra)
+        return "busy"
     except AllProvidersBusy as exc:
         await queue.requeue(conn, job, BUSY_REQUEUE_DELAY, reason="busy")
         log.warning("LLM providers busy, requeued: %s", exc, extra=extra)
+        return "busy"
     except Exception as exc:
         await queue.fail(conn, job, repr(exc))
-        log.exception("job %s failed", job["type"], extra=extra)
-    return True
+        log.exception("job %s failed", job["type"], extra=extra)  # Sentry captures error logs
+        return "failed"
 
 
 async def sweep(conn: AsyncConnection) -> int:
@@ -132,11 +164,12 @@ async def main() -> None:
     settings = get_settings()
     settings.require_env()  # FR-SEC-15
     configure_logging(settings.log_level)
+    init_sentry(settings, "worker")  # NFR-09; off without SENTRY_DSN
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
     pool = await db.open_pool()
     beat = asyncio.create_task(heartbeat(worker_id))
     log.info("worker %s started", worker_id)
-    last_sweep = last_snapshot = last_reminders = 0.0
+    last_sweep = last_snapshot = last_reminders = last_metrics = 0.0
     try:
         while True:
             async with pool.connection() as conn:
@@ -151,6 +184,10 @@ async def main() -> None:
                     old = await notifications.delete_old(conn)  # 90 days (FR-NOTIF-04)
                     log.info("readiness snapshots: %d, old notifications deleted: %d", written, old)
                     last_snapshot = time.monotonic()
+                if time.monotonic() - last_metrics > METRICS_INTERVAL:
+                    # NFR-09: queue depth, waits and failures in the logs, every few minutes.
+                    log.info("job metrics", extra={"metrics": await metrics.job_metrics(conn)})
+                    last_metrics = time.monotonic()
                 had_work = await run_one(conn, worker_id)
             if not had_work:
                 await asyncio.sleep(POLL_INTERVAL)
