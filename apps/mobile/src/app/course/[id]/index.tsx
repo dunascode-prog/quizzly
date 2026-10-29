@@ -39,6 +39,10 @@ function statusLine(doc: Doc, upload: { progress: number; failed: boolean; probl
     case 'failed':
       return { text: doc.failure_message ?? "Couldn't read this file", color: 'danger' };
     case 'ready': {
+      // A past paper is only used for its style (FR-QGEN-09).
+      if (doc.kind === 'past_paper') {
+        return { text: ['Past paper', doc.paper_year && doc.paper_year !== 'older' ? doc.paper_year : null, 'used for quiz style'].filter(Boolean).join(' · ') };
+      }
       const summary = [plural(doc.topic_count, 'topic'), doc.page_count ? plural(doc.page_count, 'page') : null];
       // FR-DOC-07: OCR'd pages that were hard to read are flagged, not hidden.
       if (doc.low_ocr_page_count > 0) {
@@ -253,7 +257,7 @@ export default function CourseScreen() {
                 meta={saved?.documentIds.includes(d.id) && d.status === 'ready' ? `${line.text} · ✓ On this phone` : line.text}
                 metaColor={line.color}
                 onPress={() =>
-                  d.status === 'ready'
+                  d.status === 'ready' && d.kind !== 'past_paper'
                     ? router.push({ pathname: '/document/[id]', params: { id: d.id } })
                     : router.push({ pathname: '/document/[id]/edit', params: { id: d.id } })
                 }

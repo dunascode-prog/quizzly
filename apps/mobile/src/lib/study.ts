@@ -24,6 +24,7 @@ export type Outline = {
   document: {
     id: string;
     title: string;
+    course_id?: string | null;
     course_code: string | null;
     page_count: number | null;
     topic_count: number;

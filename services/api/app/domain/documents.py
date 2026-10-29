@@ -33,6 +33,7 @@ FAILURE_MESSAGES = {
 _SELECT = """
 select d.id, d.title, d.original_filename, d.course_id, d.status::text as status,
        d.failure_reason, d.upload_path, d.source_file_id, d.created_at, d.image_count,
+       d.kind::text as kind, d.paper_year,
        d.upload_url_issued_at, d.user_id <> %(user)s as read_only,
        sf.page_count, coalesce(cardinality(sf.low_ocr_pages), 0) as low_ocr_page_count,
        (select count(*) from topics t
@@ -104,6 +105,8 @@ async def create_document(
     filename: str,
     course_id: UUID | None,
     image_count: int | None = None,
+    kind: str = "notes",
+    paper_year: str | None = None,
 ) -> dict:
     """A file upload, or with image_count a photo set (its upload_path is a folder). The server
     names the path; nothing from the client goes into it (FR-SEC-02)."""
@@ -115,8 +118,18 @@ async def create_document(
         path = uploads.new_path(user_id, doc_id, file_kind(filename) or ".pdf")
     await conn.execute(
         "insert into documents (id, user_id, course_id, title, original_filename, upload_path, "
-        "image_count) values (%s, %s, %s, %s, %s, %s, %s)",
-        (doc_id, user_id, course_id, title[:80], filename[:255], path, image_count),
+        "image_count, kind, paper_year) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        (
+            doc_id,
+            user_id,
+            course_id,
+            title[:80],
+            filename[:255],
+            path,
+            image_count,
+            kind,
+            paper_year,
+        ),
     )
     return await get_document(conn, user_id, doc_id)
 

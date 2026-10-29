@@ -29,11 +29,12 @@ async def create_set(
     difficulty: str,
     count: int,
     variant: int,
+    style_id: UUID | None = None,
 ) -> dict:
     await conn.execute(
         "insert into question_sets (source_file_id, cache_key, topic_ids, question_types, "
-        "difficulty, requested_count, variant, prompt_version) "
-        "values (%s, %s, %s, %s::question_type[], %s, %s, %s, %s) "
+        "difficulty, requested_count, variant, prompt_version, style_id) "
+        "values (%s, %s, %s, %s::question_type[], %s, %s, %s, %s, %s) "
         "on conflict (cache_key) do nothing",
         (
             source_file_id,
@@ -44,6 +45,7 @@ async def create_set(
             count,
             variant,
             q.prompt_version(types),
+            style_id,
         ),
     )
     return await find_set(conn, key)
