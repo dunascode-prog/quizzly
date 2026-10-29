@@ -109,6 +109,7 @@ async def _upload_urls(conn, storage, doc: dict, user_id: UUID) -> list[str]:
 
 @router.get("/v1/usage", tags=["account"])
 async def get_usage(user: User, conn: Conn, settings: AppSettings) -> UsageOut:
+    """Today's use of each daily allowance and what's left; resets at midnight (FR-LIM-01)."""
     used = await usage.used_today(conn, user.id, settings.timezone)
 
     def allowance(resource: str, limit: int) -> Allowance:
@@ -131,6 +132,8 @@ async def list_documents(
     course_id: UUID | None = None,
     unfiled: Annotated[bool, Query()] = False,
 ) -> list[DocumentOut]:
+    """The documents the student can open. Filter with `course_id`, or `unfiled=true` for
+    those not in a course."""
     rows = await documents.list_documents(conn, user.id, course_id, unfiled)
     return [DocumentOut.of(r) for r in rows]
 
@@ -204,6 +207,7 @@ async def upload_finished(
 
 @router.get("/v1/documents/{document_id}")
 async def get_document(document_id: UUID, user: User, conn: Conn) -> DocumentOut:
+    """One document, with its processing status; poll this while it's being processed."""
     return DocumentOut.of(await _found(conn, user.id, document_id))
 
 
@@ -211,6 +215,8 @@ async def get_document(document_id: UUID, user: User, conn: Conn) -> DocumentOut
 async def update_document(
     document_id: UUID, body: DocumentUpdate, user: User, conn: Conn
 ) -> DocumentOut:
+    """Renames a document or moves it to another course (`course_id: null` for Unfiled).
+    Documents in a course shared with the student can't be changed (FR-DOC-12)."""
     fields = body.model_dump(exclude_unset=True)
     if "title" in fields:
         fields["title"] = fields["title"].strip() or None

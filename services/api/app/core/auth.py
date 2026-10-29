@@ -10,7 +10,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import Settings, get_settings
 
-_bearer = HTTPBearer(auto_error=False)
+_bearer = HTTPBearer(
+    auto_error=False,
+    bearerFormat="JWT",
+    description="A Supabase access token for the signed-in student (`session.access_token`).",
+)
 _jwks_clients: dict[str, jwt.PyJWKClient] = {}
 
 

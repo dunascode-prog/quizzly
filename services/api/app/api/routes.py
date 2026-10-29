@@ -86,11 +86,14 @@ def _me(user: CurrentUser, profile: dict[str, Any] | None) -> MeOut:
 
 @router.get("/healthz", tags=["ops"])
 async def healthz() -> dict:
+    """Liveness check; doesn't need a token or the database."""
     return {"status": "ok"}
 
 
 @router.get("/v1/me", tags=["account"])
 async def me(user: User, conn: Conn) -> MeOut:
+    """The signed-in student's profile. The app keeps them in onboarding until it's complete
+    (FR-PROF-01)."""
     return _me(user, await accounts.get_profile(conn, user.id))
 
 
@@ -101,6 +104,8 @@ async def update_me(
     conn: Conn,
     settings: AppSettings,
 ) -> MeOut:
+    """Changes only the fields sent. A listed institution and a typed-in one are
+    alternatives: setting one clears the other. `accept_terms` records the current terms."""
     fields = body.model_dump(exclude_unset=True, exclude={"accept_terms"})
     # A listed school and a typed-in one are alternatives; setting one clears the other.
     if fields.get("institution_id"):
@@ -143,5 +148,7 @@ async def institutions(
     q: Annotated[str, Query(max_length=80)] = "",
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> list[InstitutionOut]:
+    """Searches institutions for onboarding: short names by prefix ("UNILAG"), full names
+    by substring or similarity."""
     rows = await accounts.search_institutions(conn, q, limit)
     return [InstitutionOut(**row) for row in rows]

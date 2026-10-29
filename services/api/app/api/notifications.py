@@ -58,23 +58,28 @@ async def list_notifications(
 
 @router.post("/v1/notifications/read", status_code=status.HTTP_204_NO_CONTENT)
 async def read(body: IdsIn, user: User, conn: Conn) -> Response:
+    """Marks these notifications read; ids that aren't the student's are ignored (FR-NOTIF-05)."""
     await notifications.mark_read(conn, user.id, body.ids)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/v1/notifications/read-all", status_code=status.HTTP_204_NO_CONTENT)
 async def read_all(user: User, conn: Conn) -> Response:
+    """Marks every notification read."""
     await notifications.mark_all_read(conn, user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/v1/push-tokens", status_code=status.HTTP_204_NO_CONTENT)
 async def save_push_token(body: PushTokenIn, user: User, conn: Conn) -> Response:
+    """Registers this device's Expo push token after sign-in. A token moves with its
+    device, so it now belongs to this account."""
     await notifications.save_push_token(conn, user.id, body.token, body.platform)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/v1/push-tokens/{token}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_push_token(token: str, user: User, conn: Conn) -> Response:
+    """Forgets this device's push token, e.g. on sign-out."""
     await notifications.delete_push_token(conn, user.id, token)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -137,6 +137,7 @@ async def _outline(conn, user_id: UUID, doc: dict) -> OutlineOut:
 
 @router.get("/v1/documents/{document_id}/outline")
 async def outline(document_id: UUID, user: User, conn: Conn) -> OutlineOut:
+    """The document's topics with the student's own renames, merges and splits applied."""
     return await _outline(conn, user.id, await _document(conn, user.id, document_id))
 
 
