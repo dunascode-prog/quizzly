@@ -67,7 +67,7 @@ From the v0.1 code review. Each task needs a regression test.
 
 - [ ] E1. Eval set and CI run on prompt changes (NFR-11).
 - [ ] E2. Sentry in app and API; job metrics (NFR-09).
-- [ ] E3. Play Store internal testing track; store listing; privacy policy and terms updated for sharing, notifications and invites (NDPA).
+- [ ] E3. Play Store internal testing track; store listing; privacy policy and terms updated for sharing, notifications and invites (NDPA). Repo side done (`eas.json`, [STORE_LISTING.md](STORE_LISTING.md)); account steps and policy pages remain.
 - [ ] E4. **Admin app** at `/admin` in `apps/web` (screens 30a–30h, WEB.md §3): team sign-in with 2FA and `role = admin`, Overview, AI costs, Reports (fix answer / regenerate / keep hidden / dismiss), Takedowns, Limits and plans (`app_config` + audit log), Students, System. Admin API endpoints under `/admin/*` in FastAPI with role checks and `admin_audit_log`.
 
 ## Decisions still open (don't block on them)
