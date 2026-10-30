@@ -3,7 +3,11 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { apiFetch } from '@/lib/api';
 import { signOut, useAuth } from '@/lib/auth';
 
-export type Level = '100L' | '200L' | '300L' | '400L' | '500L' | '600L' | '700L' | 'other';
+// Nigerian levels, years elsewhere (FR-PROF-08), postgraduate, other.
+export type Level =
+  | '100L' | '200L' | '300L' | '400L' | '500L' | '600L' | '700L'
+  | 'Y1' | 'Y2' | 'Y3' | 'Y4' | 'Y5' | 'Y6' | 'PG'
+  | 'other';
 
 export type Institution = {
   id: string;
@@ -32,6 +36,9 @@ export type Me = {
   weekly_goal_days: number;
   /** Set by payments only (FR-LIM-04); free students get the cheaper AI models. */
   plan: 'free' | 'student' | 'premium';
+  /** ISO 3166-1 alpha-2, e.g. "NG" (FR-PROF-08). */
+  country: string;
+  timezone: string;
 };
 
 export type ExplanationStyle = 'standard' | 'simple' | 'exam';
@@ -48,6 +55,8 @@ export type ProfileUpdate = Partial<
     | 'avatar_visible'
     | 'practice_times'
     | 'weekly_goal_days'
+    | 'country'
+    | 'timezone'
   > & {
     institution_id: string | null;
     accept_terms: boolean;
@@ -80,11 +89,13 @@ export function useDeleteAccount() {
   });
 }
 
-export function useInstitutionSearch(query: string) {
+/** Schools in the student's country (FR-PROF-08). */
+export function useInstitutionSearch(query: string, country = 'NG') {
   const q = query.trim();
   return useQuery({
-    queryKey: ['institutions', q.toLowerCase()],
-    queryFn: () => apiFetch<Institution[]>(`/v1/institutions?q=${encodeURIComponent(q)}&limit=20`),
+    queryKey: ['institutions', country, q.toLowerCase()],
+    queryFn: () =>
+      apiFetch<Institution[]>(`/v1/institutions?q=${encodeURIComponent(q)}&limit=20&country=${country}`),
     placeholderData: keepPreviousData,
     staleTime: 24 * 60 * 60_000,
   });

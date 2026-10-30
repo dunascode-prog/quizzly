@@ -57,8 +57,8 @@ def profiles(monkeypatch):
     async def institution_exists(conn, institution_id):
         return institution_id == UNILAG["id"]
 
-    async def search_institutions(conn, query, limit):
-        calls["search"] = (query, limit)
+    async def search_institutions(conn, query, limit, country="NG"):
+        calls["search"] = (query, limit, country)
         return [UNILAG]
 
     monkeypatch.setattr(accounts, "get_profile", get_profile)
@@ -242,7 +242,10 @@ def test_institution_search(client, profiles):
     response = client.get("/v1/institutions?q=unilag&limit=5", headers=auth_header())
     assert response.status_code == 200
     assert response.json()[0]["name"] == "University of Lagos"
-    assert profiles["search"] == ("unilag", 5)
+    assert profiles["search"] == ("unilag", 5, "NG")  # Nigeria unless told (FR-PROF-08)
+    client.get("/v1/institutions?q=legon&country=GH", headers=auth_header())
+    assert profiles["search"] == ("legon", 20, "GH")
+    assert client.get("/v1/institutions?country=ghana", headers=auth_header()).status_code == 422
 
 
 def test_profile_routes_need_a_database(settings, monkeypatch):
