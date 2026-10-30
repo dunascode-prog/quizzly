@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     daily_markings: int = 20  # theory / short answers marked by the LLM (PRD §9)
     daily_chat_messages: int = 40
     daily_share_recipients: int = 20  # people a student can send courses to per day (FR-SHARE-10)
+    daily_avatar_uploads: int = 10  # profile photo changes per day (FR-SEC-22)
+    # API requests per student per minute (FR-SEC-20); far above what the app makes.
+    requests_per_minute: int = 120
     # Host of share and invite links (PRD Q4): https://{invite_domain}/c/{code}
     invite_domain: str = "quizzly.app"  # the same placeholder as apps/web and the app (WEB.md)
     # FR-SEC-08: a day's AI spend across all students; reaching either pauses new AI work.

@@ -224,6 +224,9 @@ This document says **what the system must do**, precisely enough to build and te
 | FR-SEC-17 | P0 | **Short signed URLs:** upload URLs expire in 10 min, page view URLs in 5 min. | — |
 | FR-SEC-18 | P0 | **Idempotent IDs:** client-generated attempt/answer UUIDs that already exist return 409 (or the existing record), never 500. | — |
 | FR-SEC-19 | P0 | **Sharing and invite abuse controls:** see FR-SHARE-09/10 and FR-INV-03. | — |
+| FR-SEC-20 | P0 | **Request rate limit:** every signed-in API request is counted per student per minute in Postgres (shared by all API instances); above `REQUESTS_PER_MINUTE` (120) the API returns 429 with `Retry-After: 60`. The counter commits even when the request then fails. | The 121st request in a minute gets 429; the next minute works again. |
+| FR-SEC-21 | P0 | **Paused accounts:** an admin can set `profiles.suspended_at`; every API request from that student then gets 403 with the paused message (§4), except `DELETE /v1/me` (FR-AUTH-05). | The app shows the message; nothing else works until it's cleared. |
+| FR-SEC-22 | P1 | **Profile photo cap:** at most `DAILY_AVATAR_UPLOADS` (10) photo changes a day, counted before the image work, so refused photos count too. | The 11th change in a day gets 429 with the message in §4. |
 
 ### 2.17 Course sharing (FR-SHARE) — new in v0.2
 
@@ -284,6 +287,9 @@ This document says **what the system must do**, precisely enough to build and te
 | Generation produced too few valid questions | "We made 7 good questions out of 10 — your notes on this topic are short." |
 | Share link no longer works | "This course isn't shared any more. Ask Ada for a new link." |
 | Share limit reached | "You've shared with 20 people today. You can share again tomorrow." |
+| Too many requests (FR-SEC-20) | "Too many requests. Wait a minute and try again." |
+| Account paused (FR-SEC-21) | "Your account is paused while we look into unusual activity. If you think this is a mistake, contact Quizzly support." |
+| Photo changes limit (FR-SEC-22) | "You've changed your photo 10 times today. You can change it again tomorrow." |
 | Shared course full | "This shared course is full. Ask Ada to make a new one, or upload the notes yourself." |
 | Sharing blocked by recipient setting | Shown to the sender as sent; nothing is delivered (no leak of settings). |
 | Course taken down | "This course is no longer available." |

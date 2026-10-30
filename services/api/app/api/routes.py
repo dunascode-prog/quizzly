@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.api.deps import AppSettings, AvatarStorageDep, Conn, StorageDep, User
 from app.core import auth_admin
 from app.core.auth import CurrentUser
-from app.domain import accounts, avatars, invites
+from app.domain import accounts, avatars, invites, usage
 from app.worker import queue
 
 log = logging.getLogger("quizzly.api")
@@ -146,12 +146,21 @@ async def update_me(
 
 
 @router.put("/v1/me/avatar", tags=["account"])
-async def put_avatar(request: Request, user: User, conn: Conn, photos: AvatarStorageDep) -> MeOut:
+async def put_avatar(
+    request: Request, user: User, conn: Conn, photos: AvatarStorageDep, settings: AppSettings
+) -> MeOut:
     """Sets the profile photo (FR-PROF-04). The body is the cropped 512x512 WebP the app made
     (`Content-Type: image/webp`, at most 300 KB). The server checks and re-encodes it, which
     strips EXIF and GPS data, and names the file itself; the old photo is deleted."""
     if request.headers.get("content-type", "").split(";")[0].strip() != "image/webp":
         raise HTTPException(BAD_PHOTO_STATUS, "Send the photo as a WebP image.")
+    # Counted before the work, so refused photos count too (FR-SEC-22).
+    limit = settings.daily_avatar_uploads
+    if await usage.take(conn, user.id, "avatar_upload", limit, settings.timezone) is None:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"You've changed your photo {limit} times today. You can change it again tomorrow.",
+        )
     data = bytearray()
     async for chunk in request.stream():
         data.extend(chunk)
