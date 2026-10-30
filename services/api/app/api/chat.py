@@ -14,9 +14,10 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import AppSettings, Conn, User
 from app.core import db
-from app.domain import chat, study, usage
+from app.domain import accounts, chat, study, usage
 from app.llm import usage as llm_usage
 from app.llm.gateway import AllProvidersBusy
+from app.llm.gateway import plan as llm_plan
 from app.rag import chat as rag
 from app.rag import retrieve
 from app.worker import ingest
@@ -105,6 +106,7 @@ async def ask(
     started = time.perf_counter()
     async with db.get_pool().connection() as conn:
         doc = await _document(conn, user.id, document_id)
+        plan = await accounts.plan_of(conn, user.id)  # which models answer (FR-LIM-04)
         limit = settings.daily_chat_messages
         if await usage.take(conn, user.id, "chat_message", limit, settings.timezone) is None:
             raise HTTPException(
@@ -131,6 +133,7 @@ async def ask(
 
     async def events() -> AsyncIterator[str]:
         llm_usage.for_user(user.id)  # llm_calls rows for chat carry the student, no job
+        llm_plan.set(plan)
         think = rag.ThinkFilter()
         # What the student sees: half-written or invalid markers are held back (FR-SEC-14).
         clean = rag.CitationStream(rag.allowed_pages(chunks))

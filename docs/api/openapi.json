@@ -228,7 +228,7 @@
           "account"
         ],
         "summary": "Institutions",
-        "description": "Searches institutions for onboarding: short names by prefix (\"UNILAG\"), full names\nby substring or similarity.",
+        "description": "Searches institutions for onboarding in the student's country (FR-PROF-08): short names by\nprefix (\"UNILAG\"), full names by substring or similarity.",
         "operationId": "institutions_v1_institutions_get",
         "security": [
           {
@@ -257,6 +257,17 @@
               "minimum": 1,
               "default": 20,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$",
+              "default": "NG",
+              "title": "Country"
             }
           }
         ],
@@ -6005,6 +6016,13 @@
                   "500L",
                   "600L",
                   "700L",
+                  "Y1",
+                  "Y2",
+                  "Y3",
+                  "Y4",
+                  "Y5",
+                  "Y6",
+                  "PG",
                   "other"
                 ]
               },
@@ -6063,6 +6081,26 @@
             "type": "integer",
             "title": "Weekly Goal Days",
             "default": 4
+          },
+          "plan": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Plan",
+            "default": "free"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country",
+            "default": "NG"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "Africa/Lagos"
           }
         },
         "type": "object",
@@ -7107,6 +7145,13 @@
                   "500L",
                   "600L",
                   "700L",
+                  "Y1",
+                  "Y2",
+                  "Y3",
+                  "Y4",
+                  "Y5",
+                  "Y6",
+                  "PG",
                   "other"
                 ]
               },
@@ -7181,6 +7226,30 @@
               }
             ],
             "title": "Practice Times"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
           }
         },
         "type": "object",

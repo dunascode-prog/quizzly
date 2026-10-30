@@ -1,10 +1,14 @@
-"""Daily per-student limits (FR-LIM-01). Days roll over at midnight in the app's timezone."""
+"""Daily per-student limits (FR-LIM-01). Days roll over at midnight in the student's own time zone
+(FR-PROF-08), falling back to the app's; a time zone can change only once a week."""
 
 from uuid import UUID
 
 from psycopg import AsyncConnection
 
-_TODAY = "(now() at time zone %(tz)s)::date"
+_TODAY = (
+    "(now() at time zone coalesce("
+    "(select timezone from profiles where id = %(user)s), %(tz)s))::date"
+)
 
 
 async def take(

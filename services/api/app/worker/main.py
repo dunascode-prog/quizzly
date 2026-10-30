@@ -14,12 +14,13 @@ from datetime import timedelta
 
 from psycopg import AsyncConnection
 
-from app.core import db
+from app.core import db, guard
 from app.core.config import get_settings
 from app.core.logging import configure_logging, job_id_var
 from app.core.observability import init_sentry
+from app.domain import accounts as profiles
 from app.domain import notifications
-from app.llm import usage
+from app.llm import gateway, usage
 from app.llm.gateway import AllProvidersBusy, BudgetReached
 from app.worker import (
     accounts,
@@ -107,6 +108,7 @@ async def _run(conn: AsyncConnection, job: dict, extra: dict) -> str:
         log.error("no handler for job type %s", job["type"], extra=extra)
         return "failed"
     usage.for_job(job)  # llm_calls rows are tagged with this job and its student
+    gateway.plan.set(await profiles.plan_of(conn, job.get("user_id")))  # model choice (FR-LIM-04)
     try:
         async with asyncio.timeout(JOB_TIMEOUT.total_seconds()):
             await handler(conn, job)
@@ -182,6 +184,7 @@ async def main() -> None:
                 if time.monotonic() - last_snapshot > SNAPSHOT_INTERVAL:
                     written = await progress.snapshot_all(conn)
                     old = await notifications.delete_old(conn)  # 90 days (FR-NOTIF-04)
+                    await guard.delete_old(conn)  # request counters (FR-SEC-20)
                     log.info("readiness snapshots: %d, old notifications deleted: %d", written, old)
                     last_snapshot = time.monotonic()
                 if time.monotonic() - last_metrics > METRICS_INTERVAL:

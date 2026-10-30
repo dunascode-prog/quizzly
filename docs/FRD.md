@@ -53,6 +53,7 @@ This document says **what the system must do**, precisely enough to build and te
 | FR-PROF-05 | P1 | **Photo visibility.** "Show my photo to classmates" (default **off**). | Off: other students see initials only. On: members of courses the student shares or joins see the photo next to "Tolu A.". Admins never see photos (except a reported one). Blocked users never see it. Takes effect on next load. |
 | FR-PROF-06 | P1 | **When you practise.** Multi-select: On my commute · Between lectures · Evenings · Late night. | Sets the Daily 5 reminder time: commute 06:45, lectures 11:50, evenings 17:45, late night 21:45, none 19:30; the earliest chosen wins, moved to the end of quiet hours if it falls inside them. A time chosen in Reminders (21) wins over it. |
 | FR-PROF-07 | P1 | **Weekly goal** in onboarding: 3 / 4 / 6 study days (Light / Steady / Serious). | Writes `profiles.weekly_goal_days` (default 4). |
+| FR-PROF-08 | P1 | **Country-ready.** Step 2 starts with **Country** (pre-set from the phone's time zone, Nigeria otherwise; a list of 15 countries plus "Somewhere else"). School search shows only that country's schools; with none listed, the student types theirs. Levels follow the country: 100L–500L (600L, 700L under Other) in Nigeria, Year 1–4 (Year 5, Year 6, Postgraduate under Other) elsewhere. The phone's time zone is saved, and **daily limits roll over at the student's own midnight**. | Changing country clears the school and level. A time zone changes **at most once a week** (the first change always goes through), so switching zones can't reset limits. Prices will come from Google Play per country. |
 
 ### 2.3 Courses (FR-CRS)
 
@@ -153,6 +154,7 @@ This document says **what the system must do**, precisely enough to build and te
 | FR-LIM-01 | P0 | Daily per-student limits are enforced on the server ([PRD §9](PRD.md#9-usage-limits-free-plan-initial-values-configurable)). | Over-limit requests return HTTP 429 with the reset time; the app shows remaining usage. |
 | FR-LIM-02 | P0 | Every LLM call is logged with provider, model, tokens and estimated cost. | Admin can see daily cost per provider. |
 | FR-LIM-03 | P0 | A global circuit breaker queues work (rather than failing) when all providers are rate-limited. | The student sees "High demand — your quiz is queued". |
+| FR-LIM-04 | P1 | **Plans:** `free`, `student` ($6/month) and `premium` ($10/month) in `profiles.plan`, with `plan_expires_at` (a lapsed plan counts as free). **Free students' chat, explanations and questions run on cheaper models** (`free_tasks` in `config/models.yaml`, cheapest first); paid plans keep the stronger models. Outlines, past-paper styles and marking are the same for everyone. Daily limits are unchanged for now. Only verified payment webhooks set the plan (payments not built yet); the app can read it in `GET /v1/me` but never change it. | A call made without a plan uses the free routes, so a mistake costs less, not more. Cached explanations and question sets are shared whichever plan made them. |
 
 ### 2.12 Feedback and moderation (FR-MOD)
 
@@ -224,6 +226,9 @@ This document says **what the system must do**, precisely enough to build and te
 | FR-SEC-17 | P0 | **Short signed URLs:** upload URLs expire in 10 min, page view URLs in 5 min. | — |
 | FR-SEC-18 | P0 | **Idempotent IDs:** client-generated attempt/answer UUIDs that already exist return 409 (or the existing record), never 500. | — |
 | FR-SEC-19 | P0 | **Sharing and invite abuse controls:** see FR-SHARE-09/10 and FR-INV-03. | — |
+| FR-SEC-20 | P0 | **Request rate limit:** every signed-in API request is counted per student per minute in Postgres (shared by all API instances); above `REQUESTS_PER_MINUTE` (120) the API returns 429 with `Retry-After: 60`. The counter commits even when the request then fails. | The 121st request in a minute gets 429; the next minute works again. |
+| FR-SEC-21 | P0 | **Paused accounts:** an admin can set `profiles.suspended_at`; every API request from that student then gets 403 with the paused message (§4), except `DELETE /v1/me` (FR-AUTH-05). | The app shows the message; nothing else works until it's cleared. |
+| FR-SEC-22 | P1 | **Profile photo cap:** at most `DAILY_AVATAR_UPLOADS` (10) photo changes a day, counted before the image work, so refused photos count too. | The 11th change in a day gets 429 with the message in §4. |
 
 ### 2.17 Course sharing (FR-SHARE) — new in v0.2
 
@@ -284,6 +289,9 @@ This document says **what the system must do**, precisely enough to build and te
 | Generation produced too few valid questions | "We made 7 good questions out of 10 — your notes on this topic are short." |
 | Share link no longer works | "This course isn't shared any more. Ask Ada for a new link." |
 | Share limit reached | "You've shared with 20 people today. You can share again tomorrow." |
+| Too many requests (FR-SEC-20) | "Too many requests. Wait a minute and try again." |
+| Account paused (FR-SEC-21) | "Your account is paused while we look into unusual activity. If you think this is a mistake, contact Quizzly support." |
+| Photo changes limit (FR-SEC-22) | "You've changed your photo 10 times today. You can change it again tomorrow." |
 | Shared course full | "This shared course is full. Ask Ada to make a new one, or upload the notes yourself." |
 | Sharing blocked by recipient setting | Shown to the sender as sent; nothing is delivered (no leak of settings). |
 | Course taken down | "This course is no longer available." |

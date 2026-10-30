@@ -5,12 +5,15 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
-from app.domain import documents, sharing
+from app.domain import documents, settings, sharing
 
 _PROFILE_SQL = """
 select p.full_name, p.institution_id, p.institution_other, p.department, p.level,
        p.explanation_style::text as explanation_style, p.terms_accepted_at,
        p.avatar_path, p.avatar_visible, p.practice_times, p.weekly_goal_days,
+       p.country::text as country, p.timezone,
+       case when p.plan_expires_at is null or p.plan_expires_at > now() then p.plan::text
+            else 'free' end as plan,
        i.name as institution_name, i.short_name as institution_short_name
 from profiles p
 left join institutions i on i.id = p.institution_id
@@ -28,6 +31,7 @@ EDITABLE = (
     "weekly_goal_days",
     "avatar_visible",
     "practice_times",
+    "country",
 )
 
 # FR-PROF-06: the Daily 5 reminder goes just before the earliest time the student practises.
@@ -75,6 +79,7 @@ async def update_profile(
 ) -> dict[str, Any] | None:
     """Upserts the profile so a missing row (e.g. trigger skipped) never blocks onboarding."""
     values = {k: v for k, v in fields.items() if k in EDITABLE}
+    timezone = fields.get("timezone")
     if terms_version:
         values["terms_version"] = terms_version
     cols = list(values)
@@ -88,6 +93,8 @@ async def update_profile(
             f"on conflict (id) do update set {', '.join(f'{c} = excluded.{c}' for c in cols)}",
             (user_id, *values.values()),
         )
+    if timezone:
+        await settings.set_timezone(conn, user_id, timezone)
     return await get_profile(conn, user_id)
 
 
@@ -96,21 +103,25 @@ async def institution_exists(conn: AsyncConnection, institution_id: UUID) -> boo
     return await cur.fetchone() is not None
 
 
-async def search_institutions(conn: AsyncConnection, query: str, limit: int) -> list[dict]:
-    """Matches short names by prefix ("UNILAG") and full names by substring or similarity."""
+async def search_institutions(
+    conn: AsyncConnection, query: str, limit: int, country: str = "NG"
+) -> list[dict]:
+    """Matches short names by prefix ("UNILAG") and full names by substring or similarity, within
+    the student's country (FR-PROF-08)."""
     q = query.strip()
     like = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
     if not q:
         cur = await conn.execute(
             "select id, name, short_name, type::text as type, state from institutions "
-            "order by name limit %s",
-            (limit,),
+            "where country = %s order by name limit %s",
+            (country, limit),
         )
         return await cur.fetchall()
     cur = await conn.execute(
         """
         select id, name, short_name, type::text as type, state from institutions
-        where short_name ilike %(prefix)s or name ilike %(contains)s or name %% %(q)s
+        where country = %(country)s
+          and (short_name ilike %(prefix)s or name ilike %(contains)s or name %% %(q)s)
         order by (lower(short_name) = lower(%(q)s)) desc,
                  (short_name ilike %(prefix)s) desc,
                  greatest(similarity(name, %(q)s), similarity(coalesce(short_name, ''), %(q)s))
@@ -118,7 +129,7 @@ async def search_institutions(conn: AsyncConnection, query: str, limit: int) -> 
                  name
         limit %(limit)s
         """,
-        {"q": q, "prefix": f"{like}%", "contains": f"%{like}%", "limit": limit},
+        {"q": q, "prefix": f"{like}%", "contains": f"%{like}%", "limit": limit, "country": country},
     )
     return await cur.fetchall()
 
@@ -136,3 +147,17 @@ async def delete_account_data(conn: AsyncConnection, user_id: UUID) -> list[str]
             )
         ).fetchall()
         return await documents.release(conn, rows)
+
+
+async def plan_of(conn: AsyncConnection, user_id: UUID | None) -> str:
+    """The student's plan right now (FR-LIM-04): a lapsed paid plan counts as free."""
+    if user_id is None:
+        return "free"
+    row = await (
+        await conn.execute(
+            "select plan::text as plan from profiles where id = %s "
+            "and (plan_expires_at is null or plan_expires_at > now())",
+            (user_id,),
+        )
+    ).fetchone()
+    return row["plan"] if row else "free"

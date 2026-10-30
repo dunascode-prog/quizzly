@@ -8,7 +8,7 @@ from PIL import Image
 
 from app.api import deps
 from app.api.photos import with_photo_urls
-from app.domain import accounts, avatars
+from app.domain import accounts, avatars, usage
 from tests.conftest import JWT_SECRET
 from tests.test_api import make_token
 
@@ -114,6 +114,11 @@ def photos(client, monkeypatch):
             "weekly_goal_days": 4,
         }
 
+    async def take(conn, user_id, resource, limit, tz):
+        state["taken"] = state.get("taken", 0) + 1
+        return None if state.get("limit_hit") else state["taken"]
+
+    monkeypatch.setattr(usage, "take", take)
     monkeypatch.setattr(avatars, "set_photo", set_photo)
     monkeypatch.setattr(avatars, "clear_photo", clear_photo)
     monkeypatch.setattr(accounts, "get_profile", get_profile)
@@ -147,6 +152,18 @@ def test_upload_refuses_other_types_and_big_files(client, photos):
     assert big.status_code == 413
     assert photos["uploaded"] == {}
     assert client.put("/v1/me/avatar", content=webp()).status_code == 401
+
+
+def test_photo_changes_are_capped_per_day(client, photos):
+    """FR-SEC-22: each change costs image work and storage writes, so there's a daily cap."""
+    photos["limit_hit"] = True
+    r = client.put("/v1/me/avatar", headers=auth() | {"content-type": "image/webp"}, content=webp())
+    assert r.status_code == 429
+    assert (
+        r.json()["detail"]
+        == "You've changed your photo 10 times today. You can change it again tomorrow."
+    )
+    assert photos["uploaded"] == {} and photos["removed"] == []
 
 
 def test_removing_the_photo_deletes_the_file(client, photos):

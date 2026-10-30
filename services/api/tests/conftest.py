@@ -28,5 +28,11 @@ def client(settings: Settings, monkeypatch):
     app.dependency_overrides[get_settings] = lambda: settings
     # Route tests replace app.domain queries with fakes, so the connection is never used.
     app.dependency_overrides[get_conn] = lambda: None
+
+    # The request guard (FR-SEC-20/21) has its own tests; here every request goes ahead.
+    async def go_ahead(conn, user_id, per_minute):
+        return None
+
+    monkeypatch.setattr("app.core.guard.check", go_ahead)
     with TestClient(app) as c:
         yield c

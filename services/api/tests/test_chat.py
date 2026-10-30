@@ -7,7 +7,7 @@ import pytest
 
 from app.api import chat as chat_api
 from app.core import db
-from app.domain import chat, study, usage
+from app.domain import accounts, chat, study, usage
 from app.llm.gateway import AllProvidersBusy, Delta
 from app.rag import chat as rag
 from app.rag import retrieve
@@ -148,6 +148,9 @@ def fake(client, monkeypatch):
             for t in state["reply"]:
                 yield Delta(t, "groq", "small")
 
+    async def plan_of(conn, user_id):
+        return "free"
+
     class Pool:
         @asynccontextmanager
         async def connection(self):
@@ -155,6 +158,7 @@ def fake(client, monkeypatch):
 
     for mod, name, fn in [
         (study, "ready_document", ready_document),
+        (accounts, "plan_of", plan_of),
         (usage, "take", take),
         (usage, "give_back", give_back),
         (chat, "thread_for", thread_for),

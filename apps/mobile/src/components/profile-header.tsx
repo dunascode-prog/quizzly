@@ -5,6 +5,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Text } from '@/components/ui/text';
 import { Spacing } from '@/constants/theme';
 import { useMyAvatar } from '@/lib/avatar';
+import { levelLabel } from '@/lib/countries';
 import type { Me } from '@/lib/profile';
 
 export { initials } from '@/components/ui/avatar';
@@ -12,7 +13,7 @@ export { initials } from '@/components/ui/avatar';
 /** "UNILAG · 200L" */
 export function schoolLine(me: Me | undefined) {
   const school = me?.institution?.short_name ?? me?.institution?.name ?? me?.institution_other;
-  const level = me?.level === 'other' ? null : me?.level;
+  const level = levelLabel(me?.level);
   return [school, level].filter(Boolean).join(' · ');
 }
 

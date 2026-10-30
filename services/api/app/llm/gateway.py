@@ -66,6 +66,9 @@ class Observer(Protocol):
 
 # The task of the call in progress, so the low-level call functions can record it.
 _TASK: ContextVar[str] = ContextVar("llm_task", default="")
+# The plan of the student the call is for (FR-LIM-04): set by the worker around each job and by
+# the API around chat. Unset means free, so a call that forgets it costs less, not more.
+plan: ContextVar[str] = ContextVar("llm_plan", default="free")
 
 
 @dataclass(frozen=True)
@@ -131,7 +134,7 @@ class LLMGateway:
     ) -> Completion:
         await self._start(task)
         failures: list[str] = []
-        for route in self.config.routes_for(task):
+        for route in self.config.routes_for(task, plan.get()):
             provider = self.config.providers[route.provider]
             if not provider.api_key:
                 failures.append(f"{route.provider}: no API key")
@@ -167,7 +170,7 @@ class LLMGateway:
         before the first token; after that a failure is raised to the caller."""
         await self._start(task)
         failures: list[str] = []
-        for route in self.config.routes_for(task):
+        for route in self.config.routes_for(task, plan.get()):
             provider = self.config.providers[route.provider]
             if not provider.api_key:
                 failures.append(f"{route.provider}: no API key")

@@ -33,8 +33,8 @@ export function friendlyError(error: unknown): string {
   }
   if (error instanceof ApiError) {
     if (error.status === 401) return 'Your session has ended. Sign in again.';
-    // Our API words these for students: limits, duplicates, unsupported files.
-    if ([409, 422, 429].includes(error.status) && error.message) return error.message;
+    // Our API words these for students: a paused account, limits, duplicates, unsupported files.
+    if ([403, 409, 422, 429].includes(error.status) && error.message) return error.message;
     return GENERIC;
   }
   if (error instanceof TypeError) return OFFLINE; // fetch rejects with TypeError when there is no network
