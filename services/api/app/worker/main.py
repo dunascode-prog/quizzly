@@ -14,7 +14,7 @@ from datetime import timedelta
 
 from psycopg import AsyncConnection
 
-from app.core import db
+from app.core import db, guard
 from app.core.config import get_settings
 from app.core.logging import configure_logging, job_id_var
 from app.core.observability import init_sentry
@@ -182,6 +182,7 @@ async def main() -> None:
                 if time.monotonic() - last_snapshot > SNAPSHOT_INTERVAL:
                     written = await progress.snapshot_all(conn)
                     old = await notifications.delete_old(conn)  # 90 days (FR-NOTIF-04)
+                    await guard.delete_old(conn)  # request counters (FR-SEC-20)
                     log.info("readiness snapshots: %d, old notifications deleted: %d", written, old)
                     last_snapshot = time.monotonic()
                 if time.monotonic() - last_metrics > METRICS_INTERVAL:

@@ -102,6 +102,8 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | avatar_updated_at | timestamptz null | **0018** |
 | avatar_hidden | bool | **0018** set when 3 students report the photo, or by an admin (FR-MOD-06) |
 | practice_times | text[] | **0018** subset of `commute`, `lectures`, `evening`, `night` (FR-PROF-06) |
+| suspended_at | timestamptz null | **0019** set by an admin: the API refuses the student's requests (FR-SEC-21) |
+| suspended_reason | text null | **0019** admin note |
 
 #### `institutions` (reference)
 | Column | Type | Notes |
@@ -388,8 +390,15 @@ Index on `(status, run_after)`. Workers claim jobs with `FOR UPDATE SKIP LOCKED`
 |---|---|---|
 | user_id | uuid FK | PK with day and resource |
 | day | date | Africa/Lagos calendar day |
-| resource | enum | `upload`, `question_set`, `explanation`, `chat_message`, `marking`; **v0.2:** `share_recipient`, `reminder_push` |
+| resource | enum | `upload`, `question_set`, `explanation`, `chat_message`, `marking`; **v0.2:** `share_recipient`, `reminder_push`; **0019:** `avatar_upload` |
 | count | int | |
+
+#### `rate_limits` (0019)
+| Column | Type | Notes |
+|---|---|---|
+| key | text | PK with window_start; `user:{id}` |
+| window_start | timestamptz | the minute (`date_trunc('minute', now())`) |
+| count | int | requests in that minute (FR-SEC-20); rows older than an hour are deleted by the worker. API only: RLS on, no client policies |
 
 #### `push_tokens`
 | Column | Type | Notes |
