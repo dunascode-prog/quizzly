@@ -56,6 +56,7 @@ class CallRecord:
     latency_ms: int
     cost_usd: float
     status: str  # ok, rate_limited, error
+    ref_cost_usd: float = 0.0  # at paid-tier list prices, for the monthly allowance (FR-LIM-06)
 
 
 class Observer(Protocol):
@@ -110,6 +111,7 @@ class LLMGateway:
         if not self.observer:
             return
         cost = (p_tok * route.price_in + c_tok * route.price_out) / 1_000_000
+        ref_cost = (p_tok * route.ref_price_in + c_tok * route.ref_price_out) / 1_000_000
         self.observer.record(
             CallRecord(
                 task=_TASK.get(),
@@ -120,6 +122,7 @@ class LLMGateway:
                 latency_ms=int((time.perf_counter() - started) * 1000),
                 cost_usd=round(cost, 6),
                 status=status,
+                ref_cost_usd=round(ref_cost, 6),
             )
         )
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 from app.api.deps import AppSettings, Conn, User
-from app.domain import quizzes, study, styles, topics, usage
+from app.domain import plans, quizzes, study, styles, topics, usage
 from app.rag import questions as q
 from app.worker import marking as marking_worker
 from app.worker import queue
@@ -231,6 +231,7 @@ async def _question_set(
     count: int,
     new_questions: bool = False,
     style_id: UUID | None = None,
+    plan: str = "free",
 ) -> dict:
     """The cached set for these choices (FR-QGEN-07), or a new one from today's allowance; queues
     generation when it isn't written yet."""
@@ -254,7 +255,9 @@ async def _question_set(
             variant += 1
             existing = await quizzes.find_set(conn, key(variant))
     if existing is None:
-        limit = settings.daily_question_sets
+        if plan == "capped":  # a new set is AI work; a cached one is free (FR-LIM-06)
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, plans.CAPPED)
+        limit = plans.daily_limit(settings, plan, "question_set")
         if await usage.take(conn, user_id, "question_set", limit, settings.timezone) is None:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
@@ -319,6 +322,7 @@ async def create_quiz(
         body.count,
         body.new_questions,
         body.style_id,
+        plan=user.plan,
     )
     # The student's own name for the topic, or for a merged topic its parts (FR-TOP-03).
     mine = await topics.outline(conn, user.id, doc["source_file_id"], all_topics)
@@ -363,6 +367,7 @@ async def create_flashcards(
         [q.FLASHCARD],
         "mixed",
         FLASHCARDS_PER_TOPIC,
+        plan=user.plan,
     )
     quiz_id = await quizzes.create_quiz(
         conn, user.id, document_id, existing["id"], topic["title"], "practice", kind="flashcards"
@@ -406,7 +411,9 @@ def _time_up(attempt: dict) -> bool:
     return datetime.now(UTC) > attempt["started_at"] + timedelta(seconds=limit) + TIME_GRACE
 
 
-async def _queue_marking(conn, user_id: UUID, attempt_id: UUID, settings) -> None:
+async def _queue_marking(
+    conn, user_id: UUID, attempt_id: UUID, settings, plan: str = "free"
+) -> None:
     """Queues LLM marking for written answers not yet marked. The daily allowance is used only
     when an answer is newly queued, so resending a save never counts twice (FR-LIM-01)."""
     for question_id in await quizzes.pending_marking(conn, attempt_id):
@@ -419,7 +426,7 @@ async def _queue_marking(conn, user_id: UUID, attempt_id: UUID, settings) -> Non
         )
         if job_id is None:
             continue  # already queued or being marked
-        limit = settings.daily_markings
+        limit = plans.daily_limit(settings, plan, "marking")  # 0 when capped (FR-LIM-06)
         if await usage.take(conn, user_id, "marking", limit, settings.timezone) is None:
             await conn.execute("update jobs set status = 'cancelled' where id = %s", (job_id,))
             await quizzes.record_marking(
@@ -462,7 +469,7 @@ async def save_answers(
     except quizzes.IdInUse as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, ID_IN_USE) from exc
     if attempt["mode"] == "practice":
-        await _queue_marking(conn, user.id, attempt_id, settings)
+        await _queue_marking(conn, user.id, attempt_id, settings, user.plan)
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))
 
 
@@ -482,7 +489,7 @@ async def submit(
             except quizzes.IdInUse as exc:
                 raise HTTPException(status.HTTP_409_CONFLICT, ID_IN_USE) from exc
         await quizzes.submit(conn, attempt)
-        await _queue_marking(conn, user.id, attempt_id, settings)
+        await _queue_marking(conn, user.id, attempt_id, settings, user.plan)
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))
 
 

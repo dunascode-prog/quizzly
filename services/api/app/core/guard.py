@@ -1,7 +1,9 @@
-"""Every signed-in request passes here (FR-SEC-20/21): a per-student rate limit, and paused
-accounts are refused. One database round trip; the counter commits on its own (autocommit), so a
+"""Every signed-in request passes here (FR-SEC-20/21, FR-LIM-04..06): a per-student rate limit,
+paused accounts are refused, and the student's effective plan is worked out from their plan and
+this month's AI spend. One database round trip; the counter commits on its own (autocommit), so a
 request that fails later still counts."""
 
+import dataclasses
 from typing import Annotated
 from uuid import UUID
 
@@ -11,6 +13,7 @@ from psycopg import AsyncConnection
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import Settings, get_settings
 from app.core.db import get_conn
+from app.domain import plans
 
 RATE_LIMITED = "Too many requests. Wait a minute and try again."
 PAUSED = (
@@ -19,8 +22,9 @@ PAUSED = (
 )
 
 
-async def check(conn: AsyncConnection, user_id: UUID, per_minute: int) -> str | None:
-    """Counts this request. Returns "paused", "rate_limited" or None (go ahead)."""
+async def check(conn: AsyncConnection, user_id: UUID, settings) -> tuple[str | None, str]:
+    """Counts this request. Returns the problem ("paused", "rate_limited" or None to go ahead)
+    and the student's effective plan."""
     row = await (
         await conn.execute(
             """
@@ -31,17 +35,24 @@ async def check(conn: AsyncConnection, user_id: UUID, per_minute: int) -> str | 
               returning count
             )
             select (select count from hit) as count,
-                   coalesce((select suspended_at is not null from profiles where id = %(user)s),
-                            false) as paused
+                   coalesce(p.suspended_at is not null, false) as paused,
+                   p.plan::text as plan,
+                   (p.plan_expires_at is null or p.plan_expires_at > now()) as active,
+                   coalesce((select s.micro_usd from ai_spend s
+                             where s.user_id = %(user)s
+                               and s.month = date_trunc('month', now())::date), 0) as spent_micro
+            from (select 1) one
+            left join profiles p on p.id = %(user)s
             """,
             {"key": f"user:{user_id}", "user": user_id},
         )
     ).fetchone()
+    plan = plans.effective(settings, row if row["plan"] else None)
     if row["paused"]:
-        return "paused"
-    if row["count"] > per_minute:
-        return "rate_limited"
-    return None
+        return "paused", plan
+    if row["count"] > settings.requests_per_minute:
+        return "rate_limited", plan
+    return None, plan
 
 
 async def guarded_user(
@@ -50,7 +61,7 @@ async def guarded_user(
     conn: Annotated[AsyncConnection, Depends(get_conn)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> CurrentUser:
-    problem = await check(conn, user.id, settings.requests_per_minute)
+    problem, plan = await check(conn, user.id, settings)
     # A paused student can still delete their account (FR-AUTH-05).
     if problem == "paused" and not (request.method == "DELETE" and request.url.path == "/v1/me"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, PAUSED)
@@ -58,7 +69,7 @@ async def guarded_user(
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS, RATE_LIMITED, headers={"Retry-After": "60"}
         )
-    return user
+    return dataclasses.replace(user, plan=plan)
 
 
 async def delete_old(conn: AsyncConnection) -> int:

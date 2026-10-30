@@ -22,6 +22,9 @@ _jwks_clients: dict[str, jwt.PyJWKClient] = {}
 class CurrentUser:
     id: UUID
     email: str | None
+    # What the student may use right now (FR-LIM-04..06): free, student, premium or capped.
+    # Filled in by the request guard; a bare token means free.
+    plan: str = "free"
 
 
 def _jwks_client(url: str) -> jwt.PyJWKClient:

@@ -42,6 +42,10 @@ class Route(BaseModel):
     # USD per million tokens, for the estimated cost in llm_calls (FR-LIM-02). 0 on free tiers.
     price_in: float = 0.0
     price_out: float = 0.0
+    # List price per million tokens on the paid tier, even while we run free: each student's
+    # monthly AI allowance is measured with these (FR-LIM-06). 0 for free-only providers.
+    ref_price_in: float = 0.0
+    ref_price_out: float = 0.0
 
 
 class ModelsConfig(BaseModel):

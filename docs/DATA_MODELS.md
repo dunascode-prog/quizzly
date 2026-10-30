@@ -397,6 +397,15 @@ Index on `(status, run_after)`. Workers claim jobs with `FOR UPDATE SKIP LOCKED`
 | resource | enum | `upload`, `question_set`, `explanation`, `chat_message`, `marking`; **v0.2:** `share_recipient`, `reminder_push`; **0019:** `avatar_upload` |
 | count | int | |
 
+#### `ai_spend` (0022)
+| Column | Type | Notes |
+|---|---|---|
+| user_id | uuid FK | PK with month |
+| month | date | first day of the month (UTC) |
+| micro_usd | bigint | the student's AI use this month at paid-tier list prices, in millionths of a dollar (FR-LIM-06). API and worker only |
+
+**0022 also:** `llm_calls.ref_cost_usd` (list-price cost of each call) and `jobs.priority` (1 for active paid plans, FR-LIM-07), index `jobs (user_id, status)`.
+
 #### `rate_limits` (0019)
 | Column | Type | Notes |
 |---|---|---|

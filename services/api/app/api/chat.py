@@ -12,9 +12,9 @@ from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.api.deps import AppSettings, Conn, User
+from app.api.deps import AppSettings, Conn, User, require_ai
 from app.core import db
-from app.domain import accounts, chat, study, usage
+from app.domain import chat, plans, study, usage
 from app.llm import usage as llm_usage
 from app.llm.gateway import AllProvidersBusy
 from app.llm.gateway import plan as llm_plan
@@ -106,8 +106,9 @@ async def ask(
     started = time.perf_counter()
     async with db.get_pool().connection() as conn:
         doc = await _document(conn, user.id, document_id)
-        plan = await accounts.plan_of(conn, user.id)  # which models answer (FR-LIM-04)
-        limit = settings.daily_chat_messages
+        require_ai(user)  # FR-LIM-06
+        plan = plans.models_for(user.plan)  # which models answer (FR-LIM-04)
+        limit = plans.daily_limit(settings, user.plan, "chat_message")
         if await usage.take(conn, user.id, "chat_message", limit, settings.timezone) is None:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
