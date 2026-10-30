@@ -1,6 +1,8 @@
 # LLM routing. Providers are tried in order; on 429/5xx the gateway falls through.
 # Model names change often on free tiers: update here, never in code.
 # Last checked against each provider's model list: 2026-10-22.
+# ref_price_in/out: Groq pay-as-you-go list prices (USD per million tokens), used only to measure each
+# student's monthly AI allowance (FR-LIM-06); check them against groq.com/pricing.
 providers:
   groq:
     base_url: https://api.groq.com/openai/v1
@@ -14,40 +16,40 @@ providers:
 
 profiles:
   chat:      # streamed answers: thinking off on Groq so the first token comes quickly (FR-CHAT-04)
-    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none } }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none }, ref_price_in: 0.29, ref_price_out: 0.59 }
     - { provider: openrouter, model: "google/gemma-4-26b-a4b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct-fp8", rpm: 50 }
   fast:      # marking
-    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30 }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, ref_price_in: 0.29, ref_price_out: 0.59 }
     - { provider: openrouter, model: "google/gemma-4-26b-a4b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct-fp8", rpm: 50 }
   questions: # low reasoning effort keeps big sets fast; Groq limits tokens per minute per model, so
              # two more Groq models take over before the much slower free fallbacks
-    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, params: { reasoning_effort: low } }
-    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none } }
-    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low } }
+    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, params: { reasoning_effort: low }, ref_price_in: 0.15, ref_price_out: 0.6 }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none }, ref_price_in: 0.29, ref_price_out: 0.59 }
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low }, ref_price_in: 0.075, ref_price_out: 0.3 }
     - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
   quality:   # explanations, outlines
-    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30 }
+    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, ref_price_in: 0.15, ref_price_out: 0.6 }
     - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
 
   # Free plan (FR-LIM-04): cheapest model first; the others only take overflow.
   chat_free:
-    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low } }
-    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none } }
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low }, ref_price_in: 0.075, ref_price_out: 0.3 }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none }, ref_price_in: 0.29, ref_price_out: 0.59 }
     - { provider: openrouter, model: "google/gemma-4-26b-a4b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct-fp8", rpm: 50 }
   questions_free:
-    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low } }
-    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, params: { reasoning_effort: low } }
-    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none } }
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low }, ref_price_in: 0.075, ref_price_out: 0.3 }
+    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, params: { reasoning_effort: low }, ref_price_in: 0.15, ref_price_out: 0.6 }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none }, ref_price_in: 0.29, ref_price_out: 0.59 }
     - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
   quality_free:
-    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30 }
-    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30 }
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, ref_price_in: 0.075, ref_price_out: 0.3 }
+    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, ref_price_in: 0.15, ref_price_out: 0.6 }
     - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
 

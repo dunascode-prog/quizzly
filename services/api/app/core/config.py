@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     daily_chat_messages: int = 40
     daily_share_recipients: int = 20  # people a student can send courses to per day (FR-SHARE-10)
     daily_avatar_uploads: int = 10  # profile photo changes per day (FR-SEC-22)
+    # Monthly AI allowance per plan, at paid-tier list prices (FR-LIM-06). Typical free use is
+    # about $0.10 a month; these stop one account from costing more than its plan brings in.
+    monthly_ai_ceiling_free_usd: float = 0.60
+    monthly_ai_ceiling_student_usd: float = 2.00
+    monthly_ai_ceiling_premium_usd: float = 3.50
+    # Total stored upload size per plan, in MB (FR-LIM-05).
+    storage_free_mb: int = 500
+    storage_student_mb: int = 2000
+    storage_premium_mb: int = 5000
     # API requests per student per minute (FR-SEC-20); far above what the app makes.
     requests_per_minute: int = 120
     # Host of share and invite links (PRD Q4): https://{invite_domain}/c/{code}

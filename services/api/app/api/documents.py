@@ -5,8 +5,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import documents, uploads, usage
+from app.api.deps import AppSettings, Conn, StorageDep, User, require_ai
+from app.domain import documents, plans, uploads, usage
 from app.worker import cleanup, queue
 
 router = APIRouter(tags=["documents"])
@@ -98,6 +98,21 @@ async def _check_course(conn, user_id: UUID, course_id: UUID | None) -> None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown course")
 
 
+async def _check_storage(conn, user, settings, new_bytes: int) -> None:
+    """Each plan keeps up to a total size of notes (FR-LIM-05), so storage can't grow without end.
+    Deleting old notes makes room."""
+    plan = plans.models_for(user.plan)  # capped accounts keep the free room
+    cap_mb = getattr(settings, f"storage_{plan}_mb")
+    used = await documents.stored_bytes(conn, user.id)
+    if used + new_bytes > cap_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"Your notes use all {cap_mb // 1000 if cap_mb >= 1000 else cap_mb}"
+            f"{' GB' if cap_mb >= 1000 else ' MB'} of your space. Delete notes you've finished "
+            "with to make room.",
+        )
+
+
 def _owned(doc: dict) -> dict:
     """Documents in a course shared with the student can be studied, not changed (FR-DOC-12)."""
     if doc.get("read_only"):
@@ -161,7 +176,9 @@ async def create_document(
     await _check_course(conn, user.id, body.course_id)
     if body.kind == "past_paper" and body.course_id is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, PAST_PAPER_COURSE)
-    limit = settings.daily_uploads
+    require_ai(user)  # outlines are AI work (FR-LIM-06)
+    await _check_storage(conn, user, settings, body.size_bytes)  # FR-LIM-05
+    limit = plans.daily_limit(settings, user.plan, "upload")
     if await usage.take(conn, user.id, "upload", limit, settings.timezone) is None:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,

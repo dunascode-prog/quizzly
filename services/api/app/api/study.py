@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import avatars, chat, page_images, study, topics, usage
+from app.api.deps import AppSettings, Conn, StorageDep, User, require_ai
+from app.domain import avatars, chat, page_images, plans, study, topics, usage
 from app.rag.explain import PROMPT_VERSION
 from app.worker import queue
 
@@ -253,7 +253,8 @@ async def request_explanation(
     await _topic(conn, doc, topic_id)
     row = await study.explanation(conn, topic_id, body.style, PROMPT_VERSION)
     if row is None:
-        limit = settings.daily_explanations
+        require_ai(user)  # a new explanation is AI work; a cached one is free (FR-LIM-06)
+        limit = plans.daily_limit(settings, user.plan, "explanation")
         if await usage.take(conn, user.id, "explanation", limit, settings.timezone) is None:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,

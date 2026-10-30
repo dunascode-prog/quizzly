@@ -12,6 +12,7 @@ MAX_BACKOFF = timedelta(minutes=30)
 # Longer than the 10-minute job time limit (FR-SEC-04), so a job still inside it isn't taken
 # by another worker.
 LEASE = timedelta(minutes=15)
+RUNNING_PER_STUDENT = 2  # jobs one student may have running at once (FR-LIM-07)
 
 
 class RetryLater(Exception):
@@ -42,39 +43,70 @@ async def enqueue(
     row = await (
         await conn.execute(
             """
-            insert into jobs (type, user_id, payload, dedupe_key, run_after)
-            values (%s, %s, %s, %s, now() + %s)
+            insert into jobs (type, user_id, payload, dedupe_key, run_after, priority)
+            values (%(type)s, %(user)s, %(payload)s, %(dedupe)s, now() + %(after)s,
+                    -- Paid plans go first (FR-LIM-07).
+                    case when exists (
+                      select 1 from profiles where id = %(user)s
+                        and plan in ('student', 'premium')
+                        and (plan_expires_at is null or plan_expires_at > now())
+                    ) then 1 else 0 end)
             on conflict (dedupe_key) where status in ('queued', 'running') do nothing
             returning id
             """,
-            (job_type, user_id, json.dumps(payload), dedupe_key, run_after or timedelta()),
+            {
+                "type": job_type,
+                "user": user_id,
+                "payload": json.dumps(payload),
+                "dedupe": dedupe_key,
+                "after": run_after or timedelta(),
+            },
         )
     ).fetchone()
     return row["id"] if row else None
 
 
 async def claim(conn: AsyncConnection, worker_id: str, types: list[str]) -> dict | None:
-    """Take the oldest runnable job of a type this worker handles, or one whose lease expired
+    """Take the next runnable job of a type this worker handles, or one whose lease expired
     (crashed worker) while it still has attempts left (FR-SEC-03). An older worker mid-deploy
-    leaves new job types for a newer one."""
+    leaves new job types for a newer one.
+
+    Order (FR-LIM-07): paid plans first; then fair turns, the student served least in the last
+    10 minutes going next, so one student's pile of jobs can't hold everyone else up; then oldest.
+    A student with 2 jobs already running waits, so one account can't take every worker.
+    """
     return await (
         await conn.execute(
             """
-            update jobs set status = 'running', locked_by = %s, locked_at = now(),
+            update jobs set status = 'running', locked_by = %(worker)s, locked_at = now(),
                             attempts = attempts + 1
             where id = (
-                select id from jobs
-                where ((status = 'queued' and run_after <= now())
-                       or (status = 'running' and locked_at < now() - %s
-                           and attempts < max_attempts))
-                  and type::text = any(%s)
-                order by run_after
-                for update skip locked
+                select j.id from jobs j
+                where ((j.status = 'queued' and j.run_after <= now())
+                       or (j.status = 'running' and j.locked_at < now() - %(lease)s
+                           and j.attempts < j.max_attempts))
+                  and j.type::text = any(%(types)s)
+                  and (j.user_id is null or (
+                    select count(*) from jobs r
+                    where r.user_id = j.user_id and r.status = 'running'
+                      and r.locked_at >= now() - %(lease)s
+                  ) < %(per_student)s)
+                order by j.priority desc,
+                         (select count(*) from jobs o
+                          where o.user_id = j.user_id
+                            and o.locked_at > now() - interval '10 minutes'),
+                         j.run_after
+                for update of j skip locked
                 limit 1
             )
             returning *
             """,
-            (worker_id, LEASE, types),
+            {
+                "worker": worker_id,
+                "lease": LEASE,
+                "types": types,
+                "per_student": RUNNING_PER_STUDENT,
+            },
         )
     ).fetchone()
 

@@ -155,6 +155,9 @@ This document says **what the system must do**, precisely enough to build and te
 | FR-LIM-02 | P0 | Every LLM call is logged with provider, model, tokens and estimated cost. | Admin can see daily cost per provider. |
 | FR-LIM-03 | P0 | A global circuit breaker queues work (rather than failing) when all providers are rate-limited. | The student sees "High demand — your quiz is queued". |
 | FR-LIM-04 | P1 | **Plans:** `free`, `student` ($6/month) and `premium` ($10/month) in `profiles.plan`, with `plan_expires_at` (a lapsed plan counts as free). **Free students' chat, explanations and questions run on cheaper models** (`free_tasks` in `config/models.yaml`, cheapest first); paid plans keep the stronger models. Outlines, past-paper styles and marking are the same for everyone. Daily limits are unchanged for now. Only verified payment webhooks set the plan (payments not built yet); the app can read it in `GET /v1/me` but never change it. | A call made without a plan uses the free routes, so a mistake costs less, not more. Cached explanations and question sets are shared whichever plan made them. |
+| FR-LIM-05 | P0 | **Limits per plan.** Free: 5 uploads, 15 quiz sets, 30 explanations, 40 chat messages, 20 markings a day (unchanged). Student: 10 / 30 / 60 / 80 / 40. Premium: 20 / 50 / 120 / 150 / 80. **Storage** of notes per plan: free 500 MB, Student 2 GB, Premium 5 GB (deleting notes makes room). Offline course downloads stay free on every plan (no cost to us). | The API reads the plan from the request guard; the app shows the server's message (§4). |
+| FR-LIM-06 | P0 | **Monthly AI allowance per student**, measured at paid-tier list prices (`ref_price_*` in `config/models.yaml`, recorded per call in `llm_calls.ref_cost_usd` and summed in `ai_spend`): free $0.60, Student $2.00, Premium $3.50. A paid plan over its allowance falls back to the free limits and models for the rest of the month; a free account over its allowance gets no new AI work (uploads, new quiz sets, new explanations, chat, marking) until the 1st. Cached quiz sets and explanations always work: they cost nothing. | One account can't cost more than its plan brings in; with free tiers the measure still applies. |
+| FR-LIM-07 | P1 | **Priority processing and fair turns.** Jobs of active paid plans are queued with priority 1 and claimed first; then the student served least in the last 10 minutes goes next; a student with 2 jobs running waits. | A free student's pile of uploads can't hold up everyone else. |
 
 ### 2.12 Feedback and moderation (FR-MOD)
 
@@ -291,6 +294,8 @@ This document says **what the system must do**, precisely enough to build and te
 | Share limit reached | "You've shared with 20 people today. You can share again tomorrow." |
 | Too many requests (FR-SEC-20) | "Too many requests. Wait a minute and try again." |
 | Account paused (FR-SEC-21) | "Your account is paused while we look into unusual activity. If you think this is a mistake, contact Quizzly support." |
+| Monthly AI allowance used, free plan (FR-LIM-06) | "You've used this month's AI allowance on the free plan. Everything you've already made still works, and the allowance comes back on the 1st." |
+| Storage full (FR-LIM-05) | "Your notes use all 500 MB of your space. Delete notes you've finished with to make room." (2 GB / 5 GB on paid plans) |
 | Photo changes limit (FR-SEC-22) | "You've changed your photo 10 times today. You can change it again tomorrow." |
 | Shared course full | "This shared course is full. Ask Ada to make a new one, or upload the notes yourself." |
 | Sharing blocked by recipient setting | Shown to the sender as sent; nothing is delivered (no leak of settings). |

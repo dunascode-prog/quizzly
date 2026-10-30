@@ -18,8 +18,7 @@ from app.core import db, guard
 from app.core.config import get_settings
 from app.core.logging import configure_logging, job_id_var
 from app.core.observability import init_sentry
-from app.domain import accounts as profiles
-from app.domain import notifications
+from app.domain import notifications, plans
 from app.llm import gateway, usage
 from app.llm.gateway import AllProvidersBusy, BudgetReached
 from app.worker import (
@@ -108,7 +107,9 @@ async def _run(conn: AsyncConnection, job: dict, extra: dict) -> str:
         log.error("no handler for job type %s", job["type"], extra=extra)
         return "failed"
     usage.for_job(job)  # llm_calls rows are tagged with this job and its student
-    gateway.plan.set(await profiles.plan_of(conn, job.get("user_id")))  # model choice (FR-LIM-04)
+    # Models by plan (FR-LIM-04); a paid plan over its monthly allowance uses free ones (FR-LIM-06).
+    plan = await plans.effective_plan(conn, job.get("user_id"), get_settings())
+    gateway.plan.set(plans.models_for(plan))
     try:
         async with asyncio.timeout(JOB_TIMEOUT.total_seconds()):
             await handler(conn, job)

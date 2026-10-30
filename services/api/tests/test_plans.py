@@ -111,14 +111,14 @@ async def test_the_worker_sets_the_jobs_student_plan(monkeypatch):
     async def handler(conn, job):
         seen["plan"] = gw.plan.get()
 
-    async def plan_of(conn, user_id):
+    async def effective_plan(conn, user_id, settings):
         return "student" if user_id else "free"
 
     async def succeed(conn, job_id):
         pass
 
     monkeypatch.setitem(worker.HANDLERS, "test_job", handler)
-    monkeypatch.setattr(worker.profiles, "plan_of", plan_of)
+    monkeypatch.setattr(worker.plans, "effective_plan", effective_plan)
     monkeypatch.setattr(worker.queue, "succeed", succeed)
     job = {"id": uuid.uuid4(), "type": "test_job", "user_id": uuid.uuid4(), "payload": {}}
     assert await worker._run(None, job, {}) == "succeeded"

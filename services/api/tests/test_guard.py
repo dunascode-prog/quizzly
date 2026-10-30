@@ -15,8 +15,14 @@ USER = CurrentUser(id=uuid.uuid4(), email="tolu@example.com")
 class FakeConn:
     """Returns one row for the guard's single query and remembers what was asked."""
 
-    def __init__(self, count: int, paused: bool):
-        self.row = {"count": count, "paused": paused}
+    def __init__(self, count: int, paused: bool, plan="free", spent_micro=0, active=True):
+        self.row = {
+            "count": count,
+            "paused": paused,
+            "plan": plan,
+            "active": active,
+            "spent_micro": spent_micro,
+        }
         self.sql: list[str] = []
 
     async def execute(self, sql, params=None):
@@ -37,12 +43,17 @@ def request(method="GET", path="/v1/home"):
 
 
 def settings(per_minute=120):
-    return SimpleNamespace(requests_per_minute=per_minute)
+    return SimpleNamespace(
+        requests_per_minute=per_minute,
+        monthly_ai_ceiling_free_usd=0.60,
+        monthly_ai_ceiling_student_usd=2.00,
+        monthly_ai_ceiling_premium_usd=3.50,
+    )
 
 
 async def test_requests_under_the_limit_go_ahead():
     conn = FakeConn(count=120, paused=False)
-    assert await guard.guarded_user(request(), USER, conn, settings()) is USER
+    assert (await guard.guarded_user(request(), USER, conn, settings())).id == USER.id
     # Counted per student per minute, in the same round trip as the paused check.
     assert "rate_limits" in conn.sql[0] and "date_trunc('minute'" in conn.sql[0]
     assert "suspended_at" in conn.sql[0]
@@ -64,7 +75,9 @@ async def test_a_paused_account_is_refused():
 
 async def test_a_paused_student_can_still_delete_their_account():
     conn = FakeConn(count=1, paused=True)
-    assert await guard.guarded_user(request("DELETE", "/v1/me"), USER, conn, settings()) is USER
+    assert (
+        await guard.guarded_user(request("DELETE", "/v1/me"), USER, conn, settings())
+    ).id == USER.id
 
 
 async def test_paused_wins_over_the_rate_limit():
@@ -78,8 +91,8 @@ def test_every_signed_in_route_is_guarded(client, monkeypatch):
     from tests.conftest import JWT_SECRET
     from tests.test_api import make_token
 
-    async def limited(conn, user_id, per_minute):
-        return "rate_limited"
+    async def limited(conn, user_id, settings):
+        return "rate_limited", "free"
 
     monkeypatch.setattr(guard, "check", limited)
     headers = {"Authorization": f"Bearer {make_token(JWT_SECRET, sub=str(USER.id))}"}

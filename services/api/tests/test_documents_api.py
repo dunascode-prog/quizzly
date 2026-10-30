@@ -4,7 +4,8 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.api.deps import get_storage
-from app.domain import courses, documents, sharing, uploads, usage
+from app.core import guard
+from app.domain import courses, documents, plans, sharing, uploads, usage
 from app.worker import queue
 from tests.conftest import JWT_SECRET
 from tests.test_api import make_token
@@ -160,7 +161,11 @@ def fake(client, monkeypatch):
     async def enqueue(conn, job_type, payload, *, user_id=None, dedupe_key=None):
         state["jobs"].append((job_type, payload, dedupe_key))
 
+    async def stored_bytes(conn, user_id):
+        return state.get("stored", 0)
+
     for mod, name, fn in [
+        (documents, "stored_bytes", stored_bytes),
         (courses, "list_courses", list_courses),
         (courses, "create_course", create_course),
         (courses, "update_course", update_course),
@@ -412,3 +417,39 @@ def test_a_joined_course_is_read_only(client, fake):
     )
     assert client.delete(f"/v1/documents/{doc['id']}", headers=auth()).status_code == 403
     assert client.get(f"/v1/documents/{doc['id']}", headers=auth()).json()["read_only"] is True
+
+
+# --- plan limits, monthly allowance and storage caps on uploads (FR-LIM-05/06) ---------------
+
+
+def as_plan(monkeypatch, plan):
+    async def check(conn, user_id, settings):
+        return None, plan
+
+    monkeypatch.setattr(guard, "check", check)
+
+
+def upload(client, size=1000):
+    body = {"filename": "a.pdf", "size_bytes": size}
+    return client.post("/v1/documents", headers=auth(), json=body)
+
+
+def test_student_uploads_get_the_student_limit(client, fake, monkeypatch):
+    as_plan(monkeypatch, "student")
+    codes = [upload(client).status_code for _ in range(11)]
+    assert codes[:10] == [201] * 10 and codes[10] == 429
+
+
+def test_capped_accounts_cant_start_uploads(client, fake, monkeypatch):
+    as_plan(monkeypatch, "capped")
+    r = upload(client)
+    assert r.status_code == 429 and r.json()["detail"] == plans.CAPPED
+
+
+def test_storage_is_capped_per_plan(client, fake):
+    fake["stored"] = 500 * 1024 * 1024 - 500
+    r = upload(client)
+    assert r.status_code == 422
+    assert r.json()["detail"].startswith("Your notes use all 500 MB of your space.")
+    fake["stored"] = 0
+    assert upload(client).status_code == 201
