@@ -109,6 +109,7 @@ export default function ShareCourseSheet() {
           <MateChip
             key={m.user_id}
             name={m.display_name ?? 'Coursemate'}
+            avatarUrl={m.avatar_url}
             selected={picked.includes(m.user_id)}
             onPress={() => setPicked(picked.includes(m.user_id) ? picked.filter((x) => x !== m.user_id) : [...picked, m.user_id])}
           />

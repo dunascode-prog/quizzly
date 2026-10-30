@@ -124,12 +124,15 @@ export function useRate(targetType: 'explanation' | 'chat_message') {
   });
 }
 
+/** "avatar": a coursemate's photo, by that student's id (FR-MOD-06). */
+export type ReportTarget = 'explanation' | 'question' | 'chat_message' | 'avatar';
+
 export function useReport() {
   return useMutation({
     mutationFn: (body: {
-      target_type: 'explanation' | 'question' | 'chat_message';
+      target_type: ReportTarget;
       target_id: string;
-      reason: 'wrong' | 'unclear' | 'inappropriate';
+      reason: 'wrong' | 'unclear' | 'inappropriate' | 'other';
       note?: string;
     }) => apiFetch<void>('/v1/reports', { method: 'POST', body: JSON.stringify(body) }),
   });

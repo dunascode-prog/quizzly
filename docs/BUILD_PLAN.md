@@ -65,7 +65,7 @@ From the v0.1 code review. Each task needs a regression test.
 - [ ] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens.
 
 
-- [ ] **D9. Profile setup v2 and profile photos** ([PROFILE_V2.md](PROFILE_V2.md), screens 02a–02i, FR-PROF-01/03..07, FR-MOD-06): API and migration 0018 (photo upload and delete, visibility, practice times → reminder, photo reports); app `Avatar` component, 4-step onboarding with photo sheet and crop, edit profile.
+- [x] **D9. Profile setup v2 and profile photos** ([PROFILE_V2.md](PROFILE_V2.md), screens 02a–02i, FR-PROF-01/03..07, FR-MOD-06): API and migration 0018 (photo upload and delete, visibility, practice times → reminder, photo reports); app `Avatar` component, 4-step onboarding with photo sheet and crop, edit profile.
 
 ## Phase E — Beta readiness (M5)
 

@@ -86,7 +86,7 @@ export default function AccountScreen() {
     <Screen bottomInset={BottomTabInset}>
       <View style={styles.header}>
         <View style={styles.flex}>
-          <ProfileHeader me={me.data} title={me.data?.full_name ?? 'Your account'} ink />
+          <ProfileHeader me={me.data} title={me.data?.full_name ?? 'Your account'} account />
         </View>
         <Pill label="Edit" accessibilityLabel="Edit your profile" onPress={() => router.push('/profile/edit')} />
       </View>

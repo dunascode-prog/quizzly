@@ -1,14 +1,13 @@
+import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
+import { Avatar } from '@/components/ui/avatar';
 import { Text } from '@/components/ui/text';
-import { Radius, Size, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { Spacing } from '@/constants/theme';
+import { useMyAvatar } from '@/lib/avatar';
 import type { Me } from '@/lib/profile';
 
-export function initials(name: string | null | undefined) {
-  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
-}
+export { initials } from '@/components/ui/avatar';
 
 /** "UNILAG · 200L" */
 export function schoolLine(me: Me | undefined) {
@@ -17,25 +16,26 @@ export function schoolLine(me: Me | undefined) {
   return [school, level].filter(Boolean).join(' · ');
 }
 
-/** Initials avatar + two lines of text, used by the Library and Account headers. */
-export function ProfileHeader({ me, title, ink = false }: { me: Me | undefined; title: string; ink?: boolean }) {
-  const theme = useTheme();
+/** The student's photo (or initials) + two lines of text: the Today, Library and Account headers
+ * (02i). On Account the photo is bigger, carries the camera badge and opens the photo sheet. */
+export function ProfileHeader({ me, title, account = false }: { me: Me | undefined; title: string; account?: boolean }) {
+  const uri = useMyAvatar(me);
   return (
     <View style={styles.row}>
-      <View
-        style={[styles.avatar, { backgroundColor: ink ? theme.text : theme.backgroundSelected }]}
-        accessible={false}
-        importantForAccessibility="no-hide-descendants">
-        <Text variant="label" color={ink ? 'onInk' : 'text'}>
-          {initials(me?.full_name)}
-        </Text>
-      </View>
+      <Avatar
+        name={me?.full_name}
+        uri={uri}
+        size={account ? 76 : 52}
+        badge={account}
+        onPress={() => router.push(account ? '/profile/photo' : '/account')}
+        accessibilityLabel={account ? (uri ? 'Change profile photo' : 'Add profile photo') : 'Your account'}
+      />
       <View style={styles.text}>
-        <Text variant="heading" numberOfLines={1}>
+        <Text variant="heading" numberOfLines={account ? 2 : 1}>
           {title}
         </Text>
-        <Text variant="small" color="textSecondary" numberOfLines={1}>
-          {schoolLine(me)}
+        <Text variant="small" color="textSecondary" numberOfLines={2}>
+          {account ? [schoolLine(me), me?.department].filter(Boolean).join(' · ') : schoolLine(me)}
         </Text>
       </View>
     </View>
@@ -43,13 +43,6 @@ export function ProfileHeader({ me, title, ink = false }: { me: Me | undefined; 
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.twoHalf },
-  avatar: {
-    width: Size.iconButton,
-    height: Size.iconButton,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   text: { flex: 1, gap: Spacing.half },
 });

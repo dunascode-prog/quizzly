@@ -176,7 +176,7 @@ npx expo install expo-font @expo-google-fonts/bricolage-grotesque @expo-google-f
 | `ToggleRow` | Field row, radius 22, label + optional helper, 52×32 switch (on = ink track, white knob). `accessibilityRole="switch"`. | 18, 21 |
 | `ThemeRow` | Field row: 40 accent swatch, name + unlock rule, check (selected) or lock icon (locked; disabled, says how to unlock). Selected row has a 2 px ink border. | 18 |
 | `MateChip` | 52 pill: 40 initials circle + first name; selected = ink fill. Multi-select. | 19 |
-| `Avatar` | A student's photo (`expo-image`, disk cache keyed by path) or initials on `field` while loading, on error and without a photo. Sizes 28 / 40 / 52 / 76 / 156; optional ink camera badge; `accessibilityLabel` "Profile photo" / "Add profile photo". | 02, 13, 14, 03, members, toast |
+| `Avatar` | A student's photo (`expo-image`, disk cache keyed by path) or initials on `field` while loading, on error and without a photo. Sizes 28 / 40 / 48 (inbox) / 52 / 72 (02h) / 76 / 156; optional ink camera badge; `accessibilityLabel` "Profile photo" / "Add profile photo". | 02, 13, 14, 03, members, toast |
 | `AvatarStack` | Up to 3 overlapping 32 initials circles + count text. Only shown when the count ≥ 3. | 20 |
 | `NotificationRow` | Field row, radius 22: 48 avatar (initials, or the Logo mark for system events), bold actor + text, time, Lagoon unread dot, optional inline pills ("Add to library" ink, "View" light). | 22 |
 | `FilterPills` | Row of `Pill`s (All / Shared with me / Study). | 22 |
