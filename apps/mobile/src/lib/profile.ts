@@ -30,6 +30,8 @@ export type Me = {
   avatar_visible: boolean;
   practice_times: PracticeTime[];
   weekly_goal_days: number;
+  /** Set by payments only (FR-LIM-04); free students get the cheaper AI models. */
+  plan: 'free' | 'student' | 'premium';
 };
 
 export type ExplanationStyle = 'standard' | 'simple' | 'exam';

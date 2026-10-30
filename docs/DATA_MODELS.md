@@ -84,7 +84,8 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | department | text | |
 | level | text | `100L`…`700L`, `other` |
 | explanation_style | enum `explanation_style` | default `standard` |
-| plan | enum `plan` | `free` (later `premium`) |
+| plan | enum `plan` | `free`, `student` (**0020**), `premium`; set only by payment webhooks (FR-LIM-04) |
+| plan_expires_at | timestamptz null | **0020** a paid plan lapses to free after this; null = doesn't lapse |
 | terms_version | text | consent (FR-AUTH-03) |
 | terms_accepted_at | timestamptz | |
 | deleted_at | timestamptz | soft-delete marker during account deletion |

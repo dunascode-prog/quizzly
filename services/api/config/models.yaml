@@ -33,6 +33,24 @@ profiles:
     - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
 
+  # Free plan (FR-LIM-04): cheapest model first; the others only take overflow.
+  chat_free:
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low } }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none } }
+    - { provider: openrouter, model: "google/gemma-4-26b-a4b-it:free", rpm: 20 }
+    - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct-fp8", rpm: 50 }
+  questions_free:
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low } }
+    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, params: { reasoning_effort: low } }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none } }
+    - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
+    - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
+  quality_free:
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30 }
+    - { provider: groq, model: openai/gpt-oss-120b, rpm: 30 }
+    - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
+    - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
+
 tasks:
   chat: chat
   marking: fast
@@ -40,3 +58,10 @@ tasks:
   explanation: quality
   style: quality       # past-paper style (FR-QGEN-09)
   questions: questions
+
+# Free-plan students use these instead (FR-LIM-04). Outlines and past-paper styles run once per
+# document and are shared, and marking needs accuracy, so those stay the same for everyone.
+free_tasks:
+  chat: chat_free
+  explanation: quality_free
+  questions: questions_free

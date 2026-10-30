@@ -18,7 +18,7 @@
 | Database | **Supabase Postgres + pgvector** | Relational data and vectors in one free database |
 | Auth | **Supabase Auth** (email OTP, Google) | Free, issues JWTs the API verifies |
 | File storage | **Supabase Storage** (private bucket, signed URLs) | 1 GB free; clients upload directly |
-| LLM | **Open models on free hosted tiers**: Groq → OpenRouter (`:free` models) → Cloudflare Workers AI | ~$0 at MVP scale; no GPU to rent |
+| LLM | **Open models on free hosted tiers**: Groq → OpenRouter (`:free` models) → Cloudflare Workers AI. Free-plan students start on the cheapest model (gpt-oss-20b) for chat, explanations and questions (FR-LIM-04) | ~$0 at MVP scale; no GPU to rent; free students cost about half on paid tiers |
 | Embeddings | **`BAAI/bge-small-en-v1.5`** (384 dims) via `fastembed` (ONNX, CPU) inside the worker | Free, fast on CPU, no API quota used |
 | PDF text | `pypdfium2` (Apache/BSD); PPTX via `python-pptx` | Permissive licences (PyMuPDF is AGPL, so avoided) |
 | OCR | **Tesseract** in the worker container; vision-model OCR as a P1 fallback | Free; runs on CPU |

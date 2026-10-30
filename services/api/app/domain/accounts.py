@@ -11,6 +11,8 @@ _PROFILE_SQL = """
 select p.full_name, p.institution_id, p.institution_other, p.department, p.level,
        p.explanation_style::text as explanation_style, p.terms_accepted_at,
        p.avatar_path, p.avatar_visible, p.practice_times, p.weekly_goal_days,
+       case when p.plan_expires_at is null or p.plan_expires_at > now() then p.plan::text
+            else 'free' end as plan,
        i.name as institution_name, i.short_name as institution_short_name
 from profiles p
 left join institutions i on i.id = p.institution_id
@@ -136,3 +138,17 @@ async def delete_account_data(conn: AsyncConnection, user_id: UUID) -> list[str]
             )
         ).fetchall()
         return await documents.release(conn, rows)
+
+
+async def plan_of(conn: AsyncConnection, user_id: UUID | None) -> str:
+    """The student's plan right now (FR-LIM-04): a lapsed paid plan counts as free."""
+    if user_id is None:
+        return "free"
+    row = await (
+        await conn.execute(
+            "select plan::text as plan from profiles where id = %s "
+            "and (plan_expires_at is null or plan_expires_at > now())",
+            (user_id,),
+        )
+    ).fetchone()
+    return row["plan"] if row else "free"

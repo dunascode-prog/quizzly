@@ -46,6 +46,7 @@ class MeOut(BaseModel):
     avatar_visible: bool = False  # "Show my photo to classmates" (FR-PROF-05)
     practice_times: list[PracticeTime] = []  # FR-PROF-06
     weekly_goal_days: int = 4  # FR-PROF-07
+    plan: Literal["free", "student", "premium"] = "free"  # FR-LIM-04; set by payments only
 
 
 class ProfileUpdate(BaseModel):
@@ -103,6 +104,7 @@ async def _me(user: CurrentUser, profile: dict[str, Any] | None, photos) -> MeOu
         avatar_visible=bool(profile.get("avatar_visible")),
         practice_times=profile.get("practice_times") or [],
         weekly_goal_days=profile.get("weekly_goal_days") or 4,
+        plan=profile.get("plan") or "free",
     )
 
 
