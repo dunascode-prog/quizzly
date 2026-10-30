@@ -67,7 +67,7 @@ From the v0.1 code review. Each task needs a regression test.
 
 - [x] **D9. Profile setup v2 and profile photos** ([PROFILE_V2.md](PROFILE_V2.md), screens 02a–02i, FR-PROF-01/03..07, FR-MOD-06): API and migration 0018 (photo upload and delete, visibility, practice times → reminder, photo reports); app `Avatar` component, 4-step onboarding with photo sheet and crop, edit profile.
 
-- [ ] **D10. Quizzly credits and plans** ([CREDITS_AND_PLANS.md](CREDITS_AND_PLANS.md), screens 13, 23, 23b, 23c, 32; FR-INV-03..05, FR-PLAN-01..03, FR-LIM-05..07): cost controls and priority (done), credits and plans API with Google Play verification (done), app screens, then Play Console products and the native billing library in a dev build.
+- [ ] **D10. Quizzly credits and plans** ([CREDITS_AND_PLANS.md](CREDITS_AND_PLANS.md), screens 13, 23, 23b, 23c, 32; FR-INV-03..05, FR-PLAN-01..03, FR-LIM-05..07): cost controls and priority (done), credits and plans API with Google Play verification (done), app screens 13 / 23 / 23b / 23c / 32 (done). **Left:** Play Console products and offer, the service account and notifications (owner), then the native billing library in a dev build to start checkout from screen 32.
 
 ## Phase E — Beta readiness (M5)
 

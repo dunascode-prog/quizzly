@@ -19,6 +19,7 @@ export { default as Eye } from 'lucide-react-native/icons/eye';
 export { default as FileText } from 'lucide-react-native/icons/file-text';
 export { default as Flag } from 'lucide-react-native/icons/flag';
 export { default as Folder } from 'lucide-react-native/icons/folder';
+export { default as Gift } from 'lucide-react-native/icons/gift';
 export { default as Hand } from 'lucide-react-native/icons/hand';
 export { default as House } from 'lucide-react-native/icons/house';
 export { default as Image } from 'lucide-react-native/icons/image';
