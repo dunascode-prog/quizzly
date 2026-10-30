@@ -93,6 +93,9 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | timezone | text | **v0.2** IANA zone, default `Africa/Lagos` (study days, reminders; **0021:** daily limits roll over at its midnight) |
 | country | char(2) | **0021** ISO 3166-1 alpha-2, default `NG` (FR-PROF-08) |
 | timezone_changed_at | timestamptz null | **0021** a time zone changes at most once a week |
+| credits | int | **0023** credited friends (denormalised from `referrals`, FR-INV-03) |
+| discount_unlocked_at | timestamptz null | **0023** 5 credits: 10% off (FR-INV-05) |
+| discount_seen_at | timestamptz null | **0023** 23c shown |
 | weekly_goal_days | smallint | **v0.2** 1–7, default 4 (FR-HAB-03) |
 | accent | enum `accent` | **v0.2** `ink`, `lagoon`, `ankara`, `palm`, `lavender`; default `ink` |
 | night_mode | bool | **v0.2** default true |
@@ -396,6 +399,19 @@ Index on `(status, run_after)`. Workers claim jobs with `FOR UPDATE SKIP LOCKED`
 | day | date | Africa/Lagos calendar day |
 | resource | enum | `upload`, `question_set`, `explanation`, `chat_message`, `marking`; **v0.2:** `share_recipient`, `reminder_push`; **0019:** `avatar_upload` |
 | count | int | |
+
+#### `subscriptions` (0023)
+| Column | Type | Notes |
+|---|---|---|
+| purchase_token | text PK | Google Play token; one account per token (FR-PLAN-03) |
+| user_id | uuid FK | |
+| product_id | text | `quizzly_student`, `quizzly_premium` |
+| plan | enum `plan` | |
+| state | text | Play `subscriptionState`, or `VOIDED` |
+| offer_id | text null | `invite-10` when the invite discount was used |
+| expires_at | timestamptz null | paid-up date |
+
+**0023 also:** `referrals.study_days` (0–3, the friend's progress), notification type `invite_reward`. API only: RLS on, no client policies.
 
 #### `ai_spend` (0022)
 | Column | Type | Notes |
