@@ -6063,6 +6063,16 @@
             "type": "integer",
             "title": "Weekly Goal Days",
             "default": 4
+          },
+          "plan": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Plan",
+            "default": "free"
           }
         },
         "type": "object",

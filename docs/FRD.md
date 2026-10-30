@@ -153,6 +153,7 @@ This document says **what the system must do**, precisely enough to build and te
 | FR-LIM-01 | P0 | Daily per-student limits are enforced on the server ([PRD §9](PRD.md#9-usage-limits-free-plan-initial-values-configurable)). | Over-limit requests return HTTP 429 with the reset time; the app shows remaining usage. |
 | FR-LIM-02 | P0 | Every LLM call is logged with provider, model, tokens and estimated cost. | Admin can see daily cost per provider. |
 | FR-LIM-03 | P0 | A global circuit breaker queues work (rather than failing) when all providers are rate-limited. | The student sees "High demand — your quiz is queued". |
+| FR-LIM-04 | P1 | **Plans:** `free`, `student` ($6/month) and `premium` ($10/month) in `profiles.plan`, with `plan_expires_at` (a lapsed plan counts as free). **Free students' chat, explanations and questions run on cheaper models** (`free_tasks` in `config/models.yaml`, cheapest first); paid plans keep the stronger models. Outlines, past-paper styles and marking are the same for everyone. Daily limits are unchanged for now. Only verified payment webhooks set the plan (payments not built yet); the app can read it in `GET /v1/me` but never change it. | A call made without a plan uses the free routes, so a mistake costs less, not more. Cached explanations and question sets are shared whichever plan made them. |
 
 ### 2.12 Feedback and moderation (FR-MOD)
 
