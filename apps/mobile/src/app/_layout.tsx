@@ -112,7 +112,10 @@ function RootNavigator() {
           <Stack.Screen name="shares/[memberId]" />
           <Stack.Screen name="c/[code]" />
           <Stack.Screen name="i/[code]" />
-          <Stack.Screen name="invite" />
+          <Stack.Screen name="invite/index" />
+          <Stack.Screen name="invite/how" options={SHEET} />
+          <Stack.Screen name="invite/unlocked" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+          <Stack.Screen name="plans" />
           <Stack.Screen name="settings/privacy" />
           <Stack.Screen name="settings/themes" />
           <Stack.Screen name="settings/reminders" />

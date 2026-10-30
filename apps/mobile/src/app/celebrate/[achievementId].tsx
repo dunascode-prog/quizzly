@@ -3,19 +3,18 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Line } from 'react-native-svg';
 
 import { ChevronRight, House, X } from '@/components/icons';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
 import { IconButton } from '@/components/ui/icon-button';
 import { ProgressRing } from '@/components/ui/progress-ring';
+import { Rays } from '@/components/ui/rays';
 import { Text } from '@/components/ui/text';
 import { Accent, type AccentName, Colors, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useAccent, useCalmMotion } from '@/lib/appearance';
+import { useAccent } from '@/lib/appearance';
 import { type Celebration, useCelebration } from '@/lib/celebrate';
 import { friendlyError } from '@/lib/errors';
 
@@ -38,38 +37,6 @@ const THEME_RULE: Record<AccentName, string> = {
 };
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
-
-/** Eight short rays around the ring; they fade in after it (DESIGN.md §5: no confetti). */
-function Rays() {
-  const theme = useTheme();
-  const calm = useCalmMotion();
-  const c = RAYS / 2;
-  return (
-    <Animated.View
-      entering={calm ? undefined : FadeIn.delay(250).duration(500).reduceMotion(ReduceMotion.System)}
-      style={StyleSheet.absoluteFill}
-      pointerEvents="none">
-      <Svg width={RAYS} height={RAYS}>
-        {Array.from({ length: 8 }, (_, i) => {
-          const a = (i * Math.PI) / 4;
-          const [r1, r2] = [c - 26, c - 8];
-          return (
-            <Line
-              key={i}
-              x1={c + r1 * Math.sin(a)}
-              y1={c - r1 * Math.cos(a)}
-              x2={c + r2 * Math.sin(a)}
-              y2={c - r2 * Math.cos(a)}
-              stroke={theme.mutedOnHdr}
-              strokeWidth={4}
-              strokeLinecap="round"
-            />
-          );
-        })}
-      </Svg>
-    </Animated.View>
-  );
-}
 
 function Bar({ label, value, tone }: { label: string; value: number; tone: 'text' | 'danger' | 'warning' }) {
   const theme = useTheme();
@@ -123,7 +90,7 @@ export default function CelebrateScreen() {
         </View>
         <View style={styles.hero} accessible accessibilityLiveRegion="polite" accessibilityLabel={c && copy ? `${copy.title}. ${c.subtitle ?? ''}` : 'Loading'}>
           <View style={styles.rays}>
-            {c ? <Rays /> : null}
+            {c ? <Rays size={RAYS} /> : null}
             <ProgressRing size={RING} strokeWidth={12} value={c?.ring ?? 0} label={c?.ring_label ?? '…'} color="onHdr" trackColor="hdrLine" />
           </View>
           <Text variant="display" color="onHdr" style={styles.center} accessibilityRole="header">
