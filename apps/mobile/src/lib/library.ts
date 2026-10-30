@@ -205,7 +205,8 @@ async function sendFiles(docId: string, urls: string[]) {
       const result = await new File(file.uri).upload(urls[i], {
         httpMethod: 'PUT',
         mimeType: file.mimeType,
-        onProgress: ({ bytesSent }) => useUploads.getState().set(docId, { progress: (done + bytesSent) / total }),
+        // iOS reports bytesSent as a BigInt (SDK 58).
+        onProgress: ({ bytesSent }) => useUploads.getState().set(docId, { progress: (done + Number(bytesSent)) / total }),
       });
       if (result.status < 200 || result.status >= 300) throw new Error(`upload HTTP ${result.status}`);
       done += file.size;
