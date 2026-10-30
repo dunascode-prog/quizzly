@@ -93,6 +93,7 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | timezone | text | **v0.2** IANA zone, default `Africa/Lagos` (study days, reminders; **0021:** daily limits roll over at its midnight) |
 | country | char(2) | **0021** ISO 3166-1 alpha-2, default `NG` (FR-PROF-08) |
 | timezone_changed_at | timestamptz null | **0021** a time zone changes at most once a week |
+| email_normalized | text null | **0024** the inbox, normalised (FR-SEC-24); unique among active profiles. `normalize_email()` in SQL matches the API |
 | credits | int | **0023** credited friends (denormalised from `referrals`, FR-INV-03) |
 | discount_unlocked_at | timestamptz null | **0023** 5 credits: 10% off (FR-INV-05) |
 | discount_seen_at | timestamptz null | **0023** 23c shown |

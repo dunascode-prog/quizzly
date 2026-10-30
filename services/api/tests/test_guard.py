@@ -104,3 +104,33 @@ async def test_old_counters_are_deleted():
     conn = FakeConn(count=0, paused=False)
     assert await guard.delete_old(conn) == 3
     assert "interval '1 hour'" in conn.sql[0]
+
+
+# --- nothing costly before onboarding (FR-SEC-25) -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "method, path, allowed",
+    [
+        ("GET", "/v1/me", True),
+        ("PATCH", "/v1/me", True),
+        ("GET", "/v1/institutions", True),
+        ("PUT", "/v1/me/avatar", True),
+        ("POST", "/v1/referrals", True),
+        ("DELETE", "/v1/me", True),
+        ("POST", "/v1/documents", False),
+        ("POST", "/v1/documents/x/chat/messages", False),
+        ("GET", "/v1/home", False),
+        ("POST", "/v1/courses/x/share", False),
+    ],
+)
+async def test_accounts_that_havent_finished_onboarding_can_only_set_up(method, path, allowed):
+    conn = FakeConn(count=1, paused=False)
+    conn.row["onboarded"] = False
+    call = guard.guarded_user(request(method, path), USER, conn, settings())
+    if allowed:
+        assert (await call).id == USER.id
+    else:
+        with pytest.raises(HTTPException) as exc:
+            await call
+        assert exc.value.status_code == 403 and exc.value.detail == guard.SETUP_FIRST

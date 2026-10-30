@@ -29,8 +29,13 @@ export function startAuthListener() {
   });
 }
 
-export async function sendEmailCode(email: string) {
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+/** Sends the 6-digit code. `captchaToken` is the Turnstile token (FR-SEC-23); Supabase rejects the
+ * request without one once CAPTCHA protection is on. */
+export async function sendEmailCode(email: string, captchaToken?: string | null) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true, captchaToken: captchaToken ?? undefined },
+  });
   if (error) throw error;
 }
 
