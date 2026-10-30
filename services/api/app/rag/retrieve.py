@@ -12,7 +12,9 @@ from app.rag import embed
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 CANDIDATES = 20  # from each search, before fusion
 RRF_K = 60
-CONTEXT_CHARS = 12_000  # about 3,000 tokens of notes per answer
+# About 2,000 tokens of notes per answer: 25% less input than 12,000 characters with the same
+# citation and "not in your notes" behaviour in testing (FR-LIM-06).
+CONTEXT_CHARS = 8_000
 PAGE_CHARS = 3_000
 
 
