@@ -4025,6 +4025,36 @@
         ]
       }
     },
+    "/v1/me/invite/reward-seen": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Reward Seen",
+        "description": "The app showed the discount celebration (23c); it isn't shown again.",
+        "operationId": "reward_seen_v1_me_invite_reward_seen_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/referrals": {
       "post": {
         "tags": [
@@ -4050,6 +4080,100 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReferralOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/plans": {
+      "get": {
+        "tags": [
+          "plans"
+        ],
+        "summary": "List Plans",
+        "description": "Screen 32: Free, Student and Premium with their limits and prices (FR-PLAN-01).",
+        "operationId": "list_plans_v1_plans_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlansOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/plans/purchase": {
+      "post": {
+        "tags": [
+          "plans"
+        ],
+        "summary": "Purchase",
+        "description": "The app sends the Play purchase token after checkout. The plan is given only after Google\nconfirms the subscription, that it was bought for this account, and that the invite price was\nunlocked (FR-PLAN-03).",
+        "operationId": "purchase_v1_plans_purchase_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOut"
                 }
               }
             }
@@ -5331,6 +5455,35 @@
         ],
         "title": "Day"
       },
+      "Discount": {
+        "properties": {
+          "percent": {
+            "type": "integer",
+            "title": "Percent"
+          },
+          "at": {
+            "type": "integer",
+            "title": "At"
+          },
+          "unlocked": {
+            "type": "boolean",
+            "title": "Unlocked"
+          },
+          "celebrate": {
+            "type": "boolean",
+            "title": "Celebrate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "percent",
+          "at",
+          "unlocked",
+          "celebrate"
+        ],
+        "title": "Discount",
+        "description": "5 credits: 10% off Student or Premium (FR-INV-05)."
+      },
       "DocumentCreate": {
         "properties": {
           "filename": {
@@ -5686,15 +5839,36 @@
             "title": "Display Name"
           },
           "credited_at": {
-            "type": "string",
-            "format": "date-time",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Credited At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "counted",
+              "started"
+            ],
+            "title": "State"
+          },
+          "study_days": {
+            "type": "integer",
+            "title": "Study Days"
           }
         },
         "type": "object",
         "required": [
           "display_name",
-          "credited_at"
+          "credited_at",
+          "state",
+          "study_days"
         ],
         "title": "Friend"
       },
@@ -5888,6 +6062,9 @@
           "lavender_unlocked": {
             "type": "boolean",
             "title": "Lavender Unlocked"
+          },
+          "discount": {
+            "$ref": "#/components/schemas/Discount"
           }
         },
         "type": "object",
@@ -5897,7 +6074,8 @@
           "friends",
           "credited",
           "next_reward",
-          "lavender_unlocked"
+          "lavender_unlocked",
+          "discount"
         ],
         "title": "InviteOut"
       },
@@ -5942,6 +6120,39 @@
           "course_id"
         ],
         "title": "JoinedOut"
+      },
+      "Limits": {
+        "properties": {
+          "upload": {
+            "type": "integer",
+            "title": "Upload"
+          },
+          "question_set": {
+            "type": "integer",
+            "title": "Question Set"
+          },
+          "explanation": {
+            "type": "integer",
+            "title": "Explanation"
+          },
+          "chat_message": {
+            "type": "integer",
+            "title": "Chat Message"
+          },
+          "marking": {
+            "type": "integer",
+            "title": "Marking"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload",
+          "question_set",
+          "explanation",
+          "chat_message",
+          "marking"
+        ],
+        "title": "Limits"
       },
       "MeOut": {
         "properties": {
@@ -6227,18 +6438,33 @@
       },
       "NextReward": {
         "properties": {
-          "theme": {
+          "kind": {
             "type": "string",
-            "title": "Theme"
+            "enum": [
+              "lavender",
+              "discount"
+            ],
+            "title": "Kind"
           },
           "at": {
             "type": "integer",
             "title": "At"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent"
           }
         },
         "type": "object",
         "required": [
-          "theme",
+          "kind",
           "at"
         ],
         "title": "NextReward"
@@ -6841,6 +7067,75 @@
         "title": "PaperStyleOut",
         "description": "A past paper's style for quiz setup (FR-QGEN-09, screen 26b). Only its format, never its\nquestions."
       },
+      "PlanOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Id"
+          },
+          "price_usd": {
+            "type": "number",
+            "title": "Price Usd"
+          },
+          "discounted_price_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discounted Price Usd"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "storage_mb": {
+            "type": "integer",
+            "title": "Storage Mb"
+          },
+          "monthly_ai_usd": {
+            "type": "number",
+            "title": "Monthly Ai Usd"
+          },
+          "extras": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Extras"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "price_usd",
+          "discounted_price_usd",
+          "limits",
+          "storage_mb",
+          "monthly_ai_usd",
+          "extras",
+          "product_id"
+        ],
+        "title": "PlanOut"
+      },
       "PlanRow": {
         "properties": {
           "kind": {
@@ -6929,6 +7224,85 @@
           "kind"
         ],
         "title": "PlanRow"
+      },
+      "PlansOut": {
+        "properties": {
+          "current": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Current"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "effective": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium",
+              "capped"
+            ],
+            "title": "Effective"
+          },
+          "discount_percent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Percent"
+          },
+          "invite_offer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Offer Id"
+          },
+          "payments_ready": {
+            "type": "boolean",
+            "title": "Payments Ready"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanOut"
+            },
+            "type": "array",
+            "title": "Plans"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current",
+          "expires_at",
+          "effective",
+          "discount_percent",
+          "invite_offer_id",
+          "payments_ready",
+          "plans"
+        ],
+        "title": "PlansOut"
       },
       "PracticeOut": {
         "properties": {
@@ -7254,6 +7628,58 @@
         },
         "type": "object",
         "title": "ProfileUpdate"
+      },
+      "PurchaseIn": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Product Id"
+          },
+          "purchase_token": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 10,
+            "title": "Purchase Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "purchase_token"
+        ],
+        "title": "PurchaseIn"
+      },
+      "PurchaseOut": {
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Plan"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan",
+          "expires_at"
+        ],
+        "title": "PurchaseOut"
       },
       "PushTokenIn": {
         "properties": {

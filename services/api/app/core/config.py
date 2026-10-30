@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     storage_premium_mb: int = 5000
     # API requests per student per minute (FR-SEC-20); far above what the app makes.
     requests_per_minute: int = 120
+    # Google Play Billing (FR-PLAN-03). Payments stay off until a service account is set.
+    play_package_name: str = "app.quizzly"
+    play_service_account_json: str = ""  # key JSON of a service account with Android Publisher
+    play_rtdn_secret: str = ""  # shared secret on the Pub/Sub push URL for Play notifications
+    play_student_product: str = "quizzly_student"
+    play_premium_product: str = "quizzly_premium"
+    play_invite_offer: str = "invite-10"  # the 10% offer for 5 credits (FR-INV-05)
     # Host of share and invite links (PRD Q4): https://{invite_domain}/c/{code}
     invite_domain: str = "quizzly.app"  # the same placeholder as apps/web and the app (WEB.md)
     # FR-SEC-08: a day's AI spend across all students; reaching either pauses new AI work.
