@@ -6,6 +6,8 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { OfflineBanner } from '@/components/offline-banner';
 import { Toast } from '@/components/ui/toast';
@@ -161,14 +163,19 @@ function Live() {
 function RootLayout() {
   const colorScheme = useColorScheme();
   return (
-    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <StatusBar style="auto" />
-        <RootNavigator />
-      </ThemeProvider>
-    </PersistQueryClientProvider>
+    // Gesture handler 3 needs a root view above every GestureDetector, e.g. the toast's swipe.
+    <GestureHandlerRootView style={styles.root}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <StatusBar style="auto" />
+          <RootNavigator />
+        </ThemeProvider>
+      </PersistQueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({ root: { flex: 1 } });
 
 // NFR-09: crash reports when EXPO_PUBLIC_SENTRY_DSN is set.
 export default wrapRoot(RootLayout);
