@@ -1,6 +1,7 @@
 import logging
 from typing import Annotated, Any, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -16,7 +17,11 @@ log = logging.getLogger("quizzly.api")
 
 router = APIRouter()
 
-Level = Literal["100L", "200L", "300L", "400L", "500L", "600L", "700L", "other"]
+# Nigerian levels, years elsewhere (FR-PROF-08), postgraduate, other.
+Level = Literal[
+    "100L", "200L", "300L", "400L", "500L", "600L", "700L",
+    "Y1", "Y2", "Y3", "Y4", "Y5", "Y6", "PG", "other",
+]  # fmt: skip
 PracticeTime = Literal["commute", "lectures", "evening", "night"]
 BAD_PHOTO_STATUS = status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -47,6 +52,8 @@ class MeOut(BaseModel):
     practice_times: list[PracticeTime] = []  # FR-PROF-06
     weekly_goal_days: int = 4  # FR-PROF-07
     plan: Literal["free", "student", "premium"] = "free"  # FR-LIM-04; set by payments only
+    country: str = "NG"  # FR-PROF-08
+    timezone: str = "Africa/Lagos"
 
 
 class ProfileUpdate(BaseModel):
@@ -61,6 +68,20 @@ class ProfileUpdate(BaseModel):
     weekly_goal_days: int | None = Field(default=None, ge=1, le=7)
     avatar_visible: bool | None = None
     practice_times: list[PracticeTime] | None = Field(default=None, max_length=4)
+    # Country-ready (FR-PROF-08): ISO 3166-1 alpha-2, and the phone's time zone (changes at most
+    # once a week; daily limits roll over at the student's midnight).
+    country: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("timezone")
+    @classmethod
+    def _zone(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                ZoneInfo(v)
+            except (ZoneInfoNotFoundError, ValueError) as exc:
+                raise ValueError("Unknown time zone") from exc
+        return v
 
     @field_validator("full_name", "institution_other", "department")
     @classmethod
@@ -105,6 +126,8 @@ async def _me(user: CurrentUser, profile: dict[str, Any] | None, photos) -> MeOu
         practice_times=profile.get("practice_times") or [],
         weekly_goal_days=profile.get("weekly_goal_days") or 4,
         plan=profile.get("plan") or "free",
+        country=profile.get("country") or "NG",
+        timezone=profile.get("timezone") or "Africa/Lagos",
     )
 
 
@@ -238,8 +261,9 @@ async def institutions(
     conn: Conn,
     q: Annotated[str, Query(max_length=80)] = "",
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    country: Annotated[str, Query(pattern=r"^[A-Z]{2}$")] = "NG",
 ) -> list[InstitutionOut]:
-    """Searches institutions for onboarding: short names by prefix ("UNILAG"), full names
-    by substring or similarity."""
-    rows = await accounts.search_institutions(conn, q, limit)
+    """Searches institutions for onboarding in the student's country (FR-PROF-08): short names by
+    prefix ("UNILAG"), full names by substring or similarity."""
+    rows = await accounts.search_institutions(conn, q, limit, country)
     return [InstitutionOut(**row) for row in rows]

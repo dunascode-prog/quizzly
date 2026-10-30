@@ -82,7 +82,7 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | institution_id | uuid FK → institutions | nullable until onboarding |
 | institution_other | text | free text if the school isn't listed |
 | department | text | |
-| level | text | `100L`…`700L`, `other` |
+| level | text | `100L`…`700L`, **0021:** `Y1`…`Y6`, `PG`; `other` |
 | explanation_style | enum `explanation_style` | default `standard` |
 | plan | enum `plan` | `free`, `student` (**0020**), `premium`; set only by payment webhooks (FR-LIM-04) |
 | plan_expires_at | timestamptz null | **0020** a paid plan lapses to free after this; null = doesn't lapse |
@@ -90,7 +90,9 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | terms_accepted_at | timestamptz | |
 | deleted_at | timestamptz | soft-delete marker during account deletion |
 | display_name | text | **v0.2** first name + last initial ("Ada O."), the only name other users ever see |
-| timezone | text | **v0.2** IANA zone, default `Africa/Lagos` (study days, reminders) |
+| timezone | text | **v0.2** IANA zone, default `Africa/Lagos` (study days, reminders; **0021:** daily limits roll over at its midnight) |
+| country | char(2) | **0021** ISO 3166-1 alpha-2, default `NG` (FR-PROF-08) |
+| timezone_changed_at | timestamptz null | **0021** a time zone changes at most once a week |
 | weekly_goal_days | smallint | **v0.2** 1–7, default 4 (FR-HAB-03) |
 | accent | enum `accent` | **v0.2** `ink`, `lagoon`, `ankara`, `palm`, `lavender`; default `ink` |
 | night_mode | bool | **v0.2** default true |
@@ -114,7 +116,8 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | short_name | text | "UNILAG" |
 | type | enum | `university`, `polytechnic`, `college_of_education`, `other` |
 | ownership | enum | `federal`, `state`, `private` |
-| state | text | Nigerian state |
+| state | text | state or region |
+| country | char(2) | **0021** ISO 3166-1 alpha-2, default `NG`; search is per country (FR-PROF-08) |
 
 Trigram index on `name` and `short_name` for search (FR-PROF-02).
 

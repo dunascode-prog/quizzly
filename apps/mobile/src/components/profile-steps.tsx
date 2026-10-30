@@ -12,6 +12,7 @@ import { SelectField, TextField } from '@/components/ui/text-field';
 import { FontFamily, Radius, Size, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { pickAvatar, saveAvatar, useMyAvatar } from '@/lib/avatar';
+import { COUNTRIES, countryName, deviceTimezone, guessCountry, levelLabel, levelsFor } from '@/lib/countries';
 import { friendlyError } from '@/lib/errors';
 import { PermissionDenied } from '@/lib/photos';
 import {
@@ -37,6 +38,8 @@ export type Draft = {
   school: InstitutionChoice | null;
   department: string;
   level: Level | null;
+  /** ISO country code (FR-PROF-08). */
+  country: string;
   practice: PracticeTime[];
   goal: number;
   style: ExplanationStyle;
@@ -59,6 +62,8 @@ export function draftFrom(me: Me | undefined): Draft {
     goal: me?.weekly_goal_days ?? 4,
     style: me?.explanation_style ?? 'standard',
     showPhoto: me?.avatar_visible ?? false,
+    // A profile not set up yet starts from the phone's time zone; a saved one keeps its country.
+    country: me?.level ? me.country : guessCountry(),
   };
 }
 
@@ -72,6 +77,9 @@ export function updateFrom(d: Draft): ProfileUpdate {
     weekly_goal_days: d.goal,
     explanation_style: d.style,
     avatar_visible: d.showPhoto,
+    country: d.country,
+    // Daily limits roll over at the student's midnight (FR-PROF-08).
+    ...(deviceTimezone() ? { timezone: deviceTimezone() } : {}),
     ...(d.school?.kind === 'listed'
       ? { institution_id: d.school.institution.id }
       : d.school
@@ -98,7 +106,7 @@ export function displayName(fullName: string) {
 /** "UNILAG · 200L · Computer Science" */
 export function schoolSummary(d: Draft) {
   const school = d.school?.kind === 'listed' ? (d.school.institution.short_name ?? d.school.institution.name) : d.school?.name;
-  return [school, d.level === 'other' ? null : d.level, d.department.trim()].filter(Boolean).join(' · ');
+  return [school, levelLabel(d.level), d.department.trim()].filter(Boolean).join(' · ');
 }
 
 /** Camera or gallery → the crop screen (02c), with the permission message when it's refused. */
@@ -204,13 +212,6 @@ export function PhotoStep({ draft, set, me }: StepProps & { me: Me | undefined }
 
 // --- Step 2: your school (02e–02f) ----------------------------------------------------------------
 
-const MAIN_LEVELS: Level[] = ['100L', '200L', '300L', '400L', '500L'];
-const MORE_LEVELS: { value: Level; label: string }[] = [
-  { value: '600L', label: '600L' },
-  { value: '700L', label: '700L' },
-  { value: 'other', label: 'Not listed' },
-];
-
 /** `searching` is the open school list; onboarding keeps Continue off while it's open (02e). */
 export function SchoolStep({
   draft,
@@ -222,8 +223,10 @@ export function SchoolStep({
   const [query, setQuery] = useState('');
   const [typing, setTyping] = useState(false);
   const [other, setOther] = useState('');
-  const [showMore, setShowMore] = useState(draft.level !== null && !MAIN_LEVELS.includes(draft.level));
-  const results = useInstitutionSearch(query);
+  const [pickingCountry, setPickingCountry] = useState(false);
+  const levels = levelsFor(draft.country);
+  const [showMore, setShowMore] = useState(levels.more.some((l) => l.value === draft.level));
+  const results = useInstitutionSearch(query, draft.country);
   const picked = draft.school?.kind === 'listed' ? draft.school.institution.id : null;
 
   const choose = (school: InstitutionChoice) => {
@@ -233,9 +236,55 @@ export function SchoolStep({
     setQuery('');
   };
 
+  // Another country: its own schools and levels, so the old choices go (FR-PROF-08).
+  const chooseCountry = (country: string) => {
+    setPickingCountry(false);
+    if (country === draft.country) return;
+    set((d) => ({ ...d, country, school: null, level: null }));
+    setShowMore(false);
+    setTyping(false);
+    setQuery('');
+    setSearching(true);
+  };
+
   return (
     <>
       <View style={styles.fields}>
+        <SelectField
+          label="Country"
+          value={countryName(draft.country)}
+          placeholder="Choose your country"
+          onPress={() => setPickingCountry(!pickingCountry)}
+          accessibilityHint="Shows the list of countries"
+        />
+        {pickingCountry ? (
+          <View style={[styles.results, { backgroundColor: theme.backgroundSelected }]}>
+            {COUNTRIES.map((c) => {
+              const selected = c.code === draft.country;
+              return (
+                <Pressable
+                  key={c.code}
+                  onPress={() => chooseCountry(c.code)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={c.name}
+                  accessibilityState={{ checked: selected }}
+                  style={({ pressed }) => [
+                    styles.result,
+                    { backgroundColor: selected ? theme.background : 'transparent', opacity: pressed ? 0.8 : 1 },
+                  ]}>
+                  <Text variant="label" style={styles.flex}>
+                    {c.name}
+                  </Text>
+                  {selected ? (
+                    <View style={[styles.tick, { backgroundColor: theme.text }]}>
+                      <Check size={16} color={theme.onInk} strokeWidth={3} />
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         {!searching ? (
           <SelectField
             label="Institution"
@@ -272,7 +321,7 @@ export function SchoolStep({
               label="Institution"
               value={query}
               onChangeText={setQuery}
-              placeholder="UNILAG or University of Lagos"
+              placeholder={draft.country === 'NG' ? 'UNILAG or University of Lagos' : 'Your university or college'}
               autoFocus
               autoCorrect={false}
               returnKeyType="search"
@@ -309,7 +358,9 @@ export function SchoolStep({
               })}
               {results.data?.length === 0 && !results.isFetching ? (
                 <Text variant="small" color="textSecondary" style={styles.resultPad}>
-                  No school matches &quot;{query.trim()}&quot;.
+                  {query.trim()
+                    ? `No school matches "${query.trim()}".`
+                    : `No schools listed for ${countryName(draft.country)} yet.`}
                 </Text>
               ) : null}
               <Text
@@ -342,14 +393,14 @@ export function SchoolStep({
         <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel="Level">
           <Text variant="label">Level</Text>
           <View style={styles.pills}>
-            {MAIN_LEVELS.map((l) => (
+            {levels.main.map((l) => (
               <Pill
-                key={l}
-                label={l}
+                key={l.value}
+                label={l.label}
                 role="radio"
-                selected={draft.level === l}
+                selected={draft.level === l.value}
                 onPress={() => {
-                  set((d) => ({ ...d, level: l }));
+                  set((d) => ({ ...d, level: l.value }));
                   setShowMore(false);
                 }}
               />
@@ -358,7 +409,7 @@ export function SchoolStep({
           </View>
           {showMore ? (
             <View style={styles.pills}>
-              {MORE_LEVELS.map((l) => (
+              {levels.more.map((l) => (
                 <Pill
                   key={l.value}
                   label={l.label}
