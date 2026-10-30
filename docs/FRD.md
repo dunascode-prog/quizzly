@@ -235,6 +235,9 @@ This document says **what the system must do**, precisely enough to build and te
 | FR-SEC-20 | P0 | **Request rate limit:** every signed-in API request is counted per student per minute in Postgres (shared by all API instances); above `REQUESTS_PER_MINUTE` (120) the API returns 429 with `Retry-After: 60`. The counter commits even when the request then fails. | The 121st request in a minute gets 429; the next minute works again. |
 | FR-SEC-21 | P0 | **Paused accounts:** an admin can set `profiles.suspended_at`; every API request from that student then gets 403 with the paused message (§4), except `DELETE /v1/me` (FR-AUTH-05). | The app shows the message; nothing else works until it's cleared. |
 | FR-SEC-22 | P1 | **Profile photo cap:** at most `DAILY_AVATAR_UPLOADS` (10) photo changes a day, counted before the image work, so refused photos count too. | The 11th change in a day gets 429 with the message in §4. |
+| FR-SEC-23 | P0 | **CAPTCHA on email sign-in:** Cloudflare Turnstile on the email step (and before a resend); its one-time token goes with `signInWithOtp` and Supabase checks it (Authentication → Bot and Abuse Protection → CAPTCHA, provider Turnstile). Google sign-in has its own checks. | Without `EXPO_PUBLIC_TURNSTILE_SITE_KEY` the widget is hidden (local dev). Codes can't be requested in bulk by scripts, which also protects the email allowance. |
+| FR-SEC-24 | P0 | **One account per real inbox:** when onboarding finishes the API refuses throwaway email domains (the CC0 `disposable-email-domains` list, 10,000+ domains, subdomains included) and a second account for the same inbox, comparing normalised addresses (lower case; `+tags` dropped; Gmail dots dropped, googlemail → gmail). `profiles.email_normalized` has a unique index. | Messages in §4. Existing look-alike accounts keep studying; new ones can't be made. |
+| FR-SEC-25 | P0 | **Nothing costly before onboarding:** until terms are accepted and a level is set, the API answers only the setup routes (profile, photo, schools, settings, referral claim, account deletion); everything else gets 403 "Finish setting up your profile first." | Accounts made straight through the Supabase API can't skip FR-SEC-24 to reach uploads, AI or sharing. |
 
 ### 2.17 Course sharing (FR-SHARE) — new in v0.2
 
@@ -295,6 +298,9 @@ This document says **what the system must do**, precisely enough to build and te
 | Generation produced too few valid questions | "We made 7 good questions out of 10 — your notes on this topic are short." |
 | Share link no longer works | "This course isn't shared any more. Ask Ada for a new link." |
 | Share limit reached | "You've shared with 20 people today. You can share again tomorrow." |
+| Throwaway email at onboarding (FR-SEC-24) | "Use your usual email address. Temporary email addresses can't be used for Quizzly." |
+| Second account for the same inbox (FR-SEC-24) | "This email already has a Quizzly account. Sign in with that one instead." |
+| Security check failed (FR-SEC-23) | "The security check didn't go through. Try it again." |
 | Too many requests (FR-SEC-20) | "Too many requests. Wait a minute and try again." |
 | Account paused (FR-SEC-21) | "Your account is paused while we look into unusual activity. If you think this is a mistake, contact Quizzly support." |
 | Monthly AI allowance used, free plan (FR-LIM-06) | "You've used this month's AI allowance on the free plan. Everything you've already made still works, and the allowance comes back on the 1st." |

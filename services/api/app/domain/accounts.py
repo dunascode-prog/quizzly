@@ -161,3 +161,20 @@ async def plan_of(conn: AsyncConnection, user_id: UUID | None) -> str:
         )
     ).fetchone()
     return row["plan"] if row else "free"
+
+
+async def claim_inbox(conn: AsyncConnection, user_id: UUID, normalized: str) -> bool:
+    """Ties the inbox to this account (FR-SEC-24). False when another active account has it."""
+    taken = await (
+        await conn.execute(
+            "select 1 from profiles where email_normalized = %s and id <> %s "
+            "and deleted_at is null",
+            (normalized, user_id),
+        )
+    ).fetchone()
+    if taken:
+        return False
+    await conn.execute(
+        "update profiles set email_normalized = %s where id = %s", (normalized, user_id)
+    )
+    return True

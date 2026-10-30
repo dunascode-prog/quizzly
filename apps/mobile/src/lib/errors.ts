@@ -13,6 +13,8 @@ export function friendlyError(error: unknown): string {
   if (__DEV__) console.warn('[friendlyError]', error);
   if (error instanceof AuthError) {
     switch (error.code) {
+      case 'captcha_failed':
+        return "The security check didn't go through. Try it again.";
       case 'otp_expired':
         return 'That code is wrong or has expired. Check it or ask for a new one.';
       case 'over_email_send_rate_limit':

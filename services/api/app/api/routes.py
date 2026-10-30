@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.api.deps import AppSettings, AvatarStorageDep, Conn, StorageDep, User
 from app.core import auth_admin
 from app.core.auth import CurrentUser
-from app.domain import accounts, avatars, invites, usage
+from app.domain import accounts, avatars, emails, invites, usage
 from app.worker import queue
 
 log = logging.getLogger("quizzly.api")
@@ -32,6 +32,12 @@ class InstitutionOut(BaseModel):
     short_name: str | None
     type: str | None = None
     state: str | None = None
+
+
+DISPOSABLE_EMAIL = (
+    "Use your usual email address. Temporary email addresses can't be used for Quizzly."
+)
+INBOX_TAKEN = "This email already has a Quizzly account. Sign in with that one instead."
 
 
 class MeOut(BaseModel):
@@ -155,6 +161,11 @@ async def update_me(
     """Changes only the fields sent. A listed institution and a typed-in one are
     alternatives: setting one clears the other. `accept_terms` records the current terms."""
     fields = body.model_dump(exclude_unset=True, exclude={"accept_terms"})
+    if body.accept_terms and user.email:  # finishing onboarding (FR-SEC-24)
+        if emails.is_disposable(user.email):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, DISPOSABLE_EMAIL)
+        if not await accounts.claim_inbox(conn, user.id, emails.normalize(user.email)):
+            raise HTTPException(status.HTTP_409_CONFLICT, INBOX_TAKEN)
     # A listed school and a typed-in one are alternatives; setting one clears the other.
     if fields.get("institution_id"):
         if not await accounts.institution_exists(conn, fields["institution_id"]):

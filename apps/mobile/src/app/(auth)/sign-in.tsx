@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { StyleSheet, type TextInput, useWindowDimensions, View } from 'react-native';
 
+import { Captcha, captchaEnabled } from '@/components/captcha';
 import { ArrowRight, ArrowUp, ArrowUpRight, BookOpen, Check } from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { StudyIllustration } from '@/components/study-illustration';
@@ -16,6 +17,7 @@ import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
 import { TextField } from '@/components/ui/text-field';
 import { Radius, Size, Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { sendEmailCode, SignInCancelled, signInWithGoogle, verifyEmailCode } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
@@ -49,12 +51,21 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
 // no accent colours on sign-in.
 export default function SignInScreen() {
   const theme = useTheme();
+  const scheme = useColorScheme();
   const [step, setStep] = useState<Step>('welcome');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState<'email' | 'code' | 'google' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
+  // Turnstile (FR-SEC-23): one token per code sent, so the widget is reset after each send.
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
+  const needsCaptcha = captchaEnabled && !captcha;
+  const freshCaptcha = () => {
+    setCaptcha(null);
+    setCaptchaKey((k) => k + 1);
+  };
   const codeRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [art, setArt] = useState<{ width: number; stickers: boolean }>();
   const window = useWindowDimensions();
@@ -90,8 +101,16 @@ export default function SignInScreen() {
       setError('Enter a valid email address.');
       return;
     }
+    if (needsCaptcha) {
+      setError('Finish the security check first.');
+      return;
+    }
     run('email', async () => {
-      await sendEmailCode(address);
+      try {
+        await sendEmailCode(address, captcha);
+      } finally {
+        freshCaptcha();
+      }
       setEmail(address);
       setCode('');
       setStep('code');
@@ -99,7 +118,12 @@ export default function SignInScreen() {
     });
   };
 
-  const resend = () => run('email', () => sendEmailCode(email).then(() => setResendIn(RESEND_AFTER_S)));
+  const resend = () =>
+    run('email', () =>
+      sendEmailCode(email, captcha)
+        .then(() => setResendIn(RESEND_AFTER_S))
+        .finally(freshCaptcha),
+    );
 
   // On success the auth listener updates the session and the root layout moves on.
   const verify = (value = code) => {
@@ -144,7 +168,7 @@ export default function SignInScreen() {
           variant="light"
           onPress={sendCode}
           loading={busy === 'email'}
-          disabled={busy !== null && busy !== 'email'}
+          disabled={(busy !== null && busy !== 'email') || needsCaptcha}
         />
         <TextButton label="Back" onPress={() => go('welcome')} disabled={busy !== null} />
         {legal}
@@ -166,7 +190,7 @@ export default function SignInScreen() {
             label={resendIn > 0 ? `Resend in ${clock(resendIn)}` : 'Resend code'}
             color="textSecondary"
             onPress={resend}
-            disabled={resendIn > 0 || busy !== null}
+            disabled={resendIn > 0 || busy !== null || needsCaptcha}
           />
         </View>
         {legal}
@@ -242,6 +266,9 @@ export default function SignInScreen() {
           onSubmitEditing={sendCode}
           autoFocus
         />
+      ) : null}
+      {step === 'email' || (step === 'code' && resendIn === 0) ? (
+        <Captcha onToken={setCaptcha} resetKey={captchaKey} theme={scheme === 'dark' ? 'dark' : 'light'} />
       ) : null}
       {step === 'code' ? (
         <CodeField ref={codeRef} value={code} onChangeText={onCodeChange} length={CODE_LENGTH} />
