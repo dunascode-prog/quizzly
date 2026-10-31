@@ -26,6 +26,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
+      # The end-to-end suite needs a live API (deploys run it); here it must still import cleanly.
+      - run: uv run pytest -q e2e
 
   # NFR-11: on a pull request that changes prompts, the RAG pipeline or model routing, run the
   # evaluation set against the real models and fail if quality drops below evals/thresholds.json.
@@ -159,7 +161,8 @@ jobs:
             fi
           fi
 
-  # Secrets anywhere in git history, and Semgrep's high-severity rules for Python and TypeScript.
+  # Secrets anywhere in git history, Semgrep's high-severity rules for Python and TypeScript,
+  # bandit's high-severity Python checks, and known vulnerabilities in dependencies.
   security:
     runs-on: ubuntu-latest
     steps:
@@ -176,6 +179,21 @@ jobs:
         run: |
           uvx --from semgrep==1.182.1 semgrep scan --metrics off --error --severity ERROR \
             --config p/python --config p/typescript --config p/react services apps
+      - name: Python code (bandit, high severity)
+        working-directory: services/api
+        run: uv run --frozen bandit -q -r app -lll
+      - name: Python dependencies (pip-audit)
+        working-directory: services/api
+        run: |
+          uv export --frozen --no-hashes --no-dev --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"
+          uv run --frozen pip-audit -r "$RUNNER_TEMP/requirements.txt" --progress-spinner off
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # Build tools (Expo CLI, Metro) have moderate advisories with no fix on this SDK; nothing
+      # critical may ship in the app.
+      - name: App dependencies (npm audit, critical)
+        working-directory: apps/mobile
+        run: npm audit --omit=dev --audit-level=critical
 
   # The image builds for the VM's ARM CPU. Pull requests only: deploy.yml builds and pushes it.
   api-image:

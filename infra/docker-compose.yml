@@ -7,6 +7,10 @@ services:
     env_file: ${ENV_FILE:-.env}
     environment:
       RELEASE: ${RELEASE:-}
+      # Only Caddy can reach the API (expose, not ports), and Caddy replaces X-Forwarded-For with
+      # the real address, so trust it. Without this every student shares Caddy's IP, and the
+      # per-IP limits (share-link lookups) would be one limit for everyone.
+      FORWARDED_ALLOW_IPS: "*"
     restart: unless-stopped
     expose: ["8000"]
     networks:

@@ -17,6 +17,8 @@ After the VM setup in [CI_CD.md §6](../docs/CI_CD.md#6-one-time-setup), copy `i
 docker network create quizzly-edge
 cd edge
 API_DOMAIN=api.quizzly.app STAGING_API_DOMAIN=staging-api.quizzly.app docker compose up -d
+# no domain yet (VM IP 129.151.1.2):
+API_DOMAIN=api.129-151-1-2.sslip.io STAGING_API_DOMAIN=staging-api.129-151-1-2.sslip.io docker compose up -d
 ```
 
 Then merge to `main` (staging) or publish a `v*` release (production); the pipeline does the rest.
