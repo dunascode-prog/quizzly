@@ -31,12 +31,12 @@ flowchart LR
 
 | Job | What it checks |
 |---|---|
-| `api` | `ruff check`, `ruff format --check`, `pytest` |
+| `api` | `ruff check`, `ruff format --check`, `pytest`; the end-to-end suite must still import (it skips without a live API) |
 | `mobile` | `tsc --noEmit`, `expo lint`, `expo-doctor` |
 | `web` | `eslint`, `next build` |
 | `migrations` | Every migration applies, in order, to a fresh Postgres with pgvector |
 | `migration-rules` | Applied migrations unchanged; new ones numbered after the last; no drops or renames without the `destructive-migration` label (§4) |
-| `security` | gitleaks over the whole git history; Semgrep high-severity rules for Python, TypeScript and React |
+| `security` | gitleaks over the whole git history; Semgrep high-severity rules for Python, TypeScript and React; bandit (high severity); pip-audit (any known vulnerability in the API's dependencies); npm audit (critical, app dependencies) |
 | `api-image` | The Docker image builds for the VM's ARM CPU |
 | `evals` | Only when prompts, `app/rag/` or `models.yaml` change: the eval set against the real models (NFR-11) |
 
@@ -51,8 +51,9 @@ Each environment runs one job on GitHub (one approval for production), then upda
 1. **Check configuration**: the environment has `API_URL` and `SUPABASE_DB_URL`.
 2. **Migrate**: `supabase db push` applies new files from `supabase/migrations/`, after a dry run.
 3. **Deploy**: copies `docker-compose.yml` and `deploy.sh` to the VM over SSH (host key pinned) and runs `deploy.sh <env> <image>`. The script pulls the image, restarts the API and worker, and waits until `/readyz` answers (the API reached the database) and the worker stays up for 20 seconds. If either fails, it starts the previous image again and the job fails.
-4. **Smoke test** from outside through Caddy and TLS (`smoke.sh`): `/healthz`, `/readyz`, the running release, and `/v1/me` refusing a missing or forged token. A failure rolls back to the previous image.
-5. **App**: only after the backend is healthy, and for staging only when `apps/mobile` changed. Expo's fingerprint action compares the native fingerprint with existing EAS builds:
+4. **Smoke test** from outside through Caddy and TLS (`smoke.sh`): `/healthz`, `/readyz`, the running release, and `/v1/me` refusing a missing or forged token. Then the **end-to-end smoke and security checks** (`services/api/e2e`, `-m "smoke or security"`, about 3 minutes) with throwaway students that are deleted afterwards: every route needs a session, forged tokens fail, onboarding gates, throwaway emails and Gmail aliases, the app can't write to Supabase or Storage, one student can't reach another's courses or documents, upload checks, input limits, padlocks, rate limits and account deletion. A failure in either rolls back to the previous image.
+5. **Journey** (staging only, `-m journey`, about 5 minutes): one student uploads a real PDF and goes through outline, explanation with citations, practice and exam quizzes (exam answers hidden until submitted), written-answer marking, chat with citations, sharing to a second student (quote only, no storage URLs, no scores), leaving, invites, plans and usage. It uses the free models. A failure marks the run red without rolling back, so don't tag that commit for production.
+6. **App**: only after the backend is healthy, and for staging only when `apps/mobile` changed. Expo's fingerprint action compares the native fingerprint with existing EAS builds:
    - same fingerprint (JavaScript-only change): publishes an **EAS Update** to installed apps on that channel;
    - new fingerprint (native change): starts an **EAS build** (and, for production, submits it to the Play internal track), because an update can't reach a build with a different runtime.
 
@@ -102,6 +103,10 @@ ssh-keyscan -t ed25519 <vm-ip-or-host>   # the line for DEPLOY_KNOWN_HOSTS
 
 Point two DNS records at the VM (for example `api.quizzly.app` and `staging-api.quizzly.app`), open ports 80 and 443, and start Caddy once (see [infra/README.md](../infra/README.md)).
 
+**No domain yet?** Use [sslip.io](https://sslip.io): any name that contains the VM's IP resolves to it, so with the IP `129.151.1.2` use `api.129-151-1-2.sslip.io` and `staging-api.129-151-1-2.sslip.io`. Caddy gets real Let's Encrypt certificates for them, so the app talks HTTPS from day one. Swap in your own domain later by changing the two names in Caddy, `API_URL` and the app's `EXPO_PUBLIC_API_URL`.
+
+In Oracle Cloud, ports 80 and 443 must be open twice: in the VCN's security list (ingress rules) and on the VM itself (`sudo iptables -I INPUT 6 -p tcp -m multiport --dports 80,443 -j ACCEPT && sudo netfilter-persistent save`).
+
 ### GitHub
 
 **Settings → Secrets and variables → Actions → Repository secrets**
@@ -120,6 +125,9 @@ Point two DNS records at the VM (for example `api.quizzly.app` and `staging-api.
 |---|---|---|
 | Variable `API_URL` | `https://staging-api.quizzly.app` | `https://api.quizzly.app` |
 | Secret `SUPABASE_DB_URL` | Staging project's connection string | Production project's connection string |
+| Variable `SUPABASE_URL` | Staging project URL | Production project URL |
+| Variable `SUPABASE_ANON_KEY` | Staging anon key (public, the app ships it) | Production anon key |
+| Secret `E2E_SUPABASE_SERVICE_KEY` | Staging service-role key, for the end-to-end tests' throwaway students | Production service-role key (optional: without it only `smoke.sh` runs) |
 | Deployment branches and tags | `main` | Tags `v*`, and `main` (so **Rollback** can run) |
 | Required reviewers | — | You |
 
@@ -142,7 +150,10 @@ insert into supabase_migrations.schema_migrations (version, name) values
   ('0007', 'failure_reason_crashed'), ('0008', 'documents_processing_started'),
   ('0009', 'cleanup_storage_job'), ('0010', 'llm_daily_costs'), ('0011', 'engagement_sharing'),
   ('0012', 'daily5_and_reading'), ('0013', 'sharing_access'), ('0014', 'member_count_definer'),
-  ('0015', 'invite_code_from_name'), ('0016', 'flashcards'), ('0017', 'past_papers')
+  ('0015', 'invite_code_from_name'), ('0016', 'flashcards'), ('0017', 'past_papers'),
+  ('0018', 'profile_photo'), ('0019', 'abuse_guards'), ('0020', 'plans'), ('0021', 'countries'),
+  ('0022', 'cost_controls'), ('0023', 'credits_plans'), ('0024', 'fake_accounts'),
+  ('0025', 'rollover_and_reminders')
 on conflict do nothing;
 ```
 
@@ -159,7 +170,23 @@ A brand-new staging project needs nothing: the first deploy applies every migrat
 2. **GitHub → Releases → Draft a new release** → new tag `v1.2.0` on `main` → **Publish**.
 3. **Actions → Deploy** → the run waits for `production` approval → **Review deployments → Approve**.
 
-## 8. Known limits
+## 8. Running the tests yourself
+
+```bash
+cd services/api
+uv run pytest                                   # unit tests, no server needed
+# Against a running API (yours on :8000, or staging). Keys fall back to services/api/.env and
+# apps/mobile/.env.local; the journey also needs a worker running against the same database.
+E2E_API_URL=http://127.0.0.1:8000 uv run pytest e2e -m "smoke or security"
+E2E_API_URL=http://127.0.0.1:8000 uv run pytest e2e -m journey
+# The security scans CI runs
+uv run bandit -q -r app -lll
+uv export --no-hashes --no-dev --format requirements-txt -q > /tmp/req.txt && uv run pip-audit -r /tmp/req.txt
+uvx --from semgrep==1.182.1 semgrep scan --config p/python --config p/typescript --config p/react ../../services ../../apps
+gitleaks git --redact .                         # from the repository root
+```
+
+## 9. Known limits
 
 - The API is down for a few seconds while its container restarts. Move to two API replicas behind Caddy if that starts to matter.
 - Staging and production share the VM. A runaway staging worker can slow production; cap it with `deploy.resources` in the compose file if it happens.

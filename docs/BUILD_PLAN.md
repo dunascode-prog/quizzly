@@ -65,12 +65,17 @@ From the v0.1 code review. Each task needs a regression test.
 - [ ] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens.
 
 
+- [x] **D9. Profile setup v2 and profile photos** ([PROFILE_V2.md](PROFILE_V2.md), screens 02a–02i, FR-PROF-01/03..07, FR-MOD-06): API and migration 0018 (photo upload and delete, visibility, practice times → reminder, photo reports); app `Avatar` component, 4-step onboarding with photo sheet and crop, edit profile.
+
+- [ ] **D10. Quizzly credits and plans** ([CREDITS_AND_PLANS.md](CREDITS_AND_PLANS.md), screens 13, 23, 23b, 23c, 32; FR-INV-03..05, FR-PLAN-01..03, FR-LIM-05..07): cost controls and priority (done), credits and plans API with Google Play verification (done), app screens 13 / 23 / 23b / 23c / 32 (done). **Left:** Play Console products and offer, the service account and notifications (owner), then the native billing library in a dev build to start checkout from screen 32.
+
 ## Phase E — Beta readiness (M5)
 
 - [x] E1. Eval set and CI run on prompt changes (NFR-11). Harness, CI job and 6 sample cases; grow to 30 real documents (see evals/README.md).
 - [x] E2. Sentry in app and API; job metrics (NFR-09).
 - [ ] E3. Play Store internal testing track; store listing; privacy policy and terms updated for sharing, notifications and invites (NDPA). Repo side done (`eas.json`, [STORE_LISTING.md](STORE_LISTING.md)); account steps and policy pages remain.
 - [ ] E4. **Admin app** at `/admin` in `apps/web` (screens 30a–30h, WEB.md §3): team sign-in with 2FA and `role = admin`, Overview, AI costs, Reports (fix answer / regenerate / keep hidden / dismiss), Takedowns, Limits and plans (`app_config` + audit log), Students, System. Admin API endpoints under `/admin/*` in FastAPI with role checks and `admin_audit_log`.
+- [x] E5. CI/CD and release checks ([CI_CD.md](CI_CD.md)): CI on every PR (tests, lint, migrations, gitleaks, Semgrep, bandit, pip-audit, npm audit, ARM image); staging on merge and production on a `v*` tag with approval; automatic rollback; end-to-end smoke, security and journey tests in `services/api/e2e`. **Left (owner):** VM, GitHub environments and secrets (§6).
 
 ## Decisions still open (don't block on them)
 

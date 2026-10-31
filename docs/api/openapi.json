@@ -95,7 +95,7 @@
           "account"
         ],
         "summary": "Delete Me",
-        "description": "Deletes the account and everything only this student owns (FR-AUTH-05, NDPA). Files\nStorage can't remove right now are retried by the worker, well within the 24 h allowed.",
+        "description": "Deletes the account and everything only this student owns (FR-AUTH-05, NDPA), including\nthe profile photo. Files Storage can't remove right now are retried by the worker, well within\nthe 24 h allowed.",
         "operationId": "delete_me_v1_me_delete",
         "responses": {
           "204": {
@@ -174,13 +174,85 @@
         ]
       }
     },
+    "/v1/me/avatar": {
+      "put": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Put Avatar",
+        "description": "Sets the profile photo (FR-PROF-04). The body is the cropped 512x512 WebP the app made\n(`Content-Type: image/webp`, at most 300 KB). The server checks and re-encodes it, which\nstrips EXIF and GPS data, and names the file itself; the old photo is deleted.",
+        "operationId": "put_avatar_v1_me_avatar_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Delete Avatar",
+        "description": "Removes the profile photo and deletes the file (FR-PROF-04). Initials show again.",
+        "operationId": "delete_avatar_v1_me_avatar_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/institutions": {
       "get": {
         "tags": [
           "account"
         ],
         "summary": "Institutions",
-        "description": "Searches institutions for onboarding: short names by prefix (\"UNILAG\"), full names\nby substring or similarity.",
+        "description": "Searches institutions for onboarding in the student's country (FR-PROF-08): short names by\nprefix (\"UNILAG\"), full names by substring or similarity.",
         "operationId": "institutions_v1_institutions_get",
         "security": [
           {
@@ -209,6 +281,17 @@
               "minimum": 1,
               "default": 20,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$",
+              "default": "NG",
+              "title": "Country"
             }
           }
         ],
@@ -606,7 +689,7 @@
           "account"
         ],
         "summary": "Get Usage",
-        "description": "Today's use of each daily allowance and what's left; resets at midnight (FR-LIM-01).",
+        "description": "Each allowance on the student's plan: used today, the daily amount, and what's left now.\nUnused allowance saves up for a week (FR-LIM-01/08).",
         "operationId": "get_usage_v1_usage_get",
         "responses": {
           "200": {
@@ -3319,7 +3402,7 @@
           "sharing"
         ],
         "summary": "Members",
-        "description": "Who joined the owner's shared course, as display names only (FR-SHARE-07).",
+        "description": "Who joined the owner's shared course: display names, and photos only where the student\nchose to show theirs (FR-SHARE-07, FR-PROF-05).",
         "operationId": "members_v1_courses__course_id__members_get",
         "security": [
           {
@@ -3966,6 +4049,36 @@
         ]
       }
     },
+    "/v1/me/invite/reward-seen": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Reward Seen",
+        "description": "The app showed the discount celebration (23c); it isn't shown again.",
+        "operationId": "reward_seen_v1_me_invite_reward_seen_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/referrals": {
       "post": {
         "tags": [
@@ -3991,6 +4104,100 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReferralOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/plans": {
+      "get": {
+        "tags": [
+          "plans"
+        ],
+        "summary": "List Plans",
+        "description": "Screen 32: Free, Student and Premium with their limits and prices (FR-PLAN-01).",
+        "operationId": "list_plans_v1_plans_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlansOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/plans/purchase": {
+      "post": {
+        "tags": [
+          "plans"
+        ],
+        "summary": "Purchase",
+        "description": "The app sends the Play purchase token after checkout. The plan is given only after Google\nconfirms the subscription, that it was bought for this account, and that the invite price was\nunlocked (FR-PLAN-03).",
+        "operationId": "purchase_v1_plans_purchase_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOut"
                 }
               }
             }
@@ -4248,13 +4455,18 @@
           "remaining": {
             "type": "integer",
             "title": "Remaining"
+          },
+          "saved_up": {
+            "type": "integer",
+            "title": "Saved Up"
           }
         },
         "type": "object",
         "required": [
           "used",
           "limit",
-          "remaining"
+          "remaining",
+          "saved_up"
         ],
         "title": "Allowance"
       },
@@ -5185,6 +5397,17 @@
               }
             ],
             "title": "Display Name"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
           }
         },
         "type": "object",
@@ -5260,6 +5483,35 @@
           "questions"
         ],
         "title": "Day"
+      },
+      "Discount": {
+        "properties": {
+          "percent": {
+            "type": "integer",
+            "title": "Percent"
+          },
+          "at": {
+            "type": "integer",
+            "title": "At"
+          },
+          "unlocked": {
+            "type": "boolean",
+            "title": "Unlocked"
+          },
+          "celebrate": {
+            "type": "boolean",
+            "title": "Celebrate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "percent",
+          "at",
+          "unlocked",
+          "celebrate"
+        ],
+        "title": "Discount",
+        "description": "5 credits: 10% off Student or Premium (FR-INV-05)."
       },
       "DocumentCreate": {
         "properties": {
@@ -5616,15 +5868,36 @@
             "title": "Display Name"
           },
           "credited_at": {
-            "type": "string",
-            "format": "date-time",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Credited At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "counted",
+              "started"
+            ],
+            "title": "State"
+          },
+          "study_days": {
+            "type": "integer",
+            "title": "Study Days"
           }
         },
         "type": "object",
         "required": [
           "display_name",
-          "credited_at"
+          "credited_at",
+          "state",
+          "study_days"
         ],
         "title": "Friend"
       },
@@ -5818,6 +6091,9 @@
           "lavender_unlocked": {
             "type": "boolean",
             "title": "Lavender Unlocked"
+          },
+          "discount": {
+            "$ref": "#/components/schemas/Discount"
           }
         },
         "type": "object",
@@ -5827,7 +6103,8 @@
           "friends",
           "credited",
           "next_reward",
-          "lavender_unlocked"
+          "lavender_unlocked",
+          "discount"
         ],
         "title": "InviteOut"
       },
@@ -5872,6 +6149,39 @@
           "course_id"
         ],
         "title": "JoinedOut"
+      },
+      "Limits": {
+        "properties": {
+          "upload": {
+            "type": "integer",
+            "title": "Upload"
+          },
+          "question_set": {
+            "type": "integer",
+            "title": "Question Set"
+          },
+          "explanation": {
+            "type": "integer",
+            "title": "Explanation"
+          },
+          "chat_message": {
+            "type": "integer",
+            "title": "Chat Message"
+          },
+          "marking": {
+            "type": "integer",
+            "title": "Marking"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload",
+          "question_set",
+          "explanation",
+          "chat_message",
+          "marking"
+        ],
+        "title": "Limits"
       },
       "MeOut": {
         "properties": {
@@ -5946,6 +6256,13 @@
                   "500L",
                   "600L",
                   "700L",
+                  "Y1",
+                  "Y2",
+                  "Y3",
+                  "Y4",
+                  "Y5",
+                  "Y6",
+                  "PG",
                   "other"
                 ]
               },
@@ -5969,6 +6286,61 @@
             "type": "boolean",
             "title": "Onboarded",
             "default": false
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "avatar_visible": {
+            "type": "boolean",
+            "title": "Avatar Visible",
+            "default": false
+          },
+          "practice_times": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "commute",
+                "lectures",
+                "evening",
+                "night"
+              ]
+            },
+            "type": "array",
+            "title": "Practice Times",
+            "default": []
+          },
+          "weekly_goal_days": {
+            "type": "integer",
+            "title": "Weekly Goal Days",
+            "default": 4
+          },
+          "plan": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Plan",
+            "default": "free"
+          },
+          "country": {
+            "type": "string",
+            "title": "Country",
+            "default": "NG"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "Africa/Lagos"
           }
         },
         "type": "object",
@@ -5984,6 +6356,11 @@
             "type": "string",
             "format": "uuid",
             "title": "Member Id"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
           },
           "display_name": {
             "anyOf": [
@@ -6015,11 +6392,23 @@
               }
             ],
             "title": "Joined At"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
           }
         },
         "type": "object",
         "required": [
           "member_id",
+          "user_id",
           "display_name",
           "status",
           "joined_at"
@@ -6078,18 +6467,33 @@
       },
       "NextReward": {
         "properties": {
-          "theme": {
+          "kind": {
             "type": "string",
-            "title": "Theme"
+            "enum": [
+              "lavender",
+              "discount"
+            ],
+            "title": "Kind"
           },
           "at": {
             "type": "integer",
             "title": "At"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent"
           }
         },
         "type": "object",
         "required": [
-          "theme",
+          "kind",
           "at"
         ],
         "title": "NextReward"
@@ -6164,6 +6568,17 @@
               }
             ],
             "title": "Actor Name"
+          },
+          "actor_avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Avatar Url"
           }
         },
         "type": "object",
@@ -6338,6 +6753,17 @@
               }
             ],
             "title": "Ready"
+          },
+          "plans": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plans"
           }
         },
         "type": "object",
@@ -6681,6 +7107,95 @@
         "title": "PaperStyleOut",
         "description": "A past paper's style for quiz setup (FR-QGEN-09, screen 26b). Only its format, never its\nquestions."
       },
+      "PlanOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Id"
+          },
+          "price_usd": {
+            "type": "number",
+            "title": "Price Usd"
+          },
+          "discounted_price_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discounted Price Usd"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "storage_mb": {
+            "type": "integer",
+            "title": "Storage Mb"
+          },
+          "monthly_ai_usd": {
+            "type": "number",
+            "title": "Monthly Ai Usd"
+          },
+          "extras": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Extras"
+          },
+          "quiz_sizes": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Quiz Sizes"
+          },
+          "trial_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Days"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "price_usd",
+          "discounted_price_usd",
+          "limits",
+          "storage_mb",
+          "monthly_ai_usd",
+          "extras",
+          "quiz_sizes",
+          "trial_days",
+          "product_id"
+        ],
+        "title": "PlanOut"
+      },
       "PlanRow": {
         "properties": {
           "kind": {
@@ -6769,6 +7284,85 @@
           "kind"
         ],
         "title": "PlanRow"
+      },
+      "PlansOut": {
+        "properties": {
+          "current": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Current"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "effective": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium",
+              "capped"
+            ],
+            "title": "Effective"
+          },
+          "discount_percent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Percent"
+          },
+          "invite_offer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invite Offer Id"
+          },
+          "payments_ready": {
+            "type": "boolean",
+            "title": "Payments Ready"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanOut"
+            },
+            "type": "array",
+            "title": "Plans"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current",
+          "expires_at",
+          "effective",
+          "discount_percent",
+          "invite_offer_id",
+          "payments_ready",
+          "plans"
+        ],
+        "title": "PlansOut"
       },
       "PracticeOut": {
         "properties": {
@@ -6985,6 +7579,13 @@
                   "500L",
                   "600L",
                   "700L",
+                  "Y1",
+                  "Y2",
+                  "Y3",
+                  "Y4",
+                  "Y5",
+                  "Y6",
+                  "PG",
                   "other"
                 ]
               },
@@ -6998,10 +7599,147 @@
             "type": "boolean",
             "title": "Accept Terms",
             "default": false
+          },
+          "explanation_style": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "standard",
+                  "simple",
+                  "exam"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation Style"
+          },
+          "weekly_goal_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 7.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Goal Days"
+          },
+          "avatar_visible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Visible"
+          },
+          "practice_times": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "commute",
+                    "lectures",
+                    "evening",
+                    "night"
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice Times"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
           }
         },
         "type": "object",
         "title": "ProfileUpdate"
+      },
+      "PurchaseIn": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Product Id"
+          },
+          "purchase_token": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 10,
+            "title": "Purchase Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "purchase_token"
+        ],
+        "title": "PurchaseIn"
+      },
+      "PurchaseOut": {
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": [
+              "free",
+              "student",
+              "premium"
+            ],
+            "title": "Plan"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan",
+          "expires_at"
+        ],
+        "title": "PurchaseOut"
       },
       "PushTokenIn": {
         "properties": {
@@ -7603,7 +8341,8 @@
             "enum": [
               "explanation",
               "question",
-              "chat_message"
+              "chat_message",
+              "avatar"
             ],
             "title": "Target Type"
           },

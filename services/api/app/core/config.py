@@ -36,18 +36,40 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     database_url: str = ""
     storage_bucket: str = "documents"
+    # Profile photos (FR-PROF-04): a separate private bucket the API alone writes to.
+    avatars_bucket: str = "avatars"
     # Bump when the Terms or Privacy Policy change; stored on the profile at consent (FR-AUTH-03).
     terms_version: str = "2026-10-22"
 
     # Free-plan limits (PRD §9, FR-DOC-02, FR-LIM-01).
     max_upload_bytes: int = 25 * 1024 * 1024
     max_document_pages: int = 150
-    daily_uploads: int = 5
-    daily_explanations: int = 30
-    daily_question_sets: int = 15
-    daily_markings: int = 20  # theory / short answers marked by the LLM (PRD §9)
-    daily_chat_messages: int = 40
+    daily_uploads: int = 3
+    daily_explanations: int = 20
+    daily_question_sets: int = 5
+    daily_markings: int = 5  # theory / short answers marked by the LLM (PRD §9)
+    daily_chat_messages: int = 20
     daily_share_recipients: int = 20  # people a student can send courses to per day (FR-SHARE-10)
+    daily_avatar_uploads: int = 10  # profile photo changes per day (FR-SEC-22)
+    # Monthly AI allowance per plan, at paid-tier list prices (FR-LIM-06). Typical free use is
+    # about $0.10 a month; these stop one account from costing more than its plan brings in.
+    monthly_ai_ceiling_free_usd: float = 0.60
+    trial_days: int = 7  # the Student free trial, run by Google Play (FR-PLAN-06)
+    monthly_ai_ceiling_student_usd: float = 2.00
+    monthly_ai_ceiling_premium_usd: float = 3.50
+    # Total stored upload size per plan, in MB (FR-LIM-05).
+    storage_free_mb: int = 500
+    storage_student_mb: int = 2000
+    storage_premium_mb: int = 5000
+    # API requests per student per minute (FR-SEC-20); far above what the app makes.
+    requests_per_minute: int = 120
+    # Google Play Billing (FR-PLAN-03). Payments stay off until a service account is set.
+    play_package_name: str = "app.quizzly"
+    play_service_account_json: str = ""  # key JSON of a service account with Android Publisher
+    play_rtdn_secret: str = ""  # shared secret on the Pub/Sub push URL for Play notifications
+    play_student_product: str = "quizzly_student"
+    play_premium_product: str = "quizzly_premium"
+    play_invite_offer: str = "invite-10"  # the 10% offer for 5 credits (FR-INV-05)
     # Host of share and invite links (PRD Q4): https://{invite_domain}/c/{code}
     invite_domain: str = "quizzly.app"  # the same placeholder as apps/web and the app (WEB.md)
     # FR-SEC-08: a day's AI spend across all students; reaching either pauses new AI work.

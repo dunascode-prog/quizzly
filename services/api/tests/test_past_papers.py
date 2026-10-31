@@ -69,7 +69,12 @@ def test_a_past_paper_needs_one_of_the_students_courses():
         raise AssertionError(f"{bad!r} accepted")
 
 
-def test_a_style_is_used_only_by_its_owner_when_ready(client, fake, monkeypatch):  # noqa: F811
+def test_a_style_is_used_only_by_its_owner_when_ready(
+    client,
+    fake,  # noqa: F811
+    monkeypatch,
+    student_plan,
+):
     """FR-SEC: someone else's style, or one for another course, is a 404; a style still being
     learnt is refused; a ready one makes its own cached set."""
     mine, pending = uuid.uuid4(), uuid.uuid4()

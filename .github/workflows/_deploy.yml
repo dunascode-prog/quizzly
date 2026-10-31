@@ -34,6 +34,9 @@ jobs:
       API_URL: ${{ vars.API_URL }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       IMAGE: ${{ inputs.image }}
+      E2E_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      E2E_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      E2E_SUPABASE_SERVICE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_KEY }}
     steps:
       - name: Check the environment is configured
         run: |
@@ -78,8 +81,22 @@ jobs:
         id: smoke
         run: bash infra/smoke.sh "$API_URL" "${IMAGE##*:}"
 
+      # The e2e smoke and security probes (services/api/e2e) with throwaway students, deleted after.
+      - uses: astral-sh/setup-uv@v5
+        if: env.E2E_SUPABASE_SERVICE_KEY != ''
+      - name: End-to-end smoke and security checks
+        id: e2e
+        if: env.E2E_SUPABASE_SERVICE_KEY != ''
+        working-directory: services/api
+        env:
+          E2E_API_URL: ${{ vars.API_URL }}
+          E2E_ENV: ${{ inputs.environment }}
+        run: uv run --frozen pytest e2e -m "smoke or security" -q -p no:cacheprovider
+      - if: env.E2E_SUPABASE_SERVICE_KEY == ''
+        run: echo "::warning::No E2E_SUPABASE_SERVICE_KEY secret, so only the shell smoke test ran (docs/CI_CD.md §6)."
+
       - name: Roll back after a failed smoke test
-        if: failure() && steps.smoke.outcome == 'failure'
+        if: failure() && (steps.smoke.outcome == 'failure' || steps.e2e.outcome == 'failure')
         uses: ./.github/actions/remote-deploy
         with:
           environment: ${{ inputs.environment }}
@@ -89,6 +106,29 @@ jobs:
           ssh-key: ${{ secrets.DEPLOY_SSH_KEY }}
           known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           registry-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # The whole student journey with real (free-tier) AI calls, on staging only. A failure here doesn't
+  # roll back (the deploy passed its checks) but marks the run red so it isn't tagged for production.
+  journey:
+    needs: backend
+    if: inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: { name: staging }
+    env:
+      E2E_API_URL: ${{ vars.API_URL }}
+      E2E_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      E2E_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      E2E_SUPABASE_SERVICE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_KEY }}
+    steps:
+      - if: env.E2E_SUPABASE_SERVICE_KEY == ''
+        run: echo "::warning::No E2E_SUPABASE_SERVICE_KEY secret, so the journey test was skipped."
+      - if: env.E2E_SUPABASE_SERVICE_KEY != ''
+        uses: actions/checkout@v4
+      - if: env.E2E_SUPABASE_SERVICE_KEY != ''
+        uses: astral-sh/setup-uv@v5
+      - if: env.E2E_SUPABASE_SERVICE_KEY != ''
+        working-directory: services/api
+        run: uv run --frozen pytest e2e -m journey -q -p no:cacheprovider --durations=10
 
   # Only after the backend is healthy. With the fingerprint runtime, JS-only changes ship as an EAS
   # Update to installed apps; a native change starts a new EAS build instead (and a Play submission

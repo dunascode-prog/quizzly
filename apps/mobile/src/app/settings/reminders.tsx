@@ -24,6 +24,7 @@ const TYPES: { key: keyof NotificationSettings['types']; label: string; helper: 
   { key: 'recap', label: 'Weekly recap on Sunday', helper: 'Your week, ready to share at 6 PM' },
   { key: 'mates', label: 'Coursemate joins and challenges', helper: 'When someone joins a course you shared' },
   { key: 'ready', label: 'Notes ready to study', helper: 'When an upload finishes' },
+  { key: 'plans', label: 'Plan tips', helper: 'At most once a week, when you keep running out of something' },
 ];
 
 function Preview({ title, body }: { title: string; body: string }) {

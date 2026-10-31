@@ -55,9 +55,10 @@ function paperFields(paper?: PastPaper) {
   return paper ? { kind: 'past_paper', paper_year: paper.year } : {};
 }
 
-export type Allowance = { used: number; limit: number; remaining: number };
+/** `remaining` includes `saved_up`: unused allowance carries forward up to a week (FR-LIM-08). */
+export type Allowance = { used: number; limit: number; remaining: number; saved_up: number };
 
-/** Today's allowances (FR-LIM-01); they reset at midnight, Lagos time. */
+/** Allowances on the student's plan (FR-LIM-01/05); a day's worth arrives at their midnight. */
 export type Usage = {
   uploads: Allowance;
   explanations: Allowance;
@@ -205,7 +206,8 @@ async function sendFiles(docId: string, urls: string[]) {
       const result = await new File(file.uri).upload(urls[i], {
         httpMethod: 'PUT',
         mimeType: file.mimeType,
-        onProgress: ({ bytesSent }) => useUploads.getState().set(docId, { progress: (done + bytesSent) / total }),
+        // iOS reports bytesSent as a BigInt (SDK 58).
+        onProgress: ({ bytesSent }) => useUploads.getState().set(docId, { progress: (done + Number(bytesSent)) / total }),
       });
       if (result.status < 200 || result.status >= 300) throw new Error(`upload HTTP ${result.status}`);
       done += file.size;

@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { ArrowRight, RotateCcw, X } from '@/components/icons';
+import { ArrowRight, Lock, RotateCcw, X } from '@/components/icons';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
 import { HeroCard } from '@/components/ui/hero-card';
@@ -17,6 +17,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { useCourses } from '@/lib/library';
 import { createQuiz, type Difficulty, type Mode, type PaperStyle, type QuestionType, usePaperStyles } from '@/lib/quiz';
+import { useMe } from '@/lib/profile';
 import { useOutline } from '@/lib/study';
 
 const TYPES: { value: QuestionType; label: string }[] = [
@@ -33,6 +34,7 @@ const DIFFICULTIES: { value: Difficulty; label: string }[] = [
   { value: 'hard', label: 'Hard' },
 ];
 const COUNTS = [5, 10, 20, 30] as const;
+const FREE_COUNTS: readonly number[] = [5, 10]; // 20 and 30 are on Student and Premium (FR-PLAN-04)
 const TIMERS = [0, 10, 20, 30, 60] as const; // minutes; 0 = no timer
 
 const yearOf = (s: PaperStyle) => (s.year && s.year !== 'older' ? s.year : 'an older');
@@ -63,18 +65,35 @@ function StyleCard({ code, style, onChange }: { code: string; style: PaperStyle;
   );
 }
 
-function CountCircle({ n, selected, onPress }: { n: number; selected: boolean; onPress: () => void }) {
+function CountCircle({
+  n,
+  selected,
+  locked,
+  onPress,
+}: {
+  n: number;
+  selected: boolean;
+  locked?: boolean;
+  onPress: () => void;
+}) {
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
-      accessibilityLabel={`${n} questions`}
+      accessibilityLabel={`${n} questions${locked ? ', on Student and Premium' : ''}`}
+      accessibilityHint={locked ? 'Opens the plans' : undefined}
       style={[styles.circle, { backgroundColor: selected ? theme.text : theme.backgroundSelected }]}>
-      <Text variant="title" color={selected ? 'onInk' : 'text'}>
+      <Text variant="title" color={selected ? 'onInk' : locked ? 'textSecondary' : 'text'}>
         {n}
       </Text>
+      {/* A paid-plan size for a free student (FR-PLAN-04). */}
+      {locked ? (
+        <View style={[styles.lock, { backgroundColor: theme.text, borderColor: theme.background }]}>
+          <Lock size={12} color={theme.onInk} strokeWidth={2.5} />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -103,6 +122,10 @@ export default function QuizSetup() {
   const ready = paperStyles.filter((p) => p.status === 'ready');
   const learning = paperStyles.some((p) => p.status === 'pending' || p.status === 'generating');
   const [styleId, setStyleId] = useState<string | null>(null);
+  // Free students see paid options with a padlock that opens the plans (FR-PLAN-04).
+  const plan = useMe().data?.plan ?? 'free';
+  const free = plan === 'free';
+  const toPlans = () => router.push('/plans');
   const [picking, setPicking] = useState(false);
   const [editTypes, setEditTypes] = useState(false);
   const chosen = ready.find((p) => p.id === styleId);
@@ -204,10 +227,11 @@ export default function QuizSetup() {
                 label={`Like the ${p.year && p.year !== 'older' ? p.year : 'older'} paper`}
                 role="radio"
                 selected={chosen?.id === p.id}
-                onPress={() => pickStyle(p)}
+                locked={free}
+                onPress={() => (free ? toPlans() : pickStyle(p))}
               />
             ))}
-            <Pill label="+ Past paper" accessibilityLabel="Add a past paper" onPress={addPaper} />
+            <Pill label="+ Past paper" accessibilityLabel="Add a past paper" locked={free} onPress={free ? toPlans : addPaper} />
           </View>
           <Text variant="small" color="textSecondary">
             {learning
@@ -252,9 +276,12 @@ export default function QuizSetup() {
       <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel="Number of questions">
         <Text variant="label">Questions</Text>
         <View style={styles.counts}>
-          {COUNTS.map((n) => (
-            <CountCircle key={n} n={n} selected={count === n} onPress={() => setCount(n)} />
-          ))}
+          {COUNTS.map((n) => {
+            const locked = free && !FREE_COUNTS.includes(n);
+            return (
+              <CountCircle key={n} n={n} selected={count === n} locked={locked} onPress={() => (locked ? toPlans() : setCount(n))} />
+            );
+          })}
         </View>
       </View>
 
@@ -279,7 +306,14 @@ export default function QuizSetup() {
           <Text variant="label">Timer</Text>
           <View style={styles.pills} accessibilityRole="radiogroup" accessibilityLabel="Timer">
             {TIMERS.map((m) => (
-              <Pill key={m} label={m ? `${m} min` : 'No timer'} role="radio" selected={timer === m} onPress={() => setTimer(m)} />
+              <Pill
+                key={m}
+                label={m ? `${m} min` : 'No timer'}
+                role="radio"
+                selected={timer === m}
+                locked={free && m > 0}
+                onPress={() => (free && m > 0 ? toPlans() : setTimer(m))}
+              />
             ))}
           </View>
         </View>
@@ -297,6 +331,7 @@ const styles = StyleSheet.create({
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   counts: { flexDirection: 'row', justifyContent: 'space-between' },
   circle: { width: 72, height: 72, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  lock: { position: 'absolute', right: -2, bottom: -2, width: 26, height: 26, borderRadius: 13, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
   styleTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   styleIcon: { width: Size.minTouch, height: Size.minTouch, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   matches: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.three, paddingLeft: Spacing.gutter, borderRadius: Radius.option },

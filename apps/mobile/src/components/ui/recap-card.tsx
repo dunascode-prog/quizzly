@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { type ComponentRef, forwardRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
@@ -48,7 +48,7 @@ function Tile({ label, value }: { label: string; value: string }) {
 type Props = { recap: Recap; showIdentity: boolean; link: string | null };
 
 /** RecapCard (DESIGN.md §6, screen 17): the ink card captured as a 9:16 image when shared. */
-export const RecapCard = forwardRef<View, Props>(function RecapCard({ recap, showIdentity, link }, ref) {
+export const RecapCard = forwardRef<ComponentRef<typeof View>, Props>(function RecapCard({ recap, showIdentity, link }, ref) {
   const who = [recap.name, [recap.institution, recap.level].filter(Boolean).join(' ')]
     .filter(Boolean)
     .join(' · ');

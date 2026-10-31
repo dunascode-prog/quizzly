@@ -5,7 +5,7 @@ import pytest
 
 from app.api import deps
 from app.core import auth_admin
-from app.domain import accounts
+from app.domain import accounts, avatars
 from app.worker import queue
 from tests.conftest import JWT_SECRET
 from tests.test_api import make_token
@@ -19,7 +19,21 @@ def auth():
 
 @pytest.fixture
 def fake(client, monkeypatch):
-    state = {"storage_fails": False, "auth_fails": False, "removed": [], "jobs": [], "deleted": []}
+    state = {
+        "storage_fails": False,
+        "auth_fails": False,
+        "removed": [],
+        "jobs": [],
+        "deleted": [],
+        "photos_removed": [],
+    }
+
+    async def own_path(conn, user_id):
+        return f"{user_id}/photo.webp"
+
+    class Photos:
+        async def remove(self, paths):
+            state["photos_removed"].extend(paths)
 
     async def delete_account_data(conn, user_id):
         assert user_id == USER
@@ -40,6 +54,8 @@ def fake(client, monkeypatch):
         state["jobs"].append((job_type, payload))
 
     monkeypatch.setattr(accounts, "delete_account_data", delete_account_data)
+    monkeypatch.setattr(avatars, "own_path", own_path)
+    client.app.dependency_overrides[deps.get_avatar_storage] = lambda: Photos()
     monkeypatch.setattr(auth_admin, "delete_user", delete_user)
     monkeypatch.setattr(queue, "enqueue", enqueue)
     client.app.dependency_overrides[deps.get_storage] = lambda: Storage()
@@ -50,6 +66,7 @@ def test_deleting_the_account_removes_files_and_the_sign_in(client, fake):
     assert client.delete("/v1/me", headers=auth()).status_code == 204
     assert fake["removed"] == ["uploads/u/d1/notes.pdf", "uploads/u/d2/"]
     assert fake["deleted"] == [USER] and fake["jobs"] == []
+    assert fake["photos_removed"] == [f"{USER}/photo.webp"]  # the profile photo goes too
 
 
 def test_files_storage_cannot_remove_now_are_left_to_the_worker(client, fake):

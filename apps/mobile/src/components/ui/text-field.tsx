@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react';
+import { type ComponentRef, forwardRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, type TextInputProps, View } from 'react-native';
 
 import { X } from '@/components/icons';
@@ -14,7 +14,7 @@ type Props = TextInputProps & {
 };
 
 /** Field with a small label above the value; focused = 2 px ink border (DESIGN.md §6). */
-export const TextField = forwardRef<TextInput, Props>(function TextField(
+export const TextField = forwardRef<ComponentRef<typeof TextInput>, Props>(function TextField(
   { label, style, onFocus, onBlur, onClear, ...rest },
   ref,
 ) {

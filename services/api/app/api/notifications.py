@@ -7,7 +7,8 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Response, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import Conn, User
+from app.api.deps import AvatarStorageDep, Conn, User
+from app.api.photos import with_photo_urls
 from app.domain import notifications
 
 router = APIRouter(tags=["notifications"])
@@ -26,6 +27,8 @@ class NotificationOut(BaseModel):
     created_at: datetime
     actor_id: UUID | None  # for "Block" (FR-SHARE-09)
     actor_name: str | None  # display name only ("Ada O.")
+    # Their photo for the toast and inbox, only where they chose to show it (FR-PROF-05).
+    actor_avatar_url: str | None = None
 
 
 class InboxOut(BaseModel):
@@ -46,6 +49,7 @@ class PushTokenIn(BaseModel):
 async def list_notifications(
     user: User,
     conn: Conn,
+    photos: AvatarStorageDep,
     before: Annotated[datetime | None, Query()] = None,
     after: Annotated[datetime | None, Query()] = None,
     filter: Annotated[Literal["all", "shared", "study"], Query()] = "all",
@@ -53,6 +57,9 @@ async def list_notifications(
     """Newest first, 30 at a time: `before` pages back; `after` fetches what Realtime may have
     missed while the app was offline (FR-NOTIF-07)."""
     data = await notifications.inbox(conn, user.id, before=before, kind=filter, after=after)
+    data["notifications"] = await with_photo_urls(
+        photos, data["notifications"], "actor_avatar_path", "actor_avatar_url"
+    )
     return InboxOut(**data)
 
 

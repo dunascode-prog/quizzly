@@ -5,8 +5,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import documents, uploads, usage
+from app.api.deps import AppSettings, Conn, StorageDep, User, require_ai
+from app.domain import documents, plans, uploads, usage
 from app.worker import cleanup, queue
 
 router = APIRouter(tags=["documents"])
@@ -71,9 +71,10 @@ class DocumentUpdate(BaseModel):
 
 
 class Allowance(BaseModel):
-    used: int
-    limit: int
-    remaining: int
+    used: int  # today
+    limit: int  # a day, on the student's plan
+    remaining: int  # what's left now, including what was saved up (FR-LIM-08)
+    saved_up: int  # unused allowance carried forward from earlier days, up to a week's worth
 
 
 class UsageOut(BaseModel):
@@ -98,6 +99,21 @@ async def _check_course(conn, user_id: UUID, course_id: UUID | None) -> None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown course")
 
 
+async def _check_storage(conn, user, settings, new_bytes: int) -> None:
+    """Each plan keeps up to a total size of notes (FR-LIM-05), so storage can't grow without end.
+    Deleting old notes makes room."""
+    plan = plans.models_for(user.plan)  # capped accounts keep the free room
+    cap_mb = getattr(settings, f"storage_{plan}_mb")
+    used = await documents.stored_bytes(conn, user.id)
+    if used + new_bytes > cap_mb * 1024 * 1024:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"Your notes use all {cap_mb // 1000 if cap_mb >= 1000 else cap_mb}"
+            f"{' GB' if cap_mb >= 1000 else ' MB'} of your space. Delete notes you've finished "
+            "with to make room.",
+        )
+
+
 def _owned(doc: dict) -> dict:
     """Documents in a course shared with the student can be studied, not changed (FR-DOC-12)."""
     if doc.get("read_only"):
@@ -116,19 +132,26 @@ async def _upload_urls(conn, storage, doc: dict, user_id: UUID) -> list[str]:
 
 @router.get("/v1/usage", tags=["account"])
 async def get_usage(user: User, conn: Conn, settings: AppSettings) -> UsageOut:
-    """Today's use of each daily allowance and what's left; resets at midnight (FR-LIM-01)."""
+    """Each allowance on the student's plan: used today, the daily amount, and what's left now.
+    Unused allowance saves up for a week (FR-LIM-01/08)."""
     used = await usage.used_today(conn, user.id, settings.timezone)
 
-    def allowance(resource: str, limit: int) -> Allowance:
-        n = used.get(resource, 0)
-        return Allowance(used=n, limit=limit, remaining=max(limit - n, 0))
+    async def allowance(resource: str) -> Allowance:
+        limit = plans.daily_limit(settings, user.plan, resource)
+        left = await usage.remaining(conn, user.id, resource, limit, settings.timezone)
+        return Allowance(
+            used=used.get(resource, 0),
+            limit=limit,
+            remaining=int(left),
+            saved_up=max(int(left) - limit, 0),
+        )
 
     return UsageOut(
-        uploads=allowance("upload", settings.daily_uploads),
-        explanations=allowance("explanation", settings.daily_explanations),
-        question_sets=allowance("question_set", settings.daily_question_sets),
-        markings=allowance("marking", settings.daily_markings),
-        chat_messages=allowance("chat_message", settings.daily_chat_messages),
+        uploads=await allowance("upload"),
+        explanations=await allowance("explanation"),
+        question_sets=await allowance("question_set"),
+        markings=await allowance("marking"),
+        chat_messages=await allowance("chat_message"),
     )
 
 
@@ -150,6 +173,8 @@ async def create_document(
     body: DocumentCreate, user: User, conn: Conn, settings: AppSettings, storage: StorageDep
 ) -> UploadOut:
     """Registers an upload and returns signed URLs; the files go straight to Storage."""
+    if body.kind == "past_paper" and plans.is_free(user.plan):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, plans.LOCKED["past_paper"])  # FR-PLAN-04
     if not body.image_count and documents.file_kind(body.filename) is None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Upload a PDF or PowerPoint (.pptx) file."
@@ -161,11 +186,13 @@ async def create_document(
     await _check_course(conn, user.id, body.course_id)
     if body.kind == "past_paper" and body.course_id is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, PAST_PAPER_COURSE)
-    limit = settings.daily_uploads
+    require_ai(user)  # outlines are AI work (FR-LIM-06)
+    await _check_storage(conn, user, settings, body.size_bytes)  # FR-LIM-05
+    limit = plans.daily_limit(settings, user.plan, "upload")
     if await usage.take(conn, user.id, "upload", limit, settings.timezone) is None:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            f"You've used today's {limit} uploads. Resets at 12:00 AM.",
+            plans.used_up(settings, user.plan, "upload"),
         )
     doc = await documents.create_document(
         conn,

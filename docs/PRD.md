@@ -158,16 +158,16 @@ Primary market: undergraduates at Nigerian federal and state universities and po
 
 | Resource | Limit |
 |---|---|
-| Uploads | 5 documents/day, 25 MB and 150 pages per document |
-| Question sets | 15 generations/day (cached repeats don't count) |
-| Explanations | 30/day |
-| Chat messages | 40/day |
-| Theory answers marked | 20/day |
+| Uploads | 3 documents/day, 25 MB and 150 pages per document |
+| Question sets | 5 generations/day (cached repeats don't count); 5- and 10-question sets only |
+| Explanations | 20/day |
+| Chat messages | 20/day |
+| Theory answers marked | 5/day |
 | Direct course shares | 20 recipients/day |
 | Members per shared course | 300 |
 | Reminders | at most 2 pushes/day, none in quiet hours |
 
-Limits protect the shared free-tier quotas and can be raised once a paid plan exists. A document deleted **after** it was processed does not refund its upload.
+**(2026-10-31)** Unused allowance rolls over, up to a week's worth (FR-LIM-08). Paid plans (FR-LIM-05): Student 10 / 30 / 60 / 80 / 40, Premium 20 / 50 / 120 / 150 / 80 a day (uploads / question sets / explanations / chat / marking). Limits protect the shared free-tier quotas. A document deleted **after** it was processed does not refund its upload.
 
 ## 10. Risks and open questions
 

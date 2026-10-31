@@ -19,6 +19,7 @@ from app.api import (
     invites,
     notifications,
     openapi,
+    plans,
     quizzes,
     sharing,
     study,
@@ -142,6 +143,7 @@ def create_app() -> FastAPI:
     app.include_router(notifications.router)
     app.include_router(sharing.router)
     app.include_router(invites.router)
+    app.include_router(plans.router)
     app.include_router(chat.router)
     openapi.install(app)
     return app

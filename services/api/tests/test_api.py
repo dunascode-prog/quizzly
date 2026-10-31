@@ -6,6 +6,7 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from app.api import routes
 from app.core import auth
 from app.domain import accounts, invites
 from tests.conftest import JWT_SECRET, SUPABASE_URL
@@ -57,8 +58,8 @@ def profiles(monkeypatch):
     async def institution_exists(conn, institution_id):
         return institution_id == UNILAG["id"]
 
-    async def search_institutions(conn, query, limit):
-        calls["search"] = (query, limit)
+    async def search_institutions(conn, query, limit, country="NG"):
+        calls["search"] = (query, limit, country)
         return [UNILAG]
 
     monkeypatch.setattr(accounts, "get_profile", get_profile)
@@ -67,7 +68,12 @@ def profiles(monkeypatch):
     async def no_referral(conn, user_id):
         return None
 
+    async def claim_inbox(conn, user_id, normalized):
+        calls.setdefault("inboxes", []).append(normalized)
+        return normalized not in calls.get("taken", ())
+
     monkeypatch.setattr(invites, "check", no_referral)
+    monkeypatch.setattr(accounts, "claim_inbox", claim_inbox)
     monkeypatch.setattr(accounts, "institution_exists", institution_exists)
     monkeypatch.setattr(accounts, "search_institutions", search_institutions)
     return calls
@@ -263,7 +269,10 @@ def test_institution_search(client, profiles):
     response = client.get("/v1/institutions?q=unilag&limit=5", headers=auth_header())
     assert response.status_code == 200
     assert response.json()[0]["name"] == "University of Lagos"
-    assert profiles["search"] == ("unilag", 5)
+    assert profiles["search"] == ("unilag", 5, "NG")  # Nigeria unless told (FR-PROF-08)
+    client.get("/v1/institutions?q=legon&country=GH", headers=auth_header())
+    assert profiles["search"] == ("legon", 20, "GH")
+    assert client.get("/v1/institutions?country=ghana", headers=auth_header()).status_code == 422
 
 
 def test_profile_routes_need_a_database(settings, monkeypatch):
@@ -276,3 +285,35 @@ def test_profile_routes_need_a_database(settings, monkeypatch):
     app.dependency_overrides[auth.get_settings] = lambda: settings
     with TestClient(app) as c:
         assert c.get("/v1/me", headers=auth_header()).status_code == 503
+
+
+# --- one account per real inbox (FR-SEC-24) -------------------------------------------------------
+
+
+def finish(client, email, user=None):
+    token = make_token(JWT_SECRET, sub=user or str(uuid.uuid4()), email=email)
+    body = {"institution_id": str(UNILAG["id"]), "level": "200L", "accept_terms": True}
+    return client.patch("/v1/me", headers={"Authorization": f"Bearer {token}"}, json=body)
+
+
+def test_throwaway_emails_cant_finish_onboarding(client, profiles):
+    r = finish(client, "x7@mailinator.com")
+    assert r.status_code == 422 and r.json()["detail"] == routes.DISPOSABLE_EMAIL
+    assert finish(client, "x7@inbox.mailinator.com").status_code == 422  # subdomains too
+    assert "inboxes" not in profiles  # refused before anything is saved
+
+
+def test_one_account_per_inbox(client, profiles):
+    assert finish(client, "Tolu.A+quizzly@gmail.com").status_code == 200
+    assert profiles["inboxes"] == ["tolua@gmail.com"]  # normalised before it's stored
+    profiles["taken"] = {"tolua@gmail.com"}
+    r = finish(client, "t.o.l.u.a@googlemail.com")
+    assert r.status_code == 409 and r.json()["detail"] == routes.INBOX_TAKEN
+
+
+def test_saving_a_profile_without_finishing_skips_the_inbox_check(client, profiles):
+    token = make_token(JWT_SECRET, email="x@mailinator.com")
+    r = client.patch(
+        "/v1/me", headers={"Authorization": f"Bearer {token}"}, json={"full_name": "A B"}
+    )
+    assert r.status_code == 200 and "inboxes" not in profiles

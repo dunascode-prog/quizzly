@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { X } from '@/components/icons';
 import { initials } from '@/components/profile-header';
+import { Avatar } from '@/components/ui/avatar';
 import { Accent, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAccent, useCalmMotion } from '@/lib/appearance';
@@ -49,11 +50,16 @@ export function Toast() {
         accessibilityLiveRegion="polite"
         accessibilityLabel={`${n.title}. ${n.body ?? ''}`}>
         <View style={[styles.card, { backgroundColor: theme.text }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.inkRaised }]}>
-            <Text variant="label" color="onInk">
-              {initials(who)}
-            </Text>
-          </View>
+          {/* The sender's photo only when they show it (FR-PROF-05); a Realtime row has none. */}
+          {n.actor_avatar_url ? (
+            <Avatar name={who} uri={n.actor_avatar_url} size={40} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: theme.inkRaised }]}>
+              <Text variant="label" color="onInk">
+                {initials(who)}
+              </Text>
+            </View>
+          )}
           <View style={styles.text}>
             <Text variant="label" color="onInk" numberOfLines={2}>
               {n.title}
