@@ -1,0 +1,167 @@
+name: Deploy one environment
+
+# Called by deploy.yml. One job holds the backend steps so `production` asks for approval once.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      image:
+        type: string
+        required: true
+      mobile:
+        type: boolean
+        default: false
+      eas-profile:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.API_URL }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      API_URL: ${{ vars.API_URL }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      IMAGE: ${{ inputs.image }}
+      E2E_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      E2E_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      E2E_SUPABASE_SERVICE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_KEY }}
+    steps:
+      - name: Check the environment is configured
+        run: |
+          missing=""
+          [ -n "$API_URL" ] || missing="$missing API_URL (variable)"
+          [ -n "$SUPABASE_DB_URL" ] || missing="$missing SUPABASE_DB_URL (secret)"
+          if [ -n "$missing" ]; then
+            echo "::error::The ${{ inputs.environment }} environment needs:$missing. See docs/CI_CD.md §6."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+
+      # Migrations run before the new code starts and must still work with the old code, because a
+      # rollback below restores the old image but not the old schema (CI's migration-rules).
+      - name: Migrate the database
+        run: |
+          # A database set up by hand has the tables but no migration history: a push would re-run 0001.
+          unrecorded=$(psql "$SUPABASE_DB_URL" -tAc \
+            "select to_regclass('supabase_migrations.schema_migrations') is null and to_regclass('public.documents') is not null")
+          if [ "$unrecorded" = t ]; then
+            echo "::error::This database has no migration history. Record the applied migrations first (docs/CI_CD.md §6)."
+            exit 1
+          fi
+          supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+          supabase --yes db push --db-url "$SUPABASE_DB_URL"
+
+      - name: Deploy (rolls itself back if the new version fails its checks)
+        uses: ./.github/actions/remote-deploy
+        with:
+          environment: ${{ inputs.environment }}
+          target: ${{ inputs.image }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          user: ${{ secrets.DEPLOY_USER }}
+          ssh-key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          registry-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke test through the public URL
+        id: smoke
+        run: bash infra/smoke.sh "$API_URL" "${IMAGE##*:}"
+
+      # The e2e smoke and security probes (services/api/e2e) with throwaway students, deleted after.
+      - uses: astral-sh/setup-uv@v5
+        if: env.E2E_SUPABASE_SERVICE_KEY != ''
+      - name: End-to-end smoke and security checks
+        id: e2e
+        if: env.E2E_SUPABASE_SERVICE_KEY != ''
+        working-directory: services/api
+        env:
+          E2E_API_URL: ${{ vars.API_URL }}
+          E2E_ENV: ${{ inputs.environment }}
+        run: uv run --frozen pytest e2e -m "smoke or security" -q -p no:cacheprovider
+      - if: env.E2E_SUPABASE_SERVICE_KEY == ''
+        run: echo "::warning::No E2E_SUPABASE_SERVICE_KEY secret, so only the shell smoke test ran (docs/CI_CD.md §6)."
+
+      - name: Roll back after a failed smoke test
+        if: failure() && (steps.smoke.outcome == 'failure' || steps.e2e.outcome == 'failure')
+        uses: ./.github/actions/remote-deploy
+        with:
+          environment: ${{ inputs.environment }}
+          target: rollback
+          host: ${{ secrets.DEPLOY_HOST }}
+          user: ${{ secrets.DEPLOY_USER }}
+          ssh-key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          registry-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # The whole student journey with real (free-tier) AI calls, on staging only. A failure here doesn't
+  # roll back (the deploy passed its checks) but marks the run red so it isn't tagged for production.
+  journey:
+    needs: backend
+    if: inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: { name: staging }
+    env:
+      E2E_API_URL: ${{ vars.API_URL }}
+      E2E_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      E2E_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      E2E_SUPABASE_SERVICE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_KEY }}
+    steps:
+      - if: env.E2E_SUPABASE_SERVICE_KEY == ''
+        run: echo "::warning::No E2E_SUPABASE_SERVICE_KEY secret, so the journey test was skipped."
+      - if: env.E2E_SUPABASE_SERVICE_KEY != ''
+        uses: actions/checkout@v4
+      - if: env.E2E_SUPABASE_SERVICE_KEY != ''
+        uses: astral-sh/setup-uv@v5
+      - if: env.E2E_SUPABASE_SERVICE_KEY != ''
+        working-directory: services/api
+        run: uv run --frozen pytest e2e -m journey -q -p no:cacheprovider --durations=10
+
+  # Only after the backend is healthy. With the fingerprint runtime, JS-only changes ship as an EAS
+  # Update to installed apps; a native change starts a new EAS build instead (and a Play submission
+  # for production), since an update can't reach builds with a different runtime.
+  mobile:
+    needs: backend
+    if: inputs.mobile
+    runs-on: ubuntu-latest
+    env:
+      HAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
+    steps:
+      - if: env.HAS_EXPO_TOKEN != 'true'
+        run: echo "::warning::No EXPO_TOKEN secret, so the app update was skipped (docs/CI_CD.md §6)."
+      - if: env.HAS_EXPO_TOKEN == 'true'
+        uses: actions/checkout@v4
+      - if: env.HAS_EXPO_TOKEN == 'true'
+        uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: apps/mobile/package-lock.json }
+      - if: env.HAS_EXPO_TOKEN == 'true'
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - if: env.HAS_EXPO_TOKEN == 'true'
+        run: npm ci
+        working-directory: apps/mobile
+      # Expo publishes this sub-action from main only.
+      - if: env.HAS_EXPO_TOKEN == 'true'
+        uses: expo/expo-github-action/continuous-deploy-fingerprint@main
+        with:
+          working-directory: apps/mobile
+          platform: android
+          profile: ${{ inputs.eas-profile }}
+          branch: ${{ inputs.eas-profile }}
+          environment: ${{ inputs.eas-profile }}
+          auto-submit-builds: ${{ inputs.eas-profile == 'production' }}
