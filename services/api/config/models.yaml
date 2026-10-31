@@ -47,6 +47,11 @@ profiles:
     - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, params: { reasoning_effort: none }, ref_price_in: 0.29, ref_price_out: 0.59 }
     - { provider: openrouter, model: "google/gemma-4-31b-it:free", rpm: 20 }
     - { provider: cloudflare, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", rpm: 50 }
+  fast_free:  # marking: gave the same scores as qwen on 24/24 test answers at about a third of the cost
+    - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, params: { reasoning_effort: low }, ref_price_in: 0.075, ref_price_out: 0.3 }
+    - { provider: groq, model: qwen/qwen3.8-27b, rpm: 30, ref_price_in: 0.29, ref_price_out: 0.59 }
+    - { provider: openrouter, model: "google/gemma-4-26b-a4b-it:free", rpm: 20 }
+    - { provider: cloudflare, model: "@cf/meta/llama-3.1-8b-instruct-fp8", rpm: 50 }
   quality_free:
     - { provider: groq, model: openai/gpt-oss-20b, rpm: 30, ref_price_in: 0.075, ref_price_out: 0.3 }
     - { provider: groq, model: openai/gpt-oss-120b, rpm: 30, ref_price_in: 0.15, ref_price_out: 0.6 }
@@ -62,8 +67,10 @@ tasks:
   questions: questions
 
 # Free-plan students use these instead (FR-LIM-04). Outlines and past-paper styles run once per
-# document and are shared, and marking needs accuracy, so those stay the same for everyone.
+# document and are shared, so those stay the same for everyone. Explanations keep their default
+# reasoning: low reasoning halved their page citations in testing.
 free_tasks:
   chat: chat_free
+  marking: fast_free
   explanation: quality_free
   questions: questions_free

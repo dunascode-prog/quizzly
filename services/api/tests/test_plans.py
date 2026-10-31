@@ -18,7 +18,7 @@ REPO = load_models_config(SERVICE_ROOT / "config" / "models.yaml")
 CHEAP = "openai/gpt-oss-20b"
 
 
-@pytest.mark.parametrize("task", ["chat", "explanation", "questions"])
+@pytest.mark.parametrize("task", ["chat", "explanation", "questions", "marking"])
 def test_free_students_start_on_the_cheap_model(task):
     assert REPO.routes_for(task, "free")[0].model == CHEAP
     # Paid plans keep the stronger first choice.
@@ -26,8 +26,8 @@ def test_free_students_start_on_the_cheap_model(task):
     assert REPO.routes_for(task, "premium") == REPO.routes_for(task, "student")
 
 
-@pytest.mark.parametrize("task", ["outline", "style", "marking"])
-def test_shared_or_accuracy_critical_work_is_the_same_for_everyone(task):
+@pytest.mark.parametrize("task", ["outline", "style"])
+def test_shared_work_is_the_same_for_everyone(task):
     assert REPO.routes_for(task, "free") == REPO.routes_for(task, "premium")
 
 
