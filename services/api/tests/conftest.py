@@ -36,3 +36,13 @@ def client(settings: Settings, monkeypatch):
     monkeypatch.setattr("app.core.guard.check", go_ahead)
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def student_plan(monkeypatch):
+    """Requests come from a Student-plan account (no padlocks, Student limits)."""
+
+    async def as_student(conn, user_id, settings):
+        return None, "student"
+
+    monkeypatch.setattr("app.core.guard.check", as_student)

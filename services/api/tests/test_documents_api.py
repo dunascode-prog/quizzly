@@ -123,6 +123,9 @@ def fake(client, monkeypatch):
     async def used_today(conn, user_id, tz):
         return {"upload": state["uploads_used"]}
 
+    async def remaining(conn, user_id, resource, daily, tz):
+        return daily - state["uploads_used"] if resource == "upload" else daily
+
     async def course_belongs_to(conn, user_id, course_id):
         return course_id in state["courses"]
 
@@ -176,6 +179,7 @@ def fake(client, monkeypatch):
         (courses, "delete_course", delete_course),
         (usage, "take", take),
         (usage, "used_today", used_today),
+        (usage, "remaining", remaining),
         (documents, "course_belongs_to", course_belongs_to),
         (documents, "is_course_member", is_course_member),
         (documents, "create_document", create_document),
@@ -265,20 +269,22 @@ def test_uploads_are_checked_before_the_file_is_sent(client, fake):
 
 
 def test_daily_upload_limit(client, fake):
-    for _ in range(5):
+    for _ in range(3):
         r = client.post(
             "/v1/documents", headers=auth(), json={"filename": "a.pdf", "size_bytes": 9}
         )
         assert r.status_code == 201
     over = client.post("/v1/documents", headers=auth(), json={"filename": "a.pdf", "size_bytes": 9})
     assert over.status_code == 429
-    assert over.json()["detail"] == "You've used today's 5 uploads. Resets at 12:00 AM."
+    assert over.json()["detail"] == (
+        "You've used your uploads for now. 3 more arrive at midnight. Student gives you 10 a day."
+    )
     assert client.get("/v1/usage", headers=auth()).json() == {
-        "uploads": {"used": 5, "limit": 5, "remaining": 0},
-        "explanations": {"used": 0, "limit": 30, "remaining": 30},
-        "question_sets": {"used": 0, "limit": 15, "remaining": 15},
-        "markings": {"used": 0, "limit": 20, "remaining": 20},
-        "chat_messages": {"used": 0, "limit": 40, "remaining": 40},
+        "uploads": {"used": 3, "limit": 3, "remaining": 0, "saved_up": 0},
+        "explanations": {"used": 0, "limit": 20, "remaining": 20, "saved_up": 0},
+        "question_sets": {"used": 0, "limit": 5, "remaining": 5, "saved_up": 0},
+        "markings": {"used": 0, "limit": 5, "remaining": 5, "saved_up": 0},
+        "chat_messages": {"used": 0, "limit": 20, "remaining": 20, "saved_up": 0},
     }
 
 

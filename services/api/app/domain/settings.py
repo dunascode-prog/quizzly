@@ -15,7 +15,7 @@ SETTINGS_COLUMNS = (
     "share_permission",
     "show_identity_on_links",
 )
-NOTIFICATION_TYPES = ("exam", "due", "recap", "mates", "ready")
+NOTIFICATION_TYPES = ("exam", "due", "recap", "mates", "ready", "plans")
 
 
 class ThemeLocked(Exception):

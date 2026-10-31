@@ -71,9 +71,10 @@ class DocumentUpdate(BaseModel):
 
 
 class Allowance(BaseModel):
-    used: int
-    limit: int
-    remaining: int
+    used: int  # today
+    limit: int  # a day, on the student's plan
+    remaining: int  # what's left now, including what was saved up (FR-LIM-08)
+    saved_up: int  # unused allowance carried forward from earlier days, up to a week's worth
 
 
 class UsageOut(BaseModel):
@@ -131,19 +132,26 @@ async def _upload_urls(conn, storage, doc: dict, user_id: UUID) -> list[str]:
 
 @router.get("/v1/usage", tags=["account"])
 async def get_usage(user: User, conn: Conn, settings: AppSettings) -> UsageOut:
-    """Today's use of each daily allowance and what's left; resets at midnight (FR-LIM-01)."""
+    """Each allowance on the student's plan: used today, the daily amount, and what's left now.
+    Unused allowance saves up for a week (FR-LIM-01/08)."""
     used = await usage.used_today(conn, user.id, settings.timezone)
 
-    def allowance(resource: str, limit: int) -> Allowance:
-        n = used.get(resource, 0)
-        return Allowance(used=n, limit=limit, remaining=max(limit - n, 0))
+    async def allowance(resource: str) -> Allowance:
+        limit = plans.daily_limit(settings, user.plan, resource)
+        left = await usage.remaining(conn, user.id, resource, limit, settings.timezone)
+        return Allowance(
+            used=used.get(resource, 0),
+            limit=limit,
+            remaining=int(left),
+            saved_up=max(int(left) - limit, 0),
+        )
 
     return UsageOut(
-        uploads=allowance("upload", settings.daily_uploads),
-        explanations=allowance("explanation", settings.daily_explanations),
-        question_sets=allowance("question_set", settings.daily_question_sets),
-        markings=allowance("marking", settings.daily_markings),
-        chat_messages=allowance("chat_message", settings.daily_chat_messages),
+        uploads=await allowance("upload"),
+        explanations=await allowance("explanation"),
+        question_sets=await allowance("question_set"),
+        markings=await allowance("marking"),
+        chat_messages=await allowance("chat_message"),
     )
 
 
@@ -165,6 +173,8 @@ async def create_document(
     body: DocumentCreate, user: User, conn: Conn, settings: AppSettings, storage: StorageDep
 ) -> UploadOut:
     """Registers an upload and returns signed URLs; the files go straight to Storage."""
+    if body.kind == "past_paper" and plans.is_free(user.plan):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, plans.LOCKED["past_paper"])  # FR-PLAN-04
     if not body.image_count and documents.file_kind(body.filename) is None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Upload a PDF or PowerPoint (.pptx) file."
@@ -182,7 +192,7 @@ async def create_document(
     if await usage.take(conn, user.id, "upload", limit, settings.timezone) is None:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            f"You've used today's {limit} uploads. Resets at 12:00 AM.",
+            plans.used_up(settings, user.plan, "upload"),
         )
     doc = await documents.create_document(
         conn,

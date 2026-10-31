@@ -181,6 +181,7 @@ class NotificationTypes(BaseModel):
     recap: bool | None = None
     mates: bool | None = None
     ready: bool | None = None
+    plans: bool | None = None  # plan reminders (FR-PLAN-05)
 
 
 class NotificationSettingsOut(BaseModel):

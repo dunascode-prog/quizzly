@@ -665,7 +665,7 @@
           "account"
         ],
         "summary": "Get Usage",
-        "description": "Today's use of each daily allowance and what's left; resets at midnight (FR-LIM-01).",
+        "description": "Each allowance on the student's plan: used today, the daily amount, and what's left now.\nUnused allowance saves up for a week (FR-LIM-01/08).",
         "operationId": "get_usage_v1_usage_get",
         "responses": {
           "200": {
@@ -4431,13 +4431,18 @@
           "remaining": {
             "type": "integer",
             "title": "Remaining"
+          },
+          "saved_up": {
+            "type": "integer",
+            "title": "Saved Up"
           }
         },
         "type": "object",
         "required": [
           "used",
           "limit",
-          "remaining"
+          "remaining",
+          "saved_up"
         ],
         "title": "Allowance"
       },
@@ -6724,6 +6729,17 @@
               }
             ],
             "title": "Ready"
+          },
+          "plans": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plans"
           }
         },
         "type": "object",
@@ -7111,6 +7127,24 @@
             "type": "array",
             "title": "Extras"
           },
+          "quiz_sizes": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Quiz Sizes"
+          },
+          "trial_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trial Days"
+          },
           "product_id": {
             "anyOf": [
               {
@@ -7132,6 +7166,8 @@
           "storage_mb",
           "monthly_ai_usd",
           "extras",
+          "quiz_sizes",
+          "trial_days",
           "product_id"
         ],
         "title": "PlanOut"

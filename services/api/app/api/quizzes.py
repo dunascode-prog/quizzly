@@ -261,7 +261,7 @@ async def _question_set(
         if await usage.take(conn, user_id, "question_set", limit, settings.timezone) is None:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
-                f"You've used today's {limit} quiz generations. Resets at 12:00 AM.",
+                plans.used_up(settings, plan, "question_set"),
             )
         existing = await quizzes.create_set(
             conn,
@@ -295,6 +295,20 @@ async def create_quiz(
     """A quiz on the chosen topics (all of them when none are given). The same choices reuse
     a cached question set (FR-QGEN-07); otherwise today's allowance is used (429 when it's gone)
     and the questions are written in the background, so poll `GET /v1/quizzes/{quiz_id}`."""
+    if plans.is_free(user.plan):  # padlocks (FR-PLAN-04)
+        locked = (
+            "quiz_size"
+            if body.count not in plans.FREE_QUIZ_SIZES
+            else "exam_timer"
+            if body.mode == "exam" and body.time_limit_min
+            else "past_paper"
+            if body.style_id
+            else "fresh_set"
+            if body.new_questions
+            else None
+        )
+        if locked:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, plans.LOCKED[locked])
     doc = await study.ready_document(conn, user.id, document_id)
     if doc is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found or not ready yet")
@@ -437,8 +451,8 @@ async def _queue_marking(
                 None,
                 marking_worker.not_marked(
                     "limit",
-                    f"You've used today's {limit} answer markings. Resets at 12:00 AM. "
-                    "Compare your answer with the model answer.",
+                    plans.used_up(settings, plan, "marking")
+                    + " Compare your answer with the model answer.",
                 ),
             )
     await quizzes.finish_if_marked(conn, attempt_id)

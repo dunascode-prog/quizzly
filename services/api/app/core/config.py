@@ -44,16 +44,17 @@ class Settings(BaseSettings):
     # Free-plan limits (PRD §9, FR-DOC-02, FR-LIM-01).
     max_upload_bytes: int = 25 * 1024 * 1024
     max_document_pages: int = 150
-    daily_uploads: int = 5
-    daily_explanations: int = 30
-    daily_question_sets: int = 15
-    daily_markings: int = 20  # theory / short answers marked by the LLM (PRD §9)
-    daily_chat_messages: int = 40
+    daily_uploads: int = 3
+    daily_explanations: int = 20
+    daily_question_sets: int = 5
+    daily_markings: int = 5  # theory / short answers marked by the LLM (PRD §9)
+    daily_chat_messages: int = 20
     daily_share_recipients: int = 20  # people a student can send courses to per day (FR-SHARE-10)
     daily_avatar_uploads: int = 10  # profile photo changes per day (FR-SEC-22)
     # Monthly AI allowance per plan, at paid-tier list prices (FR-LIM-06). Typical free use is
     # about $0.10 a month; these stop one account from costing more than its plan brings in.
     monthly_ai_ceiling_free_usd: float = 0.60
+    trial_days: int = 7  # the Student free trial, run by Google Play (FR-PLAN-06)
     monthly_ai_ceiling_student_usd: float = 2.00
     monthly_ai_ceiling_premium_usd: float = 3.50
     # Total stored upload size per plan, in MB (FR-LIM-05).

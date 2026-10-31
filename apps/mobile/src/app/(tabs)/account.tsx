@@ -27,7 +27,11 @@ function Tile({ label, allowance }: { label: string; allowance: Allowance | unde
     <View
       style={[styles.tile, { backgroundColor: theme.inkRaised }]}
       accessible
-      accessibilityLabel={allowance ? `${label}: ${allowance.remaining} of ${allowance.limit} left today` : `${label}: loading`}>
+      accessibilityLabel={
+        allowance
+          ? `${label}: ${allowance.remaining} left, ${allowance.limit} a day${allowance.saved_up ? `, ${allowance.saved_up} saved up` : ''}`
+          : `${label}: loading`
+      }>
       <Text variant="small" color="mutedOnInk">
         {label}
       </Text>
@@ -39,6 +43,11 @@ function Tile({ label, allowance }: { label: string; allowance: Allowance | unde
           / {allowance?.limit ?? '–'}
         </Text>
       </View>
+      {allowance?.saved_up ? (
+        <Text variant="caption" color="mutedOnInk">
+          incl. {allowance.saved_up} saved up
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -127,7 +136,7 @@ export default function AccountScreen() {
         </View>
       </HeroCard>
       <Text variant="small" color="textSecondary">
-        {u ? `Answer markings: ${u.markings.remaining} of ${u.markings.limit} left. ` : ''}Everything resets at 12:00 AM.
+        {u ? `Answer markings: ${u.markings.remaining} of ${u.markings.limit} left. ` : ''}A day&apos;s worth arrives at midnight, and unused allowance saves up for a week.
       </Text>
       {usage.isError ? <Banner message={friendlyError(usage.error)} /> : null}
 

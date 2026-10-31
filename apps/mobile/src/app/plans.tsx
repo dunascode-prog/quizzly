@@ -44,6 +44,7 @@ export default function PlansScreen() {
   const [note, setNote] = useState<string | null>(null);
   const selected: PlanId = picked ?? (data?.current === 'premium' ? 'premium' : 'student');
   const isCurrent = data?.current === selected;
+  const trial = data?.plans.find((p) => p.id === selected)?.trial_days;
   const ready = Boolean(data?.payments_ready) && BILLING_IN_THIS_BUILD;
 
   const choose = () => {
@@ -58,13 +59,23 @@ export default function PlansScreen() {
       footer={
         <>
           <ActionPill
-            label={isCurrent ? 'Your current plan' : ready ? `Choose ${planName(selected)}` : 'Coming soon'}
+            label={
+              isCurrent
+                ? 'Your current plan'
+                : !ready
+                  ? 'Coming soon'
+                  : trial
+                    ? `Start ${trial}-day free trial`
+                    : `Choose ${planName(selected)}`
+            }
             icon={ArrowRight}
             onPress={choose}
             disabled={!data || isCurrent}
           />
           <Text variant="small" color="textSecondary" style={styles.center}>
-            Billed monthly through Google Play. Cancel any time.
+            {trial
+              ? `${trial} days free, then billed monthly through Google Play. Cancel any time.`
+              : 'Billed monthly through Google Play. Cancel any time.'}
           </Text>
         </>
       }>
@@ -191,6 +202,13 @@ function PaidCard({
           {selected ? <Check size={16} color={theme.text} strokeWidth={3} /> : null}
         </View>
       </View>
+      {plan.trial_days ? (
+        <View style={[styles.reward, { backgroundColor: selected ? theme.backgroundSelected : theme.text }]}>
+          <Text variant="caption" color={selected ? 'text' : 'onInk'}>
+            {plan.trial_days} days free
+          </Text>
+        </View>
+      ) : null}
       {discount ? (
         // Ink or white chip, never an accent (CREDITS_AND_PLANS §3).
         <View style={[styles.reward, { backgroundColor: selected ? theme.backgroundSelected : theme.text }]}>
