@@ -24,7 +24,7 @@ export function MateChip({ name, selected, onPress, avatarUrl }: Props) {
         { backgroundColor: selected ? theme.text : theme.backgroundSelected, opacity: pressed ? 0.85 : 1 },
       ]}>
       {avatarUrl ? (
-        <Avatar name={name} uri={avatarUrl} size={40} />
+        <Avatar name={name} uri={avatarUrl} size={40} remote />
       ) : (
         <View style={[styles.avatar, { backgroundColor: selected ? theme.backgroundSelected : theme.backgroundElement }]}>
           <Text variant="caption" color="text">

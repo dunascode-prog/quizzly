@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Camera } from '@/components/icons';
 import { Radius, type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAppearance } from '@/lib/appearance';
 
 import { Text } from './text';
 
@@ -24,6 +25,8 @@ type Props = {
   tone?: 'field' | 'ink' | 'raised';
   onPress?: () => void;
   accessibilityLabel?: string;
+  /** Another student's photo: in low-data mode it isn't downloaded and initials show (FR-HAB-07). */
+  remote?: boolean;
 };
 
 export function initials(name: string | null | undefined) {
@@ -35,11 +38,12 @@ const TEXT_SIZE: Record<NonNullable<Props['size']>, number> = { 28: 11, 40: 14, 
 
 /** A student's photo, or their initials (DESIGN.md §6 `Avatar`, FR-PROF-04/05). Cached on disk by
  * URL path, so a newly signed URL for the same photo doesn't download it again. */
-export function Avatar({ name, uri, size = 52, badge, dashed, ring, tone = 'field', onPress, accessibilityLabel }: Props) {
+export function Avatar({ name, uri, size = 52, badge, dashed, ring, tone = 'field', onPress, accessibilityLabel, remote }: Props) {
   const theme = useTheme();
+  const lowData = useAppearance((s) => s.lowData);
   // The URL that failed to load; a new one (another photo, a fresh signature) is tried again.
   const [failed, setFailed] = useState<string | null>(null);
-  const showPhoto = Boolean(uri) && failed !== uri;
+  const showPhoto = Boolean(uri) && failed !== uri && !(remote && lowData);
   const ringWidth = ring ? 3 : dashed && !showPhoto ? 2 : 0;
   const bg = tone === 'ink' ? theme.text : tone === 'raised' ? theme.inkRaised : theme.backgroundSelected;
   const fg = tone === 'field' ? (dashed ? theme.textSecondary : theme.text) : theme.onInk;

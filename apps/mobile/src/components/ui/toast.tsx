@@ -52,7 +52,7 @@ export function Toast() {
         <View style={[styles.card, { backgroundColor: theme.text }]}>
           {/* The sender's photo only when they show it (FR-PROF-05); a Realtime row has none. */}
           {n.actor_avatar_url ? (
-            <Avatar name={who} uri={n.actor_avatar_url} size={40} />
+            <Avatar name={who} uri={n.actor_avatar_url} size={40} remote />
           ) : (
             <View style={[styles.avatar, { backgroundColor: theme.inkRaised }]}>
               <Text variant="label" color="onInk">
