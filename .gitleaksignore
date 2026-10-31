@@ -1,6 +1,8 @@
 # Known false positives (gitleaks fingerprints). Real secrets get rotated, never listed here.
 # A dummy HS256 key used only by the API tests.
 08816f45311e40174a38a53451098503d3cde250:services/api/tests/conftest.py:generic-api-key:8
-# The example image tag (sha-1a2b…) in the first CI/CD commit, not a key.
+# The example image tag (sha-1a2b…) in the first CI/CD commit (and its copy on main), not a key.
 7e9a90a37f0b1be3cdf58a664839933f7c9cb1b3:.github/workflows/rollback.yml:generic-api-key:13
 7e9a90a37f0b1be3cdf58a664839933f7c9cb1b3:infra/README.md:generic-api-key:28
+934f39a546bf334b439e910289b1e22bfff0928b:.github/workflows/rollback.yml:generic-api-key:13
+934f39a546bf334b439e910289b1e22bfff0928b:infra/README.md:generic-api-key:28
