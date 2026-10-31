@@ -102,6 +102,27 @@ def test_healthz(client):
     assert response.headers["x-request-id"]
 
 
+def test_readyz_checks_the_database_and_names_the_release(client, settings):
+    from app.core.db import get_conn
+
+    class FakeConn:
+        async def execute(self, sql):
+            self.sql = sql
+
+    conn = FakeConn()
+    client.app.dependency_overrides[get_conn] = lambda: conn
+    settings.release = "sha-abc123"
+    response = client.get("/readyz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "release": "sha-abc123"}
+    assert conn.sql == "select 1"
+
+
+def test_readyz_is_503_without_a_database(monkeypatch):
+    with app_for(monkeypatch, env="local") as c:
+        assert c.get("/readyz").status_code == 503
+
+
 def app_for(monkeypatch, **settings):
     """A fresh app built under the given settings (no database)."""
     from fastapi.testclient import TestClient

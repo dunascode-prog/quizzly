@@ -1,0 +1,28 @@
+# Actions and the base image update weekly. App dependencies get security fixes only: Expo packages
+# must move together with `npx expo install`, so routine bumps stay manual.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+
+  - package-ecosystem: docker
+    directory: /services/api
+    schedule: { interval: weekly }
+
+  - package-ecosystem: uv
+    directory: /services/api
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: npm
+    directory: /apps/mobile
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 0
