@@ -401,6 +401,17 @@ Index on `(status, run_after)`. Workers claim jobs with `FOR UPDATE SKIP LOCKED`
 | resource | enum | `upload`, `question_set`, `explanation`, `chat_message`, `marking`; **v0.2:** `share_recipient`, `reminder_push`; **0019:** `avatar_upload` |
 | count | int | |
 
+#### `allowances` (0025)
+| Column | Type | Notes |
+|---|---|---|
+| user_id | uuid FK | PK with resource |
+| resource | enum `usage_resource` | the five plan allowances |
+| balance | numeric(8,2) | what's left, including saved-up days (max daily × 7, FR-LIM-08) |
+| daily | int | the daily amount at the last top-up (an upgrade adds the difference) |
+| day | date | the student's day of the last top-up |
+
+**0025 also:** `limit_hits (user_id, day, resource)` (days a student ran out, for FR-PLAN-05), `profiles.plan_reminded_at`, notification type `plan_reminder`, and `notification_settings.types.plans` (default true). API and worker only: RLS on, no client policies.
+
 #### `subscriptions` (0023)
 | Column | Type | Notes |
 |---|---|---|

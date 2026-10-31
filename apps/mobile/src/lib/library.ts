@@ -55,9 +55,10 @@ function paperFields(paper?: PastPaper) {
   return paper ? { kind: 'past_paper', paper_year: paper.year } : {};
 }
 
-export type Allowance = { used: number; limit: number; remaining: number };
+/** `remaining` includes `saved_up`: unused allowance carries forward up to a week (FR-LIM-08). */
+export type Allowance = { used: number; limit: number; remaining: number; saved_up: number };
 
-/** Today's allowances (FR-LIM-01); they reset at midnight, Lagos time. */
+/** Allowances on the student's plan (FR-LIM-01/05); a day's worth arrives at their midnight. */
 export type Usage = {
   uploads: Allowance;
   explanations: Allowance;

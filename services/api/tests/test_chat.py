@@ -192,7 +192,10 @@ def test_over_the_daily_limit_nothing_is_asked(client, fake):
     fake["limit_reached"] = True
     r = client.post(f"/v1/documents/{DOC}/chat/messages", headers=auth(), json={"text": "Hi"})
     assert r.status_code == 429
-    assert r.json()["detail"] == "You've used today's 40 chat messages. Resets at 12:00 AM."
+    assert r.json()["detail"] == (
+        "You've used your chat messages for now. 20 more arrive at midnight. "
+        "Student gives you 80 a day."
+    )
     assert fake["prompt"] is None
 
 

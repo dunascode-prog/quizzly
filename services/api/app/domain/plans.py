@@ -102,9 +102,15 @@ STORAGE_FIELD = {
     "premium": "storage_premium_mb",
 }
 EXTRAS = {
-    "free": ["Offline course downloads"],
-    "student": ["Stronger AI model", "Priority processing", "Offline course downloads"],
+    "free": ["5 and 10-question sets", "Offline course downloads"],
+    "student": [
+        "All quiz sizes, timed exams and past-paper style",
+        "Stronger AI model",
+        "Priority processing",
+        "Offline course downloads",
+    ],
     "premium": [
+        "All quiz sizes, timed exams and past-paper style",
         "Stronger AI model",
         "Priority processing",
         "Most room for exam season",
@@ -135,6 +141,8 @@ def catalogue(settings, discount_percent: int | None) -> list[dict]:
                 "storage_mb": getattr(settings, STORAGE_FIELD[plan]),
                 "monthly_ai_usd": ceiling_usd(settings, plan),
                 "extras": EXTRAS[plan],
+                "quiz_sizes": list(FREE_QUIZ_SIZES) if plan == "free" else [5, 10, 20, 30],
+                "trial_days": settings.trial_days if plan == "student" else None,
             }
         )
     return out
@@ -222,3 +230,38 @@ async def void(conn: AsyncConnection, user_id: UUID, token: str) -> None:
         "update subscriptions set state = 'VOIDED' where purchase_token = %s", (token,)
     )
     await revoke(conn, user_id, token)
+
+
+# --- what free students see when something is locked or used up (FR-PLAN-04) ---------------------
+
+NAMES = {
+    "upload": "uploads",
+    "question_set": "quiz sets",
+    "explanation": "explanations",
+    "chat_message": "chat messages",
+    "marking": "markings",
+}
+FREE_QUIZ_SIZES = (5, 10)  # 20- and 30-question sets are on Student and Premium
+
+LOCKED = {
+    "quiz_size": "20 and 30-question sets are on Student and Premium.",
+    "exam_timer": "Timed exam practice is on Student and Premium.",
+    "past_paper": "Past-paper style questions are on Student and Premium.",
+    "fresh_set": "A brand-new set of the same quiz is on Student and Premium.",
+}
+
+
+def is_free(plan: str) -> bool:
+    """Free or over its monthly allowance: the padlocks apply."""
+    return plan not in PAID
+
+
+def used_up(settings, plan: str, resource: str) -> str:
+    """The message when an allowance runs out. Kind, no countdown (DESIGN.md); for free students
+    it says what Student gives, and unused allowance saves up for a week (FR-LIM-08)."""
+    daily = daily_limit(settings, plan, resource)
+    name = NAMES[resource]
+    message = f"You've used your {name} for now. {daily} more arrive at midnight."
+    if is_free(plan):
+        message += f" Student gives you {PAID_LIMITS['student'][resource]} a day."
+    return message

@@ -51,7 +51,7 @@ export type NotificationSettings = {
   daily_reminder_time: string;
   quiet_start: string;
   quiet_end: string;
-  types: { exam: boolean; due: boolean; recap: boolean; mates: boolean; ready: boolean };
+  types: { exam: boolean; due: boolean; recap: boolean; mates: boolean; ready: boolean; plans: boolean };
 };
 
 const notifyKey = ['notification-settings'] as const;

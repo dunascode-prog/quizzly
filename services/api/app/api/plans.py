@@ -52,6 +52,8 @@ class PlanOut(BaseModel):
     storage_mb: int
     monthly_ai_usd: float  # the fair-use AI allowance (FR-LIM-06)
     extras: list[str]
+    quiz_sizes: list[int]  # free: 5 and 10 only (FR-PLAN-04)
+    trial_days: int | None  # Student: a free trial run by Google Play (FR-PLAN-06)
     product_id: str | None  # the Google Play product to buy
 
 

@@ -258,7 +258,7 @@ async def request_explanation(
         if await usage.take(conn, user.id, "explanation", limit, settings.timezone) is None:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
-                f"You've used today's {limit} explanations. Resets at 12:00 AM.",
+                plans.used_up(settings, user.plan, "explanation"),
             )
         await study.create_explanation(
             conn, doc["source_file_id"], topic_id, body.style, PROMPT_VERSION

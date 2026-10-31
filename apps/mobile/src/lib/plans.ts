@@ -36,6 +36,10 @@ export type Plan = {
   storage_mb: number;
   monthly_ai_usd: number;
   extras: string[];
+  /** Free: 5 and 10 only (FR-PLAN-04). */
+  quiz_sizes: number[];
+  /** Student: a free trial run by Google Play (FR-PLAN-06). */
+  trial_days: number | null;
   product_id: string | null;
 };
 

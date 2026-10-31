@@ -112,7 +112,7 @@ async def ask(
         if await usage.take(conn, user.id, "chat_message", limit, settings.timezone) is None:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
-                f"You've used today's {limit} chat messages. Resets at 12:00 AM.",
+                plans.used_up(settings, user.plan, "chat_message"),
             )
         thread = await chat.thread_for(conn, user.id, document_id)
         history = await chat.messages(conn, thread["id"], rag.HISTORY_MESSAGES) if thread else []

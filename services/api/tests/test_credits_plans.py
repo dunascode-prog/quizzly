@@ -253,7 +253,14 @@ def test_the_plan_list_shows_limits_prices_and_the_discount(client, store):
     assert r.status_code == 200
     body = r.json()
     by_id = {p["id"]: p for p in body["plans"]}
-    assert by_id["free"]["limits"]["question_set"] == 15 and by_id["free"]["price_usd"] == 0
+    assert by_id["free"]["limits"]["question_set"] == 5 and by_id["free"]["price_usd"] == 0
+    assert by_id["free"]["quiz_sizes"] == [5, 10] and by_id["student"]["quiz_sizes"] == [
+        5,
+        10,
+        20,
+        30,
+    ]
+    assert by_id["student"]["trial_days"] == 7 and by_id["premium"]["trial_days"] is None
     assert by_id["student"]["price_usd"] == 6 and by_id["premium"]["price_usd"] == 10
     assert by_id["student"]["monthly_ai_usd"] == 2.0 and by_id["premium"]["monthly_ai_usd"] == 3.5
     assert "Offline course downloads" in by_id["free"]["extras"]  # free on every plan
