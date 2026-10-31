@@ -85,7 +85,7 @@ function CountCircle({
       accessibilityLabel={`${n} questions${locked ? ', on Student and Premium' : ''}`}
       accessibilityHint={locked ? 'Opens the plans' : undefined}
       style={[styles.circle, { backgroundColor: selected ? theme.text : theme.backgroundSelected }]}>
-      <Text variant="title" color={selected ? 'onInk' : locked ? 'textSecondary' : 'text'}>
+      <Text variant="title" color={selected ? 'onInk' : locked ? 'textSecondary' : 'text'} maxFontSizeMultiplier={1.3}>
         {n}
       </Text>
       {/* A paid-plan size for a free student (FR-PLAN-04). */}

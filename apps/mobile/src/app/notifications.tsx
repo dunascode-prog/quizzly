@@ -81,7 +81,7 @@ function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
         accessibilityHint="Opens it. Long-press for more options"
         style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
         {n.actor_name ? (
-          <Avatar name={n.actor_name} uri={n.actor_avatar_url} size={48} tone="ink" />
+          <Avatar name={n.actor_name} uri={n.actor_avatar_url} size={48} tone="ink" remote />
         ) : (
           <View style={[styles.avatar, { borderWidth: 1.5, borderColor: theme.line }]}>
             <Text variant="label">Q</Text>

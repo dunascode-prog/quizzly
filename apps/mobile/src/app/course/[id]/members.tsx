@@ -54,7 +54,7 @@ export default function MembersScreen() {
         <View style={styles.list}>
           {[...active, ...pending].map((m) => (
             <View key={m.member_id} style={[styles.row, { backgroundColor: theme.backgroundSelected }]}>
-              <Avatar name={m.display_name} uri={m.avatar_url} size={40} tone="ink" />
+              <Avatar name={m.display_name} uri={m.avatar_url} size={40} tone="ink" remote />
               <View style={styles.flex}>
                 <Text variant="label">{m.display_name ?? 'Coursemate'}</Text>
                 <Text variant="small" color="textSecondary">
