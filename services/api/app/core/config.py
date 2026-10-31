@@ -52,8 +52,9 @@ class Settings(BaseSettings):
     daily_share_recipients: int = 20  # people a student can send courses to per day (FR-SHARE-10)
     daily_avatar_uploads: int = 10  # profile photo changes per day (FR-SEC-22)
     # Monthly AI allowance per plan, at paid-tier list prices (FR-LIM-06). Typical free use is
-    # about $0.10 a month; these stop one account from costing more than its plan brings in.
-    monthly_ai_ceiling_free_usd: float = 0.60
+    # about $0.04 a month (2026-10-31 limits); these stop one account from costing more than its
+    # plan brings in.
+    monthly_ai_ceiling_free_usd: float = 0.30
     trial_days: int = 7  # the Student free trial, run by Google Play (FR-PLAN-06)
     monthly_ai_ceiling_student_usd: float = 2.00
     monthly_ai_ceiling_premium_usd: float = 3.50

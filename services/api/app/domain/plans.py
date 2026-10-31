@@ -40,7 +40,7 @@ _FREE_FIELDS = {
 
 CAPPED = (
     "You've used this month's AI allowance on the free plan. Everything you've already made "
-    "still works, and the allowance comes back on the 1st."
+    "still works, and the allowance comes back on the 1st. Student gives you much more room."
 )
 
 # One round trip: the plan, whether it's active, and this month's reference spend.
@@ -256,12 +256,18 @@ def is_free(plan: str) -> bool:
     return plan not in PAID
 
 
+def next_plan(plan: str) -> str | None:
+    """The plan to suggest: Student for free accounts, Premium for Student, nothing for Premium."""
+    return "premium" if plan == "student" else None if plan == "premium" else "student"
+
+
 def used_up(settings, plan: str, resource: str) -> str:
-    """The message when an allowance runs out. Kind, no countdown (DESIGN.md); for free students
-    it says what Student gives, and unused allowance saves up for a week (FR-LIM-08)."""
+    """The message when an allowance runs out. Kind, no countdown (DESIGN.md); it says what the
+    next plan up gives (Student for free, Premium for Student) (FR-LIM-08, FR-PLAN-04)."""
     daily = daily_limit(settings, plan, resource)
     name = NAMES[resource]
     message = f"You've used your {name} for now. {daily} more arrive at midnight."
-    if is_free(plan):
-        message += f" Student gives you {PAID_LIMITS['student'][resource]} a day."
+    up = next_plan(plan)
+    if up:
+        message += f" {up.title()} gives you {PAID_LIMITS[up][resource]} a day."
     return message

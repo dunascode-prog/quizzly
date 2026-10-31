@@ -177,9 +177,11 @@ async def schedule_reminders(conn: AsyncConnection) -> int:
 
 
 async def _plan_reminder(conn: AsyncConnection, student: dict, today: date) -> bool:
-    """FR-PLAN-05: a free student who ran out of something on 2+ days this week hears, once a week,
-    what Student gives. Kind copy, no countdown; off in Reminders → Plan tips."""
-    if await plans.effective_plan(conn, student["id"], get_settings()) in plans.PAID:
+    """FR-PLAN-05: a student who ran out of something on 2+ days this week hears, once a week, what
+    the next plan up gives (Student for free, Premium for Student). Kind copy, no countdown; off in
+    Reminders → Plan tips."""
+    up = plans.next_plan(await plans.effective_plan(conn, student["id"], get_settings()))
+    if up is None:
         return False
     recent = await (
         await conn.execute(
@@ -200,14 +202,14 @@ async def _plan_reminder(conn: AsyncConnection, student: dict, today: date) -> b
     if not hits or hits["days"] < PLAN_HIT_DAYS:
         return False
     name = plans.NAMES[hits["resource"]]
-    more = plans.PAID_LIMITS["student"][hits["resource"]]
+    more = plans.PAID_LIMITS[up][hits["resource"]]
+    trial = f" You can try it free for {get_settings().trial_days} days." if up == "student" else ""
     sent = await _send(
         conn,
         student,
         "plan_reminder",
         f"You ran out of {name} on {hits['days']} days this week",
-        f"Student gives you {more} a day, and unused ones save up for a week. "
-        f"You can try it free for {get_settings().trial_days} days.",
+        f"{up.title()} gives you {more} a day, and unused ones save up for a week.{trial}",
         {"route": "/plans"},
         f"plan:{today.isocalendar()[0]}-{today.isocalendar()[1]}",
     )

@@ -94,7 +94,11 @@ def test_limit_messages_are_kind_and_mention_student_only_to_free():
         "You've used your quiz sets for now. 5 more arrive at midnight. Student gives you 30 a day."
     )
     assert plans.used_up(s, "student", "question_set") == (
-        "You've used your quiz sets for now. 30 more arrive at midnight."
+        "You've used your quiz sets for now. 30 more arrive at midnight. "
+        "Premium gives you 50 a day."
+    )
+    assert plans.used_up(s, "premium", "question_set") == (
+        "You've used your quiz sets for now. 50 more arrive at midnight."
     )
 
 
@@ -166,13 +170,22 @@ async def test_no_reminder_otherwise(sent, conn):
     assert sent == []
 
 
-async def test_paid_students_get_no_plan_reminders(sent, monkeypatch):
-    async def paid(conn, user_id, settings):
-        return "student"
+async def test_student_plans_hear_about_premium_and_premium_hears_nothing(sent, monkeypatch):
+    plan = {"now": "student"}
 
-    monkeypatch.setattr(reminders.plans, "effective_plan", paid)
-    conn = Conn(hits={"resource": "question_set", "days": 5})
-    assert not await reminders._plan_reminder(conn, STUDENT, date(2026, 11, 2))
+    async def current(conn, user_id, settings):
+        return plan["now"]
+
+    monkeypatch.setattr(reminders.plans, "effective_plan", current)
+    conn = Conn(hits={"resource": "question_set", "days": 3})
+    assert await reminders._plan_reminder(conn, STUDENT, date(2026, 11, 2))
+    assert sent[0][2] == "Premium gives you 50 a day, and unused ones save up for a week."
+    plan["now"] = "premium"
+    sent.clear()
+    assert not await reminders._plan_reminder(
+        Conn(hits={"resource": "upload", "days": 5}), STUDENT, date(2026, 11, 2)
+    )
+    assert sent == []
 
 
 def test_the_plan_reminder_has_its_own_toggle():

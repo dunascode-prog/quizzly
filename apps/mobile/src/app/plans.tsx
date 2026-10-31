@@ -42,7 +42,8 @@ export default function PlansScreen() {
   const data = query.data;
   const [picked, setPicked] = useState<PlanId | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const selected: PlanId = picked ?? (data?.current === 'premium' ? 'premium' : 'student');
+  // Free students start on Student; Student and Premium students on Premium (the next step up).
+  const selected: PlanId = picked ?? (data && data.current !== 'free' ? 'premium' : 'student');
   const isCurrent = data?.current === selected;
   const trial = data?.plans.find((p) => p.id === selected)?.trial_days;
   const ready = Boolean(data?.payments_ready) && BILLING_IN_THIS_BUILD;

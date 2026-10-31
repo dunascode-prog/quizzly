@@ -138,6 +138,14 @@ export default function AccountScreen() {
       <Text variant="small" color="textSecondary">
         {u ? `Answer markings: ${u.markings.remaining} of ${u.markings.limit} left. ` : ''}A day&apos;s worth arrives at midnight, and unused allowance saves up for a week.
       </Text>
+      {me.data && me.data.plan !== 'premium' ? (
+        // The next plan up, from where the limits are shown (FR-PLAN-04).
+        <TextButton
+          label={me.data.plan === 'student' ? 'Get more each day with Premium' : 'Get more each day with Student'}
+          compact
+          onPress={() => router.push('/plans')}
+        />
+      ) : null}
       {usage.isError ? <Banner message={friendlyError(usage.error)} /> : null}
 
       <View style={styles.rows}>
