@@ -1,8 +1,9 @@
 """Google sign-in bridge (FR-AUTH-01).
 
-Supabase only returns to http(s) addresses on its Redirect URLs list, but the app is reached at
-`quizzly://…` (builds) or `exp://…` (Expo Go). So Supabase returns here, and this page forwards
-the result to the app address named in `next`.
+On Android the sign-in browser sheet often won't follow Supabase's redirect straight into an app
+address (`quizzly://…` in builds, `exp://…` in Expo Go) and keeps loading. So Supabase returns to
+this ordinary https page on the API, which forwards the result to the app address named in `next`
+(with an "Open Quizzly" button as a fallback). Works on the sslip.io addresses, no domain needed.
 
 Only Quizzly's own app addresses are accepted, and only the sign-in result is passed on. A code
 that leaks is useless anyway: with PKCE only the phone that started the sign-in can exchange it.
