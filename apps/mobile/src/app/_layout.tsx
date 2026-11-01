@@ -6,6 +6,8 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { OfflineBanner } from '@/components/offline-banner';
 import { Toast } from '@/components/ui/toast';
@@ -85,6 +87,11 @@ function RootNavigator() {
         <Stack.Protected guard={signedIn && !onboarded} redirectTo={start}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
+        {/* The photo sheet and crop open from onboarding step 1 and from Account (FR-PROF-04). */}
+        <Stack.Protected guard={signedIn} redirectTo={start}>
+          <Stack.Screen name="profile/photo" options={SHEET} />
+          <Stack.Screen name="profile/crop" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
+        </Stack.Protected>
         <Stack.Protected guard={signedIn && onboarded} redirectTo={start}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="course/[id]/index" />
@@ -105,7 +112,10 @@ function RootNavigator() {
           <Stack.Screen name="shares/[memberId]" />
           <Stack.Screen name="c/[code]" />
           <Stack.Screen name="i/[code]" />
-          <Stack.Screen name="invite" />
+          <Stack.Screen name="invite/index" />
+          <Stack.Screen name="invite/how" options={SHEET} />
+          <Stack.Screen name="invite/unlocked" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+          <Stack.Screen name="plans" />
           <Stack.Screen name="settings/privacy" />
           <Stack.Screen name="settings/themes" />
           <Stack.Screen name="settings/reminders" />
@@ -156,14 +166,19 @@ function Live() {
 function RootLayout() {
   const colorScheme = useColorScheme();
   return (
-    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <StatusBar style="auto" />
-        <RootNavigator />
-      </ThemeProvider>
-    </PersistQueryClientProvider>
+    // Gesture handler 3 needs a root view above every GestureDetector, e.g. the toast's swipe.
+    <GestureHandlerRootView style={styles.root}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <StatusBar style="auto" />
+          <RootNavigator />
+        </ThemeProvider>
+      </PersistQueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({ root: { flex: 1 } });
 
 // NFR-09: crash reports when EXPO_PUBLIC_SENTRY_DSN is set.
 export default wrapRoot(RootLayout);

@@ -1,0 +1,23 @@
+# TLS reverse proxy for both environments. Started once by hand (README.md); CI never redeploys it.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN, e.g. api.quizzly.app}
+      STAGING_API_DOMAIN: ${STAGING_API_DOMAIN:?set STAGING_API_DOMAIN, e.g. staging-api.quizzly.app}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+
+networks:
+  edge:
+    name: quizzly-edge
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

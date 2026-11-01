@@ -62,8 +62,12 @@ From the v0.1 code review. Each task needs a regression test.
 - [x] **D8d. Save course for offline** (screen 28, FR-OFF-03, P1): offline manifest endpoint (items + byte size), background download into the SQLite cache with per-part progress, "Saved for offline" state and auto-update while on.
 - [x] **D8e. Past-question mode** (screen 26, FR-QGEN-09, P1): past-paper upload (same pipeline, `kind = past_paper`, never shared or used as answers), style extraction job (types, wording patterns, marks), `style` option on `POST /quizzes`.
 
-- [ ] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens.
+- [x] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens. *(2026-10-31: every touchable on the new screens has a role and label; colours are tokens only; reduce motion is honoured by the crop zoom, rays and rings; social screens show offline states; low-data mode stops downloading other students' photos; numbers in fixed circles cap their font scale at 1.3. Check 200% on a device: web emulation is unreliable.)*
 
+
+- [x] **D9. Profile setup v2 and profile photos** ([PROFILE_V2.md](PROFILE_V2.md), screens 02a–02i, FR-PROF-01/03..07, FR-MOD-06): API and migration 0018 (photo upload and delete, visibility, practice times → reminder, photo reports); app `Avatar` component, 4-step onboarding with photo sheet and crop, edit profile.
+
+- [ ] **D10. Quizzly credits and plans** ([CREDITS_AND_PLANS.md](CREDITS_AND_PLANS.md), screens 13, 23, 23b, 23c, 32; FR-INV-03..05, FR-PLAN-01..03, FR-LIM-05..07): cost controls and priority (done), credits and plans API with Google Play verification (done), app screens 13 / 23 / 23b / 23c / 32 (done). **Left:** Play Console products and offer, the service account and notifications (owner), then the native billing library in a dev build to start checkout from screen 32.
 
 ## Phase E — Beta readiness (M5)
 
@@ -71,6 +75,7 @@ From the v0.1 code review. Each task needs a regression test.
 - [x] E2. Sentry in app and API; job metrics (NFR-09).
 - [ ] E3. Play Store internal testing track; store listing; privacy policy and terms updated for sharing, notifications and invites (NDPA). Repo side done (`eas.json`, [STORE_LISTING.md](STORE_LISTING.md)); account steps and policy pages remain.
 - [ ] E4. **Admin app** at `/admin` in `apps/web` (screens 30a–30h, WEB.md §3): team sign-in with 2FA and `role = admin`, Overview, AI costs, Reports (fix answer / regenerate / keep hidden / dismiss), Takedowns, Limits and plans (`app_config` + audit log), Students, System. Admin API endpoints under `/admin/*` in FastAPI with role checks and `admin_audit_log`.
+- [x] E5. CI/CD and release checks ([CI_CD.md](CI_CD.md)): CI on every PR (tests, lint, migrations, gitleaks, Semgrep, bandit, pip-audit, npm audit, ARM image); staging on merge and production on a `v*` tag with approval; automatic rollback; end-to-end smoke, security and journey tests in `services/api/e2e`. **Left (owner):** VM, GitHub environments and secrets (§6).
 
 ## Decisions still open (don't block on them)
 

@@ -32,9 +32,7 @@ export function DateField({ label, value, onChange, placeholder, minimumDate }: 
         value: current,
         mode: 'date',
         minimumDate,
-        onChange: (event, date) => {
-          if (event.type === 'set' && date) onChange(toIsoDay(date));
-        },
+        onValueChange: (_, date) => onChange(toIsoDay(date)),
       });
     } else {
       setOpen(!open);
@@ -57,7 +55,7 @@ export function DateField({ label, value, onChange, placeholder, minimumDate }: 
           display="inline"
           minimumDate={minimumDate}
           accentColor={theme.text}
-          onChange={(_, date) => date && onChange(toIsoDay(date))}
+          onValueChange={(_, date) => onChange(toIsoDay(date))}
         />
       ) : null}
       {value ? (

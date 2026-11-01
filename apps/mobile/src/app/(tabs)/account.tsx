@@ -17,6 +17,7 @@ import { signOut } from '@/lib/auth';
 import { friendlyError } from '@/lib/errors';
 import { type Allowance, useUsage } from '@/lib/library';
 import { unregisterPush } from '@/lib/notifications';
+import { planName, useInvite } from '@/lib/plans';
 import { useMe } from '@/lib/profile';
 
 /** One allowance on the ink card: what's left today out of the daily limit. */
@@ -26,7 +27,11 @@ function Tile({ label, allowance }: { label: string; allowance: Allowance | unde
     <View
       style={[styles.tile, { backgroundColor: theme.inkRaised }]}
       accessible
-      accessibilityLabel={allowance ? `${label}: ${allowance.remaining} of ${allowance.limit} left today` : `${label}: loading`}>
+      accessibilityLabel={
+        allowance
+          ? `${label}: ${allowance.remaining} left, ${allowance.limit} a day${allowance.saved_up ? `, ${allowance.saved_up} saved up` : ''}`
+          : `${label}: loading`
+      }>
       <Text variant="small" color="mutedOnInk">
         {label}
       </Text>
@@ -38,22 +43,41 @@ function Tile({ label, allowance }: { label: string; allowance: Allowance | unde
           / {allowance?.limit ?? '–'}
         </Text>
       </View>
+      {allowance?.saved_up ? (
+        <Text variant="caption" color="mutedOnInk">
+          incl. {allowance.saved_up} saved up
+        </Text>
+      ) : null}
     </View>
   );
 }
 
-function Row({ label, icon: Icon, onPress, hint }: { label: string; icon: LucideIcon; onPress: () => void; hint?: string }) {
+function Row({
+  label,
+  icon: Icon,
+  onPress,
+  hint,
+  value,
+}: {
+  label: string;
+  icon: LucideIcon;
+  onPress: () => void;
+  hint?: string;
+  /** Shown before the chevron, e.g. "Free" on "Your plan". */
+  value?: string;
+}) {
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={value ? `${label}: ${value}` : label}
       accessibilityHint={hint}
       style={({ pressed }) => [styles.row, { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.8 : 1 }]}>
       <Text variant="label" style={styles.rowText}>
         {label}
       </Text>
+      {value ? <Text variant="label">{value}</Text> : null}
       <Icon size={22} color={theme.text} strokeWidth={2} />
     </Pressable>
   );
@@ -73,6 +97,15 @@ export default function AccountScreen() {
     }, [refetch]),
   );
   const u = usage.data;
+  const invite = useInvite().data;
+  const credits = invite?.credited ?? 0;
+  const next = invite?.next_reward;
+  const left = next ? Math.max(0, next.at - credits) : 0;
+  const creditsLine = !next
+    ? `Invite friends · ${invite?.discount.percent ?? 10}% off unlocked`
+    : next.kind === 'discount'
+      ? `Invite friends · ${left} more for ${next.percent}% off`
+      : `Invite friends · ${left} more for Lavender`;
 
   const onSignOut = () => {
     setError(null);
@@ -86,7 +119,7 @@ export default function AccountScreen() {
     <Screen bottomInset={BottomTabInset}>
       <View style={styles.header}>
         <View style={styles.flex}>
-          <ProfileHeader me={me.data} title={me.data?.full_name ?? 'Your account'} ink />
+          <ProfileHeader me={me.data} title={me.data?.full_name ?? 'Your account'} account />
         </View>
         <Pill label="Edit" accessibilityLabel="Edit your profile" onPress={() => router.push('/profile/edit')} />
       </View>
@@ -103,23 +136,33 @@ export default function AccountScreen() {
         </View>
       </HeroCard>
       <Text variant="small" color="textSecondary">
-        {u ? `Answer markings: ${u.markings.remaining} of ${u.markings.limit} left. ` : ''}Everything resets at 12:00 AM.
+        {u ? `Answer markings: ${u.markings.remaining} of ${u.markings.limit} left. ` : ''}A day&apos;s worth arrives at midnight, and unused allowance saves up for a week.
       </Text>
       {usage.isError ? <Banner message={friendlyError(usage.error)} /> : null}
 
       <View style={styles.rows}>
+        {/* FR-PLAN-02: your plan (→ 32) and Quizzly credits (→ 23). */}
+        <Row label="Your plan" value={planName(me.data?.plan ?? 'free')} icon={ChevronRight} onPress={() => router.push('/plans')} />
+        <Row label="Themes and study modes" icon={ChevronRight} onPress={() => router.push('/settings/themes')} />
+        <Row label="Reminders" icon={ChevronRight} onPress={() => router.push('/settings/reminders')} />
         <Pressable
           onPress={() => router.push('/invite')}
           accessibilityRole="button"
-          accessibilityLabel="Invite friends to Quizzly"
+          accessibilityLabel={`Quizzly credits: ${credits}. ${creditsLine}`}
           style={({ pressed }) => [styles.row, { backgroundColor: theme.text, opacity: pressed ? 0.85 : 1 }]}>
-          <Text variant="label" color="onInk" style={styles.rowText}>
-            Invite friends to Quizzly
+          <View style={styles.rowText}>
+            <Text variant="label" color="onInk">
+              Quizzly credits
+            </Text>
+            <Text variant="small" color="mutedOnInk">
+              {creditsLine}
+            </Text>
+          </View>
+          <Text variant="label" color="onInk">
+            {credits}
           </Text>
           <ChevronRight size={22} color={theme.onInk} strokeWidth={2} />
         </Pressable>
-        <Row label="Themes and study modes" icon={ChevronRight} onPress={() => router.push('/settings/themes')} />
-        <Row label="Reminders" icon={ChevronRight} onPress={() => router.push('/settings/reminders')} />
         <Row label="Privacy and blocking" icon={ChevronRight} onPress={() => router.push('/settings/privacy')} />
         <Row label="Privacy Policy and Terms" icon={ChevronRight} onPress={() => router.push('/legal')} />
         <Row label="Sign out" icon={LogOut} onPress={onSignOut} hint={me.data?.email ? `Signed in as ${me.data.email}` : undefined} />

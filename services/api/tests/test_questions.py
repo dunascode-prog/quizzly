@@ -301,7 +301,7 @@ def test_new_quiz_queues_a_set_and_the_same_choices_reuse_it_free(client, fake):
     assert len(fake["sets"]) == 1
 
 
-def test_new_questions_makes_another_set_and_counts(client, fake):
+def test_new_questions_makes_another_set_and_counts(client, fake, student_plan):
     client.post(URL, headers=auth(), json={})
     client.post(URL, headers=auth(), json={"new_questions": True})
     assert fake["used"] == 2
@@ -321,7 +321,9 @@ def test_daily_quiz_limit_and_unsupported_types(client, fake):
     fake["used"] = 15
     r = client.post(URL, headers=auth(), json={})
     assert r.status_code == 429
-    assert r.json()["detail"] == "You've used today's 15 quiz generations. Resets at 12:00 AM."
+    assert r.json()["detail"] == (
+        "You've used your quiz sets for now. 5 more arrive at midnight. Student gives you 30 a day."
+    )
     assert client.post(URL, headers=auth(), json={"types": ["essay"]}).status_code == 422
     assert client.post(URL, headers=auth(), json={"count": 7}).status_code == 422
 
@@ -399,7 +401,7 @@ def test_exam_answers_stay_hidden_until_the_attempt_is_submitted(
 FLASH_URL = f"/v1/documents/{DOC}/flashcards"
 
 
-def test_flashcards_are_a_cached_practice_round_for_one_topic(client, fake):
+def test_flashcards_are_a_cached_practice_round_for_one_topic(client, fake, student_plan):
     r = client.post(FLASH_URL, headers=auth(), json={"topic_id": str(T2)})
     assert r.status_code == 201
     body = r.json()

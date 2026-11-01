@@ -38,6 +38,7 @@ class UsageLog:
         self._cost = 0.0
         self._read_at = 0.0
         self._tasks: set[asyncio.Task] = set()
+        self._warned: set[tuple] = set()
 
     def _today(self):
         return datetime.now(self.tz).date()
@@ -69,9 +70,29 @@ class UsageLog:
                 log.exception("couldn't read today's AI usage; allowing the call")
                 return True
         allowed = self._tokens < self.token_budget and self._cost < self.cost_budget
+        self._warn_at_thresholds()
         if not allowed:
             log.warning("daily AI budget reached: %s tokens, $%.4f", self._tokens, self._cost)
         return allowed
+
+    def _warn_at_thresholds(self) -> None:
+        """Logs once a day at 50% and 80% of the AI budget, so spend is noticed before the circuit
+        breaker trips (FR-SEC-08); Sentry picks up warnings."""
+        used = max(
+            self._tokens / self.token_budget,
+            self._cost / self.cost_budget if self.cost_budget else 0,
+        )
+        for mark in (0.8, 0.5):
+            key = (self._day, mark)
+            if used >= mark and key not in self._warned:
+                self._warned.add(key)
+                log.warning(
+                    "AI budget %d%% used today: %s tokens, $%.4f",
+                    mark * 100,
+                    self._tokens,
+                    self._cost,
+                )
+                break
 
     def record(self, call: CallRecord) -> None:
         """Counts the call now and writes the row in the background, so it never slows a reply."""
@@ -90,8 +111,8 @@ class UsageLog:
             async with pool.connection() as conn:
                 await conn.execute(
                     "insert into llm_calls (job_id, user_id, task, provider, model, prompt_tokens, "
-                    "completion_tokens, latency_ms, cost_usd, status) "
-                    "values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    "completion_tokens, latency_ms, cost_usd, status, ref_cost_usd) "
+                    "values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                     (
                         owner.get("job_id"),
                         owner.get("user_id"),
@@ -103,7 +124,18 @@ class UsageLog:
                         call.latency_ms,
                         call.cost_usd,
                         call.status,
+                        call.ref_cost_usd,
                     ),
                 )
+                # The student's monthly AI allowance (FR-LIM-06).
+                micro = round(call.ref_cost_usd * 1_000_000)
+                if owner.get("user_id") and micro > 0:
+                    await conn.execute(
+                        "insert into ai_spend (user_id, month, micro_usd) "
+                        "values (%s, date_trunc('month', now())::date, %s) "
+                        "on conflict (user_id, month) "
+                        "do update set micro_usd = ai_spend.micro_usd + excluded.micro_usd",
+                        (owner["user_id"], micro),
+                    )
         except Exception:
             log.exception("couldn't record an LLM call")

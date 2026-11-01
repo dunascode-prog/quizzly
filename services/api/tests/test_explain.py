@@ -200,7 +200,10 @@ def test_daily_explanation_limit(client, fake):
     fake["used"] = 30
     r = client.post(URL, headers=auth(), json={"style": "standard"})
     assert r.status_code == 429
-    assert r.json()["detail"] == "You've used today's 30 explanations. Resets at 12:00 AM."
+    assert r.json()["detail"] == (
+        "You've used your explanations for now. 20 more arrive at midnight. "
+        "Student gives you 60 a day."
+    )
 
 
 def test_feedback_and_reports_need_access(client, fake):

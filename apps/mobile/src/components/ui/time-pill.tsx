@@ -35,7 +35,7 @@ export function TimePill({ value, onChange, accessibilityLabel }: TimePillProps)
       DateTimePickerAndroid.open({
         value: toDate(value),
         mode: 'time',
-        onChange: (event, d) => event.type === 'set' && d && onChange(hhmm(d)),
+        onValueChange: (_, d) => onChange(hhmm(d)),
       });
     } else {
       setOpen(!open);
@@ -54,7 +54,7 @@ export function TimePill({ value, onChange, accessibilityLabel }: TimePillProps)
         </Text>
       </Pressable>
       {open && Platform.OS === 'ios' ? (
-        <DateTimePicker value={toDate(value)} mode="time" display="spinner" onChange={(_, d) => d && onChange(hhmm(d))} />
+        <DateTimePicker value={toDate(value)} mode="time" display="spinner" onValueChange={(_, d) => onChange(hhmm(d))} />
       ) : null}
     </View>
   );

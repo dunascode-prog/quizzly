@@ -10,6 +10,8 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
+from app.domain import avatars
+
 _DOC = """
 select d.id, d.title, d.source_file_id, d.course_id, c.code as course_code, sf.page_count,
        sf.low_ocr_pages, d.user_id <> %(user)s as shared
@@ -141,6 +143,8 @@ async def report(
     )
     if target_type == "question":
         await hide_if_reported(conn, target_id)
+    elif target_type == "avatar":
+        await avatars.hide_if_reported(conn, target_id)  # FR-MOD-06
 
 
 REPORTS_TO_HIDE = 3  # FR-MOD-02

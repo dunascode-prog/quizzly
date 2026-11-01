@@ -4,7 +4,8 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.api.deps import get_storage
-from app.domain import courses, documents, sharing, uploads, usage
+from app.core import guard
+from app.domain import courses, documents, plans, sharing, uploads, usage
 from app.worker import queue
 from tests.conftest import JWT_SECRET
 from tests.test_api import make_token
@@ -122,6 +123,9 @@ def fake(client, monkeypatch):
     async def used_today(conn, user_id, tz):
         return {"upload": state["uploads_used"]}
 
+    async def remaining(conn, user_id, resource, daily, tz):
+        return daily - state["uploads_used"] if resource == "upload" else daily
+
     async def course_belongs_to(conn, user_id, course_id):
         return course_id in state["courses"]
 
@@ -160,7 +164,11 @@ def fake(client, monkeypatch):
     async def enqueue(conn, job_type, payload, *, user_id=None, dedupe_key=None):
         state["jobs"].append((job_type, payload, dedupe_key))
 
+    async def stored_bytes(conn, user_id):
+        return state.get("stored", 0)
+
     for mod, name, fn in [
+        (documents, "stored_bytes", stored_bytes),
         (courses, "list_courses", list_courses),
         (courses, "create_course", create_course),
         (courses, "update_course", update_course),
@@ -171,6 +179,7 @@ def fake(client, monkeypatch):
         (courses, "delete_course", delete_course),
         (usage, "take", take),
         (usage, "used_today", used_today),
+        (usage, "remaining", remaining),
         (documents, "course_belongs_to", course_belongs_to),
         (documents, "is_course_member", is_course_member),
         (documents, "create_document", create_document),
@@ -260,20 +269,22 @@ def test_uploads_are_checked_before_the_file_is_sent(client, fake):
 
 
 def test_daily_upload_limit(client, fake):
-    for _ in range(5):
+    for _ in range(3):
         r = client.post(
             "/v1/documents", headers=auth(), json={"filename": "a.pdf", "size_bytes": 9}
         )
         assert r.status_code == 201
     over = client.post("/v1/documents", headers=auth(), json={"filename": "a.pdf", "size_bytes": 9})
     assert over.status_code == 429
-    assert over.json()["detail"] == "You've used today's 5 uploads. Resets at 12:00 AM."
+    assert over.json()["detail"] == (
+        "You've used your uploads for now. 3 more arrive at midnight. Student gives you 10 a day."
+    )
     assert client.get("/v1/usage", headers=auth()).json() == {
-        "uploads": {"used": 5, "limit": 5, "remaining": 0},
-        "explanations": {"used": 0, "limit": 30, "remaining": 30},
-        "question_sets": {"used": 0, "limit": 15, "remaining": 15},
-        "markings": {"used": 0, "limit": 20, "remaining": 20},
-        "chat_messages": {"used": 0, "limit": 40, "remaining": 40},
+        "uploads": {"used": 3, "limit": 3, "remaining": 0, "saved_up": 0},
+        "explanations": {"used": 0, "limit": 20, "remaining": 20, "saved_up": 0},
+        "question_sets": {"used": 0, "limit": 5, "remaining": 5, "saved_up": 0},
+        "markings": {"used": 0, "limit": 5, "remaining": 5, "saved_up": 0},
+        "chat_messages": {"used": 0, "limit": 20, "remaining": 20, "saved_up": 0},
     }
 
 
@@ -412,3 +423,39 @@ def test_a_joined_course_is_read_only(client, fake):
     )
     assert client.delete(f"/v1/documents/{doc['id']}", headers=auth()).status_code == 403
     assert client.get(f"/v1/documents/{doc['id']}", headers=auth()).json()["read_only"] is True
+
+
+# --- plan limits, monthly allowance and storage caps on uploads (FR-LIM-05/06) ---------------
+
+
+def as_plan(monkeypatch, plan):
+    async def check(conn, user_id, settings):
+        return None, plan
+
+    monkeypatch.setattr(guard, "check", check)
+
+
+def upload(client, size=1000):
+    body = {"filename": "a.pdf", "size_bytes": size}
+    return client.post("/v1/documents", headers=auth(), json=body)
+
+
+def test_student_uploads_get_the_student_limit(client, fake, monkeypatch):
+    as_plan(monkeypatch, "student")
+    codes = [upload(client).status_code for _ in range(11)]
+    assert codes[:10] == [201] * 10 and codes[10] == 429
+
+
+def test_capped_accounts_cant_start_uploads(client, fake, monkeypatch):
+    as_plan(monkeypatch, "capped")
+    r = upload(client)
+    assert r.status_code == 429 and r.json()["detail"] == plans.CAPPED
+
+
+def test_storage_is_capped_per_plan(client, fake):
+    fake["stored"] = 500 * 1024 * 1024 - 500
+    r = upload(client)
+    assert r.status_code == 422
+    assert r.json()["detail"].startswith("Your notes use all 500 MB of your space.")
+    fake["stored"] = 0
+    assert upload(client).status_code == 201

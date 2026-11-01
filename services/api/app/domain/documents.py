@@ -222,3 +222,16 @@ async def delete_document(
             return None
         await refund_uploads(conn, user_id, rows, tz)
         return await release(conn, rows)
+
+
+async def stored_bytes(conn: AsyncConnection, user_id: UUID) -> int:
+    """Total size of the files behind the student's notes (FR-LIM-05)."""
+    row = await (
+        await conn.execute(
+            "select coalesce(sum(sf.size_bytes), 0) as n from documents d "
+            "join source_files sf on sf.id = d.source_file_id "
+            "where d.user_id = %s and d.deleted_at is null",
+            (user_id,),
+        )
+    ).fetchone()
+    return int(row["n"])

@@ -22,6 +22,8 @@ export type Notification = {
   created_at: string;
   actor_id: string | null;
   actor_name: string | null;
+  /** Only when the actor shows their photo to classmates (FR-PROF-05). */
+  actor_avatar_url?: string | null;
 };
 
 export type InboxFilter = 'all' | 'shared' | 'study';

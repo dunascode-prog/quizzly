@@ -22,7 +22,7 @@
       "package": "app.quizzly"
     },
     "web": {
-      "output": "server",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -63,6 +63,10 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "runtimeVersion": { "policy": "fingerprint" },
+    "updates": {
+      "url": "https://u.expo.dev/de8a96d5-93e2-4f8a-9145-8fa17e2a31b8"
     },
     "extra": {
       "eas": {

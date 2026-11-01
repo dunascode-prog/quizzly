@@ -82,14 +82,21 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | institution_id | uuid FK → institutions | nullable until onboarding |
 | institution_other | text | free text if the school isn't listed |
 | department | text | |
-| level | text | `100L`…`700L`, `other` |
+| level | text | `100L`…`700L`, **0021:** `Y1`…`Y6`, `PG`; `other` |
 | explanation_style | enum `explanation_style` | default `standard` |
-| plan | enum `plan` | `free` (later `premium`) |
+| plan | enum `plan` | `free`, `student` (**0020**), `premium`; set only by payment webhooks (FR-LIM-04) |
+| plan_expires_at | timestamptz null | **0020** a paid plan lapses to free after this; null = doesn't lapse |
 | terms_version | text | consent (FR-AUTH-03) |
 | terms_accepted_at | timestamptz | |
 | deleted_at | timestamptz | soft-delete marker during account deletion |
 | display_name | text | **v0.2** first name + last initial ("Ada O."), the only name other users ever see |
-| timezone | text | **v0.2** IANA zone, default `Africa/Lagos` (study days, reminders) |
+| timezone | text | **v0.2** IANA zone, default `Africa/Lagos` (study days, reminders; **0021:** daily limits roll over at its midnight) |
+| country | char(2) | **0021** ISO 3166-1 alpha-2, default `NG` (FR-PROF-08) |
+| timezone_changed_at | timestamptz null | **0021** a time zone changes at most once a week |
+| email_normalized | text null | **0024** the inbox, normalised (FR-SEC-24); unique among active profiles. `normalize_email()` in SQL matches the API |
+| credits | int | **0023** credited friends (denormalised from `referrals`, FR-INV-03) |
+| discount_unlocked_at | timestamptz null | **0023** 5 credits: 10% off (FR-INV-05) |
+| discount_seen_at | timestamptz null | **0023** 23c shown |
 | weekly_goal_days | smallint | **v0.2** 1–7, default 4 (FR-HAB-03) |
 | accent | enum `accent` | **v0.2** `ink`, `lagoon`, `ankara`, `palm`, `lavender`; default `ink` |
 | night_mode | bool | **v0.2** default true |
@@ -97,6 +104,13 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | share_permission | enum `share_permission` | **v0.2** `coursemates`, `code` (default), `nobody` (FR-SHARE-09) |
 | show_identity_on_links | bool | **v0.2** show name/institution/level on invite landing and recap; default true |
 | invite_code | text unique | **v0.2** e.g. `TOLU7`, case-insensitive unique (`upper(invite_code)`) |
+| avatar_path | text null | **0018** `{user_id}/{uuid}.webp` in the private `avatars` bucket; named by the API, a new name per upload (FR-PROF-04) |
+| avatar_visible | bool | **0018** "Show my photo to classmates", default false (FR-PROF-05) |
+| avatar_updated_at | timestamptz null | **0018** |
+| avatar_hidden | bool | **0018** set when 3 students report the photo, or by an admin (FR-MOD-06) |
+| practice_times | text[] | **0018** subset of `commute`, `lectures`, `evening`, `night` (FR-PROF-06) |
+| suspended_at | timestamptz null | **0019** set by an admin: the API refuses the student's requests (FR-SEC-21) |
+| suspended_reason | text null | **0019** admin note |
 
 #### `institutions` (reference)
 | Column | Type | Notes |
@@ -106,7 +120,8 @@ One row per Supabase Auth user, created by a trigger on `auth.users`.
 | short_name | text | "UNILAG" |
 | type | enum | `university`, `polytechnic`, `college_of_education`, `other` |
 | ownership | enum | `federal`, `state`, `private` |
-| state | text | Nigerian state |
+| state | text | state or region |
+| country | char(2) | **0021** ISO 3166-1 alpha-2, default `NG`; search is per country (FR-PROF-08) |
 
 Trigram index on `name` and `short_name` for search (FR-PROF-02).
 
@@ -383,8 +398,48 @@ Index on `(status, run_after)`. Workers claim jobs with `FOR UPDATE SKIP LOCKED`
 |---|---|---|
 | user_id | uuid FK | PK with day and resource |
 | day | date | Africa/Lagos calendar day |
-| resource | enum | `upload`, `question_set`, `explanation`, `chat_message`, `marking`; **v0.2:** `share_recipient`, `reminder_push` |
+| resource | enum | `upload`, `question_set`, `explanation`, `chat_message`, `marking`; **v0.2:** `share_recipient`, `reminder_push`; **0019:** `avatar_upload` |
 | count | int | |
+
+#### `allowances` (0025)
+| Column | Type | Notes |
+|---|---|---|
+| user_id | uuid FK | PK with resource |
+| resource | enum `usage_resource` | the five plan allowances |
+| balance | numeric(8,2) | what's left, including saved-up days (max daily × 7, FR-LIM-08) |
+| daily | int | the daily amount at the last top-up (an upgrade adds the difference) |
+| day | date | the student's day of the last top-up |
+
+**0025 also:** `limit_hits (user_id, day, resource)` (days a student ran out, for FR-PLAN-05), `profiles.plan_reminded_at`, notification type `plan_reminder`, and `notification_settings.types.plans` (default true). API and worker only: RLS on, no client policies.
+
+#### `subscriptions` (0023)
+| Column | Type | Notes |
+|---|---|---|
+| purchase_token | text PK | Google Play token; one account per token (FR-PLAN-03) |
+| user_id | uuid FK | |
+| product_id | text | `quizzly_student`, `quizzly_premium` |
+| plan | enum `plan` | |
+| state | text | Play `subscriptionState`, or `VOIDED` |
+| offer_id | text null | `invite-10` when the invite discount was used |
+| expires_at | timestamptz null | paid-up date |
+
+**0023 also:** `referrals.study_days` (0–3, the friend's progress), notification type `invite_reward`. API only: RLS on, no client policies.
+
+#### `ai_spend` (0022)
+| Column | Type | Notes |
+|---|---|---|
+| user_id | uuid FK | PK with month |
+| month | date | first day of the month (UTC) |
+| micro_usd | bigint | the student's AI use this month at paid-tier list prices, in millionths of a dollar (FR-LIM-06). API and worker only |
+
+**0022 also:** `llm_calls.ref_cost_usd` (list-price cost of each call) and `jobs.priority` (1 for active paid plans, FR-LIM-07), index `jobs (user_id, status)`.
+
+#### `rate_limits` (0019)
+| Column | Type | Notes |
+|---|---|---|
+| key | text | PK with window_start; `user:{id}` |
+| window_start | timestamptz | the minute (`date_trunc('minute', now())`) |
+| count | int | requests in that minute (FR-SEC-20); rows older than an hour are deleted by the worker. API only: RLS on, no client policies |
 
 #### `push_tokens`
 | Column | Type | Notes |
@@ -516,6 +571,9 @@ Index `(user_id, created_at desc)`, partial index on unread. Table added to the 
 | daily_reminder_time | time | default 19:30 |
 | quiet_start, quiet_end | time | default 23:00 / 07:00 |
 | types | jsonb | per-type toggles: `exam`, `due`, `recap`, `mates` (default false), `ready` |
+| daily_reminder_custom | bool | **0018** true once the student picks a time in Reminders; then practice times no longer change it (FR-PROF-06) |
+
+**Storage bucket `avatars`** (0018): private, 300 KB limit, no client policies. Only the API writes (service role); the app reads through signed URLs (7 days). Other students get a URL only when `avatar_visible and not avatar_hidden` and neither has blocked the other (FR-PROF-05). Deleting the photo or the account deletes the file.
 
 ### 2.12 Invites (v0.2)
 

@@ -20,7 +20,7 @@ def test_every_route_is_described_and_tagged_once(client):
 
 def test_every_signed_in_route_documents_401(client):
     for name, op in _operations(client):
-        if name != "GET /healthz":
+        if name not in ("GET /healthz", "GET /readyz"):
             assert op.get("security"), f"{name} should need a token"
             assert "401" in op["responses"], name
 

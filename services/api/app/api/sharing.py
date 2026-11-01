@@ -9,7 +9,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import AppSettings, Conn, User
+from app.api.deps import AppSettings, AvatarStorageDep, Conn, User
+from app.api.photos import with_photo_urls
 from app.domain import sharing
 
 router = APIRouter(tags=["sharing"])
@@ -65,14 +66,19 @@ class ShareOut(BaseModel):
 
 class MemberOut(BaseModel):
     member_id: UUID
+    user_id: UUID  # to report their photo (FR-MOD-06)
     display_name: str | None  # "Ada O.": the only name shown (FR-SHARE-07)
     status: Literal["pending", "active"]
     joined_at: datetime | None
+    # Only when they chose to show it, it isn't hidden by reports, and neither blocked the other
+    # (FR-PROF-05); otherwise the app shows initials.
+    avatar_url: str | None = None
 
 
 class CoursemateOut(BaseModel):
     user_id: UUID
     display_name: str | None
+    avatar_url: str | None = None  # same rules as MemberOut (FR-PROF-05)
 
 
 class PreviewOut(BaseModel):
@@ -177,12 +183,18 @@ async def stop_sharing(course_id: UUID, user: User, conn: Conn) -> Response:
 
 
 @router.get("/v1/courses/{course_id}/members")
-async def members(course_id: UUID, user: User, conn: Conn) -> list[MemberOut]:
-    """Who joined the owner's shared course, as display names only (FR-SHARE-07)."""
+async def members(
+    course_id: UUID, user: User, conn: Conn, photos: AvatarStorageDep
+) -> list[MemberOut]:
+    """Who joined the owner's shared course: display names, and photos only where the student
+    chose to show theirs (FR-SHARE-07, FR-PROF-05)."""
     try:
-        return [MemberOut(**m) for m in await sharing.members(conn, user.id, course_id)]
+        rows = await sharing.members(conn, user.id, course_id)
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found") from exc
+    return [
+        MemberOut(**m) for m in await with_photo_urls(photos, rows, "avatar_path", "avatar_url")
+    ]
 
 
 @router.delete(
@@ -204,10 +216,13 @@ async def report_course(course_id: UUID, body: CourseReportIn, user: User, conn:
 
 
 @router.get("/v1/coursemates")
-async def coursemates(user: User, conn: Conn) -> list[CoursemateOut]:
+async def coursemates(user: User, conn: Conn, photos: AvatarStorageDep) -> list[CoursemateOut]:
     """People who already share a course with the student, as quick picks on screen 19.
     Blocked people never appear (FR-SHARE-09)."""
-    return [CoursemateOut(**m) for m in await sharing.coursemates(conn, user.id)]
+    rows = await with_photo_urls(
+        photos, await sharing.coursemates(conn, user.id), "avatar_path", "avatar_url"
+    )
+    return [CoursemateOut(**m) for m in rows]
 
 
 @router.get("/v1/shares/code/{code}")

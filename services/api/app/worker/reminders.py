@@ -9,7 +9,8 @@ from datetime import date, datetime, time, timedelta
 
 from psycopg import AsyncConnection
 
-from app.domain import notifications, usage
+from app.core.config import get_settings
+from app.domain import notifications, plans, usage
 from app.worker import progress
 from app.worker.push import in_quiet_hours
 
@@ -19,6 +20,8 @@ TICK = timedelta(minutes=15)
 MAX_A_DAY = 2
 EXAM_DAYS = (7, 3, 1)  # countdown reminders this many days before an exam
 RECAP_AT = time(18, 0)  # Sunday 6 PM local
+PLAN_AT = time(17, 0)  # plan reminders, 5 PM local, at most once a week (FR-PLAN-05)
+PLAN_HIT_DAYS = 2  # only after running out on 2 or more days in the last week
 SUNDAY = 6
 
 
@@ -166,6 +169,50 @@ async def schedule_reminders(conn: AsyncConnection) -> int:
                 sent += await _exams(conn, student, today)
         if today.weekday() == SUNDAY and in_window(now, RECAP_AT) and types.get("recap", True):
             sent += await _recap(conn, student, today)
+        if in_window(now, PLAN_AT) and types.get("plans", True):
+            sent += await _plan_reminder(conn, student, today)
     if sent:
         log.info("reminders sent: %d", sent)
+    return sent
+
+
+async def _plan_reminder(conn: AsyncConnection, student: dict, today: date) -> bool:
+    """FR-PLAN-05: a free student who ran out of something on 2+ days this week hears, once a week,
+    what Student gives. Kind copy, no countdown; off in Reminders → Plan tips."""
+    if await plans.effective_plan(conn, student["id"], get_settings()) in plans.PAID:
+        return False
+    recent = await (
+        await conn.execute(
+            "select plan_reminded_at > now() - interval '7 days' as recent from profiles "
+            "where id = %s",
+            (student["id"],),
+        )
+    ).fetchone()
+    if recent and recent["recent"]:
+        return False
+    hits = await (
+        await conn.execute(
+            "select resource::text as resource, count(*) as days from limit_hits "
+            "where user_id = %s and day > %s - 7 group by resource order by days desc limit 1",
+            (student["id"], today),
+        )
+    ).fetchone()
+    if not hits or hits["days"] < PLAN_HIT_DAYS:
+        return False
+    name = plans.NAMES[hits["resource"]]
+    more = plans.PAID_LIMITS["student"][hits["resource"]]
+    sent = await _send(
+        conn,
+        student,
+        "plan_reminder",
+        f"You ran out of {name} on {hits['days']} days this week",
+        f"Student gives you {more} a day, and unused ones save up for a week. "
+        f"You can try it free for {get_settings().trial_days} days.",
+        {"route": "/plans"},
+        f"plan:{today.isocalendar()[0]}-{today.isocalendar()[1]}",
+    )
+    if sent:
+        await conn.execute(
+            "update profiles set plan_reminded_at = now() where id = %s", (student["id"],)
+        )
     return sent

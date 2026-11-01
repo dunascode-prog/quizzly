@@ -42,14 +42,22 @@ class Route(BaseModel):
     # USD per million tokens, for the estimated cost in llm_calls (FR-LIM-02). 0 on free tiers.
     price_in: float = 0.0
     price_out: float = 0.0
+    # List price per million tokens on the paid tier, even while we run free: each student's
+    # monthly AI allowance is measured with these (FR-LIM-06). 0 for free-only providers.
+    ref_price_in: float = 0.0
+    ref_price_out: float = 0.0
 
 
 class ModelsConfig(BaseModel):
     providers: dict[str, Provider]
     profiles: dict[str, list[Route]]
     tasks: dict[str, str]
+    # Free-plan overrides of `tasks` (FR-LIM-04); paid plans use `tasks`.
+    free_tasks: dict[str, str] = {}
 
-    def routes_for(self, task: str) -> list[Route]:
+    def routes_for(self, task: str, plan: str = "free") -> list[Route]:
+        if plan == "free" and task in self.free_tasks:
+            return self.profiles[self.free_tasks[task]]
         return self.profiles[self.tasks[task]]
 
 
@@ -61,7 +69,7 @@ def load_models_config(path: Path) -> ModelsConfig:
         for route in routes:
             if route.provider not in config.providers:
                 raise ValueError(f"profile {profile!r} uses unknown provider {route.provider!r}")
-    for task, profile in config.tasks.items():
+    for task, profile in [*config.tasks.items(), *config.free_tasks.items()]:
         if profile not in config.profiles:
             raise ValueError(f"task {task!r} uses unknown profile {profile!r}")
     return config

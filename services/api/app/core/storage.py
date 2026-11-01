@@ -9,9 +9,11 @@ from app.core.config import Settings
 
 
 class Storage:
-    def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None):
+    def __init__(
+        self, settings: Settings, client: httpx.AsyncClient | None = None, bucket: str | None = None
+    ):
         self.base = f"{settings.supabase_url.rstrip('/')}/storage/v1"
-        self.bucket = settings.storage_bucket
+        self.bucket = bucket or settings.storage_bucket
         key = settings.supabase_service_role_key
         self.headers = {"apikey": key, "Authorization": f"Bearer {key}"}
         self.client = client or httpx.AsyncClient(timeout=120)
@@ -84,6 +86,22 @@ class Storage:
         )
         r.raise_for_status()
         return f"{self.base}{r.json()['signedURL']}"
+
+    async def signed_urls(self, paths: list[str], expires_in: int = 300) -> dict[str, str]:
+        """{path: URL} for several files in one request; files that don't exist are left out."""
+        if not paths:
+            return {}
+        r = await self.client.post(
+            f"{self.base}/object/sign/{self.bucket}",
+            headers=self.headers,
+            json={"expiresIn": expires_in, "paths": paths},
+        )
+        r.raise_for_status()
+        return {
+            item["path"]: f"{self.base}{item['signedURL']}"
+            for item in r.json()
+            if item.get("signedURL") and not item.get("error")
+        }
 
     async def upload(self, path: str, data: bytes, content_type: str) -> None:
         """Writes a file the server made (e.g. a rendered page), replacing any earlier copy."""

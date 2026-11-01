@@ -16,16 +16,21 @@ from app.domain import notifications
 from app.domain.sharing import normalise_code, normalise_invite_code
 from app.worker import queue
 
-ANSWERS_NEEDED = 5
 MAX_CREDITS = 50  # per inviter
-LAVENDER_AT = 3  # credited friends unlock the Lavender theme (FR-INV-05)
+LAVENDER_AT = 3  # credits unlock the Lavender theme (FR-INV-05)
+DISCOUNT_AT = 5  # credits unlock 10% off Student or Premium (FR-INV-05)
+DISCOUNT_PERCENT = 10
+STUDY_DAYS_NEEDED = 3  # a friend counts after studying on 3 different days (FR-INV-03)
 
 
 async def my_invite(conn: AsyncConnection, user_id: UUID, invite_domain: str) -> dict | None:
-    """Screen 23: the link, credited friends (display names only) and the next reward."""
+    """Screen 23: the link, credits, friends (display names only, counted or getting started) and
+    the next reward (FR-INV-04)."""
     me = await (
         await conn.execute(
-            "select invite_code from profiles where id = %s and deleted_at is null", (user_id,)
+            "select invite_code, discount_unlocked_at, discount_seen_at from profiles "
+            "where id = %s and deleted_at is null",
+            (user_id,),
         )
     ).fetchone()
     if me is None:
@@ -33,23 +38,49 @@ async def my_invite(conn: AsyncConnection, user_id: UUID, invite_domain: str) ->
     friends = await (
         await conn.execute(
             """
-            select p.display_name, r.credited_at from referrals r
+            select p.display_name, r.credited_at, r.study_days,
+                   case when r.status = 'credited' then 'counted' else 'started' end as state
+            from referrals r
             join profiles p on p.id = r.invitee_id
-            where r.inviter_id = %s and r.status = 'credited'
-            order by r.credited_at desc
+            where r.inviter_id = %s and r.status in ('credited', 'pending')
+              and p.deleted_at is null
+            order by r.status = 'credited' desc, r.credited_at desc nulls last, r.created_at desc
             """,
             (user_id,),
         )
     ).fetchall()
-    n = len(friends)
+    n = sum(f["state"] == "counted" for f in friends)
+    if n < LAVENDER_AT:
+        next_reward = {"kind": "lavender", "at": LAVENDER_AT, "percent": None}
+    elif n < DISCOUNT_AT:
+        next_reward = {"kind": "discount", "at": DISCOUNT_AT, "percent": DISCOUNT_PERCENT}
+    else:
+        next_reward = None
+    unlocked = me["discount_unlocked_at"] is not None
     return {
         "code": me["invite_code"],
         "link": f"https://{invite_domain}/i/{me['invite_code']}",
         "friends": friends,
         "credited": n,
-        "next_reward": None if n >= LAVENDER_AT else {"theme": "lavender", "at": LAVENDER_AT},
+        "next_reward": next_reward,
         "lavender_unlocked": n >= LAVENDER_AT,
+        "discount": {
+            "percent": DISCOUNT_PERCENT,
+            "at": DISCOUNT_AT,
+            "unlocked": unlocked,
+            # 23c is shown once (FR-INV-05).
+            "celebrate": unlocked and me["discount_seen_at"] is None,
+        },
     }
+
+
+async def mark_reward_seen(conn: AsyncConnection, user_id: UUID) -> None:
+    """The 23c celebration was shown; it isn't shown again."""
+    await conn.execute(
+        "update profiles set discount_seen_at = now() "
+        "where id = %s and discount_unlocked_at is not null and discount_seen_at is null",
+        (user_id,),
+    )
 
 
 async def _inviter_for(conn: AsyncConnection, code: str, channel: str) -> UUID | None:
@@ -107,7 +138,8 @@ async def claim(
 
 
 async def ready_for_credit(conn: AsyncConnection, user_id: UUID) -> bool:
-    """Email verified, onboarding finished, and at least 5 questions answered (FR-INV-03)."""
+    """Email verified, onboarding finished, and studied on 3 different days in their own time zone
+    (FR-INV-03): a quiz, flashcards or a Daily 5 each make a study day."""
     row = await (
         await conn.execute(
             """
@@ -115,22 +147,25 @@ async def ready_for_credit(conn: AsyncConnection, user_id: UUID) -> bool:
               (select email_confirmed_at is not null from auth.users where id = %(u)s) as verified,
               ((p.institution_id is not null or p.institution_other is not null)
                 and p.level is not null and p.terms_accepted_at is not null) as onboarded,
-              (select count(*) from attempt_answers aa
-               join quiz_attempts a on a.id = aa.attempt_id where a.user_id = %(u)s) as answers
+              (select count(*) from study_days s where s.user_id = %(u)s and s.counted) as days
             from profiles p where p.id = %(u)s and p.deleted_at is null
             """,
             {"u": user_id},
         )
     ).fetchone()
-    return bool(row and row["verified"] and row["onboarded"] and row["answers"] >= ANSWERS_NEEDED)
+    return bool(row and row["verified"] and row["onboarded"] and row["days"] >= STUDY_DAYS_NEEDED)
 
 
 async def check(conn: AsyncConnection, user_id: UUID) -> None:
-    """Queues the credit job once a pending referral's conditions are met. Cheap to call after
-    onboarding, after a claim, and after each finished quiz."""
+    """Keeps the friend's study-day progress up to date for screen 23, and queues the credit job
+    once a pending referral's conditions are met. Cheap to call after onboarding, after a claim,
+    and after each finished quiz."""
     pending = await (
         await conn.execute(
-            "select 1 from referrals where invitee_id = %s and status = 'pending'", (user_id,)
+            "update referrals set study_days = least(%s, (select count(*) from study_days s "
+            "where s.user_id = %s and s.counted)) "
+            "where invitee_id = %s and status = 'pending' returning id",
+            (STUDY_DAYS_NEEDED, user_id, user_id),
         )
     ).fetchone()
     if pending and await ready_for_credit(conn, user_id):
@@ -189,10 +224,12 @@ async def credit(conn: AsyncConnection, invitee_id: UUID) -> str | None:
             await _reject(conn, r["id"], "cap_reached")
             return "cap_reached"
         await conn.execute(
-            "update referrals set status = 'credited', credited_at = now() where id = %s",
-            (r["id"],),
+            "update referrals set status = 'credited', credited_at = now(), study_days = %s "
+            "where id = %s",
+            (STUDY_DAYS_NEEDED, r["id"]),
         )
         n = count + 1
+        await conn.execute("update profiles set credits = %s where id = %s", (n, r["inviter_id"]))
         friend = await (
             await conn.execute("select display_name from profiles where id = %s", (invitee_id,))
         ).fetchone()
@@ -201,8 +238,7 @@ async def credit(conn: AsyncConnection, invitee_id: UUID) -> str | None:
             r["inviter_id"],
             "invite_joined",
             f"{friend['display_name']} joined Quizzly with your invite",
-            f"{n} friend{'s' if n != 1 else ''} joined"
-            + ("" if n >= LAVENDER_AT else f" · {LAVENDER_AT - n} more to unlock Lavender"),
+            f"{n} credit{'s' if n != 1 else ''}" + _next_line(n),
             {"route": "/invite"},
             actor_id=invitee_id,
             dedupe_key=f"invite:{r['inviter_id']}:joined",
@@ -213,4 +249,32 @@ async def credit(conn: AsyncConnection, invitee_id: UUID) -> str | None:
                 "on conflict do nothing",
                 (r["inviter_id"], json.dumps({"theme": "lavender"})),
             )
+        if n >= DISCOUNT_AT:
+            unlocked = await (
+                await conn.execute(
+                    "update profiles set discount_unlocked_at = now() "
+                    "where id = %s and discount_unlocked_at is null returning id",
+                    (r["inviter_id"],),
+                )
+            ).fetchone()
+            if unlocked:  # once (FR-INV-05)
+                await notifications.notify(
+                    conn,
+                    r["inviter_id"],
+                    "invite_reward",
+                    f"You unlocked {DISCOUNT_PERCENT}% off",
+                    f"{DISCOUNT_AT} friends are studying with Quizzly because of you. "
+                    f"Student and Premium are now {DISCOUNT_PERCENT}% off for you.",
+                    {"route": "/invite/unlocked"},
+                    dedupe_key=f"invite:{r['inviter_id']}:reward",
+                )
         return "credited"
+
+
+def _next_line(n: int) -> str:
+    """For the invite_joined notification: what the next reward needs."""
+    if n < LAVENDER_AT:
+        return f" · {LAVENDER_AT - n} more to unlock Lavender"
+    if n < DISCOUNT_AT:
+        return f" · {DISCOUNT_AT - n} more for {DISCOUNT_PERCENT}% off"
+    return ""

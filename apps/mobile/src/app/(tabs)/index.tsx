@@ -6,6 +6,7 @@ import { ArrowRight, Bell as BellIcon, X } from '@/components/icons';
 import { ProfileHeader } from '@/components/profile-header';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
+import { ExamPlanCard } from '@/components/exam-plan-card';
 import { CountdownCard } from '@/components/ui/countdown-card';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { IconButton } from '@/components/ui/icon-button';
@@ -209,6 +210,7 @@ export default function TodayScreen() {
                 : router.push('/course/new')
             }
           />
+          <ExamPlanCard countdown={data.countdown} />
           <WeekStrip days={data.week.days} today={data.today} studyDays={data.week.study_days} goal={data.week.goal} />
 
           <View style={styles.section}>

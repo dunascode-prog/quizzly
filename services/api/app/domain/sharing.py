@@ -11,7 +11,7 @@ from uuid import UUID
 
 from psycopg import AsyncConnection, errors
 
-from app.domain import notifications, usage
+from app.domain import avatars, notifications, usage
 from app.worker import queue
 
 CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford base32: no I, L, O, U
@@ -99,7 +99,7 @@ async def coursemates(conn: AsyncConnection, user_id: UUID) -> list[dict[str, An
     Blocked people (either way) never appear (FR-SHARE-09)."""
     return await (
         await conn.execute(
-            """
+            f"""
             with mates as (
               select s.owner_id as user_id from course_members m
               join course_shares s on s.id = m.share_id and s.status = 'active'
@@ -109,7 +109,9 @@ async def coursemates(conn: AsyncConnection, user_id: UUID) -> list[dict[str, An
               join course_members m on m.share_id = s.id and m.status = 'active'
               where s.owner_id = %(u)s and s.status = 'active'
             )
-            select p.id as user_id, p.display_name from mates
+            select p.id as user_id, p.display_name,
+                   {avatars.shown_path_sql("%(u)s")} as avatar_path
+            from mates
             join profiles p on p.id = mates.user_id and p.deleted_at is null
             where mates.user_id <> %(u)s
               and not exists (select 1 from user_blocks b
@@ -253,14 +255,16 @@ async def members(conn: AsyncConnection, owner: UUID, course_id: UUID) -> list[d
         raise LookupError
     return await (
         await conn.execute(
-            """
-            select m.id as member_id, p.display_name, m.status::text as status, m.joined_at
+            f"""
+            select m.id as member_id, p.id as user_id, p.display_name, m.status::text as status,
+                   m.joined_at, {avatars.shown_path_sql("%(owner)s")} as avatar_path
             from course_shares s join course_members m on m.share_id = s.id
             join profiles p on p.id = m.user_id
-            where s.course_id = %s and s.status = 'active' and m.status in ('pending', 'active')
+            where s.course_id = %(course)s and s.status = 'active'
+              and m.status in ('pending', 'active')
             order by m.status, p.display_name
             """,
-            (course_id,),
+            {"course": course_id, "owner": owner},
         )
     ).fetchall()
 
