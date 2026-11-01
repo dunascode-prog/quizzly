@@ -303,3 +303,5 @@ def test_deleting_an_account_removes_access(make_student, supabase):
         json={"email": s.email, "password": s.password},
     )
     assert r.status_code != 200
+    gone = supabase.http.get(f"{supabase.url}/auth/v1/admin/users/{s.id}", headers=supabase.admin)
+    assert gone.status_code == 404

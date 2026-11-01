@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 from app.api import routes
 from app.core import auth
@@ -217,6 +217,32 @@ def test_me_with_jwks_signed_token(client, settings, monkeypatch):
     token = make_token(private_key, algorithm="RS256")
     response = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
+
+
+def test_me_with_es256_token_while_a_legacy_secret_is_set(client, settings, monkeypatch):
+    """New Supabase projects sign with ES256 even when the legacy secret is configured too."""
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    assert settings.supabase_jwt_secret
+
+    class FakeJwksClient:
+        def get_signing_key_from_jwt(self, _token):
+            return jwt.PyJWK.from_dict(
+                {
+                    **jwt.algorithms.ECAlgorithm.to_jwk(private_key.public_key(), as_dict=True),
+                    "alg": "ES256",
+                }
+            )
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda url: FakeJwksClient())
+    token = make_token(private_key, algorithm="ES256")
+    response = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+
+
+def test_hs256_tokens_need_the_secret(client, settings):
+    settings.supabase_jwt_secret = ""
+    token = make_token(JWT_SECRET)
+    assert client.get("/v1/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
 
 
 def test_onboarding_needs_institution_level_and_terms(client, profiles):
