@@ -79,7 +79,10 @@ ERROR = {
     "required": ["detail"],
 }
 
-EXPORT_PATH = Path(__file__).resolve().parents[4] / "docs" / "api" / "openapi.json"
+# docs/api/openapi.json in the repository. The server image has no docs folder (the file sits only
+# three folders deep there), so this is None and the API still starts.
+_PARENTS = Path(__file__).resolve().parents
+EXPORT_PATH = _PARENTS[4] / "docs" / "api" / "openapi.json" if len(_PARENTS) > 4 else None
 
 
 def _tidy(schema: dict[str, Any]) -> None:
@@ -120,6 +123,7 @@ def export(app: FastAPI) -> str:
 if __name__ == "__main__":
     from app.main import create_app
 
+    assert EXPORT_PATH is not None, "run this from the repository, not the server image"
     EXPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     EXPORT_PATH.write_text(export(create_app()), encoding="utf-8", newline="\n")
     sys.stdout.write(f"Wrote {EXPORT_PATH}\n")
