@@ -150,10 +150,29 @@ class Supabase:
         return r.json()["id"]
 
     def sign_in(self, email: str, password: str) -> str:
+        """A session for the test student. With the sign-in CAPTCHA on (production), a password
+        sign-in is refused without a solved challenge, so the tests use an admin-made one-time link
+        instead; the CAPTCHA stays on for everyone else."""
         r = self.http.post(
             f"{self.url}/auth/v1/token?grant_type=password",
             headers={"apikey": self.anon},
             json={"email": email, "password": password},
+        )
+        if r.status_code == 200:
+            return r.json()["access_token"]
+        assert "captcha" in r.text, r.text
+        link = self.http.post(
+            f"{self.url}/auth/v1/admin/generate_link",
+            headers=self.admin,
+            json={"type": "magiclink", "email": email},
+        )
+        assert link.status_code == 200, link.text
+        body = link.json()
+        token_hash = body.get("hashed_token") or body["properties"]["hashed_token"]
+        r = self.http.post(
+            f"{self.url}/auth/v1/verify",
+            headers={"apikey": self.anon},
+            json={"type": "magiclink", "token_hash": token_hash},
         )
         assert r.status_code == 200, r.text
         return r.json()["access_token"]

@@ -39,8 +39,14 @@ CLOCK_LEEWAY_S = 30
 
 
 def decode_token(token: str, settings: Settings) -> dict:
+    """Verifies a Supabase session token. Projects sign with the legacy shared secret (HS256) or
+    with asymmetric signing keys (ES256/RS256, published as JWKS); a project can have both while it
+    migrates, so the token's own header picks the method. Each method accepts only its own
+    algorithms: HS256 only with the secret, ES256/RS256 only with a key from the project's JWKS."""
     options = {"require": ["exp", "sub", "aud"]}
-    if settings.supabase_jwt_secret:
+    if jwt.get_unverified_header(token).get("alg") == "HS256":
+        if not settings.supabase_jwt_secret:
+            raise jwt.InvalidTokenError("HS256 token, but no JWT secret is configured")
         return jwt.decode(
             token,
             settings.supabase_jwt_secret,

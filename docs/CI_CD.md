@@ -125,7 +125,7 @@ In Oracle Cloud, ports 80 and 443 must be open twice: in the VCN's security list
 |---|---|---|
 | Variable `API_URL` | `https://staging-api.quizzly.app` | `https://api.quizzly.app` |
 | Secret `SUPABASE_DB_URL` | Staging project's connection string | Production project's connection string |
-| Variable `SUPABASE_URL` | Staging project URL | Production project URL |
+| Variable `SUPABASE_URL` | Staging project URL | Production project URL: `https://<ref>.supabase.co` only, without `/rest/v1/` |
 | Variable `SUPABASE_ANON_KEY` | Staging anon key (public, the app ships it) | Production anon key |
 | Secret `E2E_SUPABASE_SERVICE_KEY` | Staging service-role key, for the end-to-end tests' throwaway students | Production service-role key (optional: without it only `smoke.sh` runs) |
 | Deployment branches and tags | `main` | Tags `v*`, and `main` (so **Rollback** can run) |
