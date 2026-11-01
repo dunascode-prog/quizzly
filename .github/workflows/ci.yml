@@ -215,3 +215,5 @@ jobs:
       - name: The API and worker start inside the image
         run: |
           docker run --rm -e ENV=test quizzly-api:ci python -c "import app.main, app.worker.main"
+          # The embedding model is in the image and loads offline, as the app user (ingest and chat).
+          docker run --rm --network none -e ENV=test quizzly-api:ci python -c             "from app.rag import embed; from app.core.config import Settings; embed.load(Settings(_env_file=None).embedding_model); print('model ok')"
