@@ -6,7 +6,7 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
-from app.llm.gateway import AllProvidersBusy
+from app.llm.gateway import AllProvidersBusy, Completion
 from app.rag import explain
 from app.worker import ingest
 
@@ -34,6 +34,42 @@ async def _topic_chunks(conn: AsyncConnection, row: dict) -> list[explain.Source
             )
         ).fetchall()
     return [explain.SourceChunk(**r) for r in rows]
+
+
+CITE_REMINDER = (
+    "\n\nImportant: cite the page each fact comes from as [p. N] after the paragraph, bullet or "
+    "table row that states it, using only page numbers from the notes above."
+)
+
+
+async def write(gateway, prompt: str, allowed: set[int]) -> tuple[str, list[int], Completion]:
+    """The explanation's Markdown, the pages it cites, and the completion that wrote it.
+
+    Every AI answer shows its pages (FR-EXPL-02). Small free models now and then leave the [p. N]
+    tags out, so an answer without any is asked for once more with a reminder (rare, so cheap).
+    If it's still missing them, the topic's own pages are its sources: it was written only from
+    them."""
+
+    async def ask(text: str) -> tuple[str, list[int], Completion]:
+        completion = await gateway.complete(
+            "explanation", [{"role": "user", "content": text}], temperature=0.3, max_tokens=4096
+        )
+        markdown, cited = explain.clean_citations(explain.strip_fence(completion.text), allowed)
+        if len(markdown) < MIN_LENGTH:
+            raise ValueError(f"answer too short ({len(markdown)} chars) from {completion.model}")
+        return markdown, cited, completion
+
+    markdown, cited, completion = await ask(prompt)
+    if cited:
+        return markdown, cited, completion
+    log.warning("explanation without page citations from %s; asking again", completion.model)
+    try:
+        again = await ask(prompt + CITE_REMINDER)
+    except ValueError:
+        again = None
+    if again and again[1]:
+        return again
+    return markdown, sorted(allowed), completion
 
 
 async def generate_explanation(conn: AsyncConnection, job: dict) -> None:
@@ -64,12 +100,7 @@ async def generate_explanation(conn: AsyncConnection, job: dict) -> None:
             row["page_end"] or chunks[-1].page_end,
             chunks,
         )
-        completion = await ingest.gateway().complete(
-            "explanation", [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=4096
-        )
-        markdown, cited = explain.clean_citations(explain.strip_fence(completion.text), allowed)
-        if len(markdown) < MIN_LENGTH:
-            raise ValueError(f"answer too short ({len(markdown)} chars) from {completion.model}")
+        markdown, cited, completion = await write(ingest.gateway(), prompt, allowed)
         await conn.execute(
             "update explanations set content_md = %s, citations = %s, model = %s, "
             "status = 'ready' where id = %s",
