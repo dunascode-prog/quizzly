@@ -94,6 +94,25 @@ def test_students_cannot_read_each_others_rows_on_supabase(make_student, supabas
     assert all(row.get("id") == b.id for row in rows)
 
 
+def test_cost_and_usage_tables_are_not_readable_by_students(make_student, supabase):
+    """App-wide AI costs and other students' spending stay on the server (FR-SEC-01)."""
+    s = make_student()
+    for table in (
+        "daily_llm_cost",
+        "llm_daily_costs",
+        "llm_calls",
+        "ai_spend",
+        "rate_limits",
+        "jobs",
+    ):
+        r = httpx.get(
+            f"{supabase.url}/rest/v1/{table}?select=*&limit=5",
+            headers=supabase.as_app(s.token),
+            timeout=30,
+        )
+        assert r.status_code != 200 or r.json() == [], (table, r.status_code, r.text[:200])
+
+
 def test_storage_is_not_listable_or_writable_by_the_app(make_student, supabase):
     s = make_student()
     headers = supabase.as_app(s.token)
