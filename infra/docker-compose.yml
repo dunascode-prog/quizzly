@@ -1,11 +1,22 @@
-# Production-style stack for the Oracle Cloud Always Free VM (ARCHITECTURE §1).
-# Usage: cd infra && docker compose up -d --build
+# One environment (staging or production) of the API and worker on the Oracle Cloud Always Free VM
+# (ARCHITECTURE §1). CI runs it with a prebuilt image through deploy.sh; see README.md.
+# Caddy runs once for both environments (edge/) and reaches the API over the quizzly-edge network.
 services:
   api:
-    build: ../services/api
-    env_file: ../services/api/.env
+    image: ${API_IMAGE:-quizzly-api:local}
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      RELEASE: ${RELEASE:-}
+      # Only Caddy can reach the API (expose, not ports), and Caddy replaces X-Forwarded-For with
+      # the real address, so trust it. Without this every student shares Caddy's IP, and the
+      # per-IP limits (share-link lookups) would be one limit for everyone.
+      FORWARDED_ALLOW_IPS: "*"
     restart: unless-stopped
     expose: ["8000"]
+    networks:
+      default:
+      edge:
+        aliases: ["api-${QUIZZLY_ENV:-local}"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 30s
@@ -13,23 +24,16 @@ services:
       retries: 3
 
   worker:
-    build: ../services/api
-    env_file: ../services/api/.env
+    image: ${API_IMAGE:-quizzly-api:local}
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      RELEASE: ${RELEASE:-}
     command: ["python", "-m", "app.worker.main"]
     restart: unless-stopped
+    # A job cut off mid-run is retried as crashed (0007); let the current one finish first.
+    stop_grace_period: 60s
 
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports: ["80:80", "443:443"]
-    environment:
-      API_DOMAIN: ${API_DOMAIN:-localhost}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on: [api]
-
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  edge:
+    name: quizzly-edge
+    external: true

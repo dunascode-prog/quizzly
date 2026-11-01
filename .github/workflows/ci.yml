@@ -1,13 +1,22 @@
 name: CI
 
+# Runs on every pull request, and from deploy.yml before anything ships (see docs/CI_CD.md).
+# Make every job here a required check on main so nothing merges red.
 on:
   pull_request:
-  push:
-    branches: [main]
+    # labeled/unlabeled so adding `destructive-migration` re-runs migration-rules.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   api:
-    if: ${{ hashFiles('services/api/pyproject.toml') != '' }}
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: services/api } }
     steps:
@@ -17,6 +26,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
+      # The end-to-end suite needs a live API (deploys run it); here it must still import cleanly.
+      - run: uv run pytest -q e2e
 
   # NFR-11: on a pull request that changes prompts, the RAG pipeline or model routing, run the
   # evaluation set against the real models and fail if quality drops below evals/thresholds.json.
@@ -57,7 +68,6 @@ jobs:
         with: { name: eval-report, path: "evals/report.*", if-no-files-found: ignore }
 
   mobile:
-    if: ${{ hashFiles('apps/mobile/package.json') != '' }}
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: apps/mobile } }
     steps:
@@ -70,7 +80,6 @@ jobs:
       - run: npx expo-doctor
 
   web:
-    if: ${{ hashFiles('apps/web/package.json') != '' }}
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: apps/web } }
     steps:
@@ -95,10 +104,107 @@ jobs:
         env: { PGPASSWORD: postgres }
         run: |
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role service_role nologin;
           create schema auth;
-          create table auth.users (id uuid primary key, raw_user_meta_data jsonb);
+          create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb);
           create function auth.uid() returns uuid language sql as 'select null::uuid';
           create schema storage;
           create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint);
           SQL
           for f in supabase/migrations/*.sql; do psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f "$f"; done
+
+  # Applied migrations never change, and new ones must not break the code that's still running:
+  # deploys migrate first and can roll the code back, but never the schema (docs/CI_CD.md §4).
+  migration-rules:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Migrations are append-only and safe to roll back over
+        env:
+          BASE: origin/${{ github.base_ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          changed=$(git diff --name-status --no-renames "$BASE...HEAD" -- supabase/migrations)
+          if echo "$changed" | grep -qE '^[MD]'; then
+            echo "::error::An applied migration was edited or deleted. Add a new numbered file instead."
+            echo "$changed"
+            exit 1
+          fi
+          dupes=$(ls supabase/migrations | cut -d_ -f1 | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "::error::Two migrations share the number $dupes."
+            exit 1
+          fi
+          added=$(echo "$changed" | awk '$1 == "A" { print $2 }')
+          [ -z "$added" ] && { echo "No new migrations."; exit 0; }
+          max=$(git ls-tree --name-only "$BASE" supabase/migrations/ | sed -n 's#.*/\([0-9]*\)_.*#\1#p' | sort -n | tail -1)
+          for f in $added; do
+            n=$(basename "$f" | cut -d_ -f1)
+            if ! [[ $n =~ ^[0-9]+$ ]] || (( 10#$n <= 10#${max:-0} )); then
+              echo "::error file=$f::Number new migrations after ${max} (e.g. $(printf '%04d' $((10#${max:-0} + 1)))_name.sql)."
+              exit 1
+            fi
+          done
+          pattern='\b(drop[[:space:]]+(table|column|schema|type|function|view)|rename[[:space:]]+(to|column)|alter[[:space:]]+column[[:space:]]+[^[:space:]]+[[:space:]]+(type|set[[:space:]]+not[[:space:]]+null)|truncate)\b'
+          if grep -inE "$pattern" $added; then
+            if [[ ",$LABELS," == *",destructive-migration,"* ]]; then
+              echo "::warning::Destructive migration allowed by the destructive-migration label."
+            else
+              echo "::error::This migration drops, renames or tightens something the running code may use, so a"
+              echo "::error::rollback would break. Split it: ship the code that stops using it first, drop it in a"
+              echo "::error::later release, and add the destructive-migration label to that PR."
+              exit 1
+            fi
+          fi
+
+  # Secrets anywhere in git history, Semgrep's high-severity rules for Python and TypeScript,
+  # bandit's high-severity Python checks, and known vulnerabilities in dependencies.
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Secrets (gitleaks)
+        env: { GITLEAKS_VERSION: 8.30.1 }
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner .
+      - uses: astral-sh/setup-uv@v5
+      - name: Code (semgrep)
+        run: |
+          uvx --from semgrep==1.182.1 semgrep scan --metrics off --error --severity ERROR \
+            --config p/python --config p/typescript --config p/react services apps
+      - name: Python code (bandit, high severity)
+        working-directory: services/api
+        run: uv run --frozen bandit -q -r app -lll
+      - name: Python dependencies (pip-audit)
+        working-directory: services/api
+        run: |
+          uv export --frozen --no-hashes --no-dev --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"
+          uv run --frozen pip-audit -r "$RUNNER_TEMP/requirements.txt" --progress-spinner off
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # Build tools (Expo CLI, Metro) have moderate advisories with no fix on this SDK; nothing
+      # critical may ship in the app.
+      - name: App dependencies (npm audit, critical)
+        working-directory: apps/mobile
+        run: npm audit --omit=dev --audit-level=critical
+
+  # The image builds for the VM's ARM CPU. Pull requests only: deploy.yml builds and pushes it.
+  api-image:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/api
+          platforms: linux/arm64
+          push: false
+          cache-from: type=gha,scope=api

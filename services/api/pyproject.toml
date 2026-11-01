@@ -16,12 +16,14 @@ dependencies = [
     "python-pptx>=1.0.2",
     "fastembed>=0.9.0",
     "pytesseract>=0.3.13",
-    "pillow>=12.3.0",
+    "pillow>=13.0.0",
     "sentry-sdk[fastapi]>=2.20",
 ]
 
 [dependency-groups]
 dev = [
+    "bandit>=1.9.4",
+    "pip-audit>=2.10.1",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
@@ -33,6 +35,12 @@ package = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "smoke: no account needed; safe on production after every deploy (e2e/)",
+    "security: probes with throwaway accounts, no AI calls (e2e/)",
+    "journey: the whole student journey with real AI calls; needs a worker (e2e/)",
+    "slow: takes a minute or more",
+]
 
 [tool.ruff]
 line-length = 100
