@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 # Tesseract for OCR on scanned pages (FR-DOC-07)
 RUN apt-get update \
