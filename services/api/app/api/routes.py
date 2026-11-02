@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.api.deps import AppSettings, AvatarStorageDep, Conn, StorageDep, User
 from app.core import auth_admin
 from app.core.auth import CurrentUser
+from app.core.config import Settings
 from app.domain import accounts, avatars, emails, invites, usage
 from app.worker import queue
 
@@ -95,7 +96,9 @@ class ProfileUpdate(BaseModel):
         return v.strip() or None if v is not None else None
 
 
-async def _me(user: CurrentUser, profile: dict[str, Any] | None, photos) -> MeOut:
+async def _me(
+    user: CurrentUser, profile: dict[str, Any] | None, photos, settings: Settings
+) -> MeOut:
     if profile is None:
         return MeOut(id=user.id, email=user.email)
     avatar_url = None
@@ -131,7 +134,7 @@ async def _me(user: CurrentUser, profile: dict[str, Any] | None, photos) -> MeOu
         avatar_visible=bool(profile.get("avatar_visible")),
         practice_times=profile.get("practice_times") or [],
         weekly_goal_days=profile.get("weekly_goal_days") or 4,
-        plan=profile.get("plan") or "free",
+        plan=settings.beta_plan or profile.get("plan") or "free",
         country=profile.get("country") or "NG",
         timezone=profile.get("timezone") or "Africa/Lagos",
     )
@@ -152,10 +155,10 @@ async def readyz(conn: Conn, settings: AppSettings) -> dict:
 
 
 @router.get("/v1/me", tags=["account"])
-async def me(user: User, conn: Conn, photos: AvatarStorageDep) -> MeOut:
+async def me(user: User, conn: Conn, photos: AvatarStorageDep, settings: AppSettings) -> MeOut:
     """The signed-in student's profile. The app keeps them in onboarding until it's complete
     (FR-PROF-01)."""
-    return await _me(user, await accounts.get_profile(conn, user.id), photos)
+    return await _me(user, await accounts.get_profile(conn, user.id), photos, settings)
 
 
 @router.patch("/v1/me", tags=["account"])
@@ -186,7 +189,7 @@ async def update_me(
     if "practice_times" in fields:
         await accounts.apply_practice_times(conn, user.id, fields["practice_times"])  # FR-PROF-06
     await invites.check(conn, user.id)  # finishing onboarding may credit their inviter
-    return await _me(user, profile, photos)
+    return await _me(user, profile, photos, settings)
 
 
 @router.put("/v1/me/avatar", tags=["account"])
@@ -225,11 +228,13 @@ async def put_avatar(
             await photos.remove([old])
         except httpx.HTTPError:
             log.warning("old profile photo not deleted yet")
-    return await _me(user, await accounts.get_profile(conn, user.id), photos)
+    return await _me(user, await accounts.get_profile(conn, user.id), photos, settings)
 
 
 @router.delete("/v1/me/avatar", tags=["account"])
-async def delete_avatar(user: User, conn: Conn, photos: AvatarStorageDep) -> MeOut:
+async def delete_avatar(
+    user: User, conn: Conn, photos: AvatarStorageDep, settings: AppSettings
+) -> MeOut:
     """Removes the profile photo and deletes the file (FR-PROF-04). Initials show again."""
     old = await avatars.clear_photo(conn, user.id)
     if old:
@@ -237,7 +242,7 @@ async def delete_avatar(user: User, conn: Conn, photos: AvatarStorageDep) -> MeO
             await photos.remove([old])
         except httpx.HTTPError:
             log.warning("removed profile photo not deleted from storage yet")
-    return await _me(user, await accounts.get_profile(conn, user.id), photos)
+    return await _me(user, await accounts.get_profile(conn, user.id), photos, settings)
 
 
 @router.delete("/v1/me", status_code=status.HTTP_204_NO_CONTENT, tags=["account"])

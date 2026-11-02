@@ -45,6 +45,7 @@ def request(method="GET", path="/v1/home"):
 def settings(per_minute=120):
     return SimpleNamespace(
         requests_per_minute=per_minute,
+        beta_plan="",
         monthly_ai_ceiling_free_usd=0.60,
         monthly_ai_ceiling_student_usd=2.00,
         monthly_ai_ceiling_premium_usd=3.50,

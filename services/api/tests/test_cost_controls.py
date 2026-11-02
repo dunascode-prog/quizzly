@@ -21,6 +21,7 @@ from app.llm.gateway import CallRecord, LLMGateway
 from app.worker import queue
 
 SETTINGS = SimpleNamespace(
+    beta_plan="",
     daily_uploads=5,
     daily_question_sets=15,
     daily_explanations=30,

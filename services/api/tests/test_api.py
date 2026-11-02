@@ -180,6 +180,14 @@ def test_me_with_valid_hs256_token(client):
     assert body["onboarded"] is False
 
 
+def test_me_reports_the_beta_plan_so_the_app_unlocks_everything(client, settings):
+    headers = auth_header()
+    client.patch("/v1/me", headers=headers, json={"department": "Computer Science"})
+    assert client.get("/v1/me", headers=headers).json()["plan"] == "free"
+    settings.beta_plan = "premium"
+    assert client.get("/v1/me", headers=headers).json()["plan"] == "premium"
+
+
 def test_token_issued_a_moment_in_the_future_is_accepted(client):
     # Supabase's clock can run ahead of ours; a fresh token mustn't fail the first request.
     now = int(time.time())
