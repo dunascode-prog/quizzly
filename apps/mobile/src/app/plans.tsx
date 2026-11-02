@@ -73,9 +73,11 @@ export default function PlansScreen() {
             disabled={!data || isCurrent}
           />
           <Text variant="small" color="textSecondary" style={styles.center}>
-            {trial
-              ? `${trial} days free, then billed monthly through Google Play. Cancel any time.`
-              : 'Billed monthly through Google Play. Cancel any time.'}
+            {data?.beta
+              ? 'Every feature is unlocked during the beta, free of charge.'
+              : trial
+                ? `${trial} days free, then billed monthly through Google Play. Cancel any time.`
+                : 'Billed monthly through Google Play. Cancel any time.'}
           </Text>
         </>
       }>

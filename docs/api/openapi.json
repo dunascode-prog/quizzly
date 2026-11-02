@@ -7344,6 +7344,10 @@
             "type": "boolean",
             "title": "Payments Ready"
           },
+          "beta": {
+            "type": "boolean",
+            "title": "Beta"
+          },
           "plans": {
             "items": {
               "$ref": "#/components/schemas/PlanOut"
@@ -7360,6 +7364,7 @@
           "discount_percent",
           "invite_offer_id",
           "payments_ready",
+          "beta",
           "plans"
         ],
         "title": "PlansOut"

@@ -50,6 +50,8 @@ export type Plans = {
   discount_percent: number | null;
   invite_offer_id: string | null;
   payments_ready: boolean;
+  /** A beta build: every account has `current` free of charge. */
+  beta: boolean;
   plans: Plan[];
 };
 

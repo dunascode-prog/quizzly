@@ -73,8 +73,9 @@ def ceiling_usd(settings, plan: str) -> float:
 def effective(settings, row: dict | None) -> str:
     """free, student or premium as the student may use them now, or capped (no new AI work)."""
     if row is None:
-        return "free"
+        return settings.beta_plan or "free"
     plan = row["plan"] if row["active"] and row["plan"] in PAID else "free"
+    plan = settings.beta_plan or plan
     spent = row["spent_micro"] / 1_000_000
     if plan in PAID:
         return plan if spent < ceiling_usd(settings, plan) else "free"

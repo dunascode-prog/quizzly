@@ -19,6 +19,7 @@ log = logging.getLogger("quizzly.api")
 router = APIRouter(tags=["plans"])
 
 NOT_READY = "Payments aren't available yet. Free stays free in the meantime."
+IN_BETA = "Every feature is unlocked during the beta, so there's nothing to buy."
 NOT_FOUND = "We couldn't find that purchase. If you were charged, contact Quizzly support."
 NOT_YOURS = "This purchase belongs to another account."
 NO_OFFER = "The invite price is for students who unlocked it with 5 credits."
@@ -65,6 +66,7 @@ class PlansOut(BaseModel):
     discount_percent: int | None  # set when 5 credits unlocked the invite reward
     invite_offer_id: str | None  # the Play offer to apply when the discount is unlocked
     payments_ready: bool
+    beta: bool  # a beta build: every account has `current` free of charge
     plans: list[PlanOut]
 
 
@@ -76,12 +78,13 @@ async def list_plans(user: User, conn: Conn, settings: AppSettings, play: Play) 
     products = {"student": settings.play_student_product, "premium": settings.play_premium_product}
     paying = row is not None and row["active"] and row["plan"] in plans.PAID
     return PlansOut(
-        current=row["plan"] if paying else "free",
-        expires_at=row["plan_expires_at"] if paying else None,
+        current=settings.beta_plan or (row["plan"] if paying else "free"),
+        expires_at=row["plan_expires_at"] if paying and not settings.beta_plan else None,
         effective=user.plan,
         discount_percent=disc,
         invite_offer_id=settings.play_invite_offer if disc else None,
-        payments_ready=play.configured,
+        payments_ready=play.configured and not settings.beta_plan,
+        beta=bool(settings.beta_plan),
         plans=[
             PlanOut(**p, product_id=products.get(p["id"])) for p in plans.catalogue(settings, disc)
         ],
@@ -105,6 +108,8 @@ async def purchase(
     """The app sends the Play purchase token after checkout. The plan is given only after Google
     confirms the subscription, that it was bought for this account, and that the invite price was
     unlocked (FR-PLAN-03)."""
+    if settings.beta_plan:
+        raise HTTPException(status.HTTP_409_CONFLICT, IN_BETA)
     if not play.configured:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, NOT_READY)
     plan = plans.product_plan(settings, body.product_id)

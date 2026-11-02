@@ -165,6 +165,16 @@ A brand-new staging project needs nothing: the first deploy applies every migrat
 - Each build profile is its own app on the phone (`APP_VARIANT` in `eas.json`, read by `app.config.js`): `development` is **Quizzly Dev** (`app.quizzly.dev`), `preview` is **Quizzly Staging** (`app.quizzly.staging`), and `production` / `production-apk` are **Quizzly** (`app.quizzly`, the Play Store ID, never changes). `production-apk` is the same app as an installable APK for testers before the Play Store.
 - `expo-updates` is new native code, so the first run per channel starts a build. Install that build on test phones; later JavaScript-only changes arrive as updates.
 
+### Beta build (every feature unlocked)
+
+Beta testers use the **Quizzly Staging** app against the staging API, with every account on a paid plan. Plan gates are enforced by the API, so the unlock is a server setting, not an app flag.
+
+1. On the VM, add `BETA_PLAN=premium` to `/opt/quizzly/staging/.env` (or `student`), then restart the staging API and worker. `/v1/me` and `/v1/plans` now report Premium, and the app's padlocks open.
+2. Build the APK: `cd apps/mobile && eas build --profile preview --platform android`. Send testers the install link EAS prints. Later JavaScript-only changes reach them as updates on the `preview` channel.
+3. To end the beta, remove `BETA_PLAN` and restart. Accounts go back to their real plan.
+
+Daily limits, the monthly AI allowance per account and the daily AI budget (FR-SEC-08) still apply. Purchases are refused during the beta. Production refuses to start with `BETA_PLAN` set.
+
 ## 7. Releasing to production
 
 1. Check staging after the merges you want to ship.

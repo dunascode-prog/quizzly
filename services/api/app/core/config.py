@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -70,6 +71,9 @@ class Settings(BaseSettings):
     play_student_product: str = "quizzly_student"
     play_premium_product: str = "quizzly_premium"
     play_invite_offer: str = "invite-10"  # the 10% offer for 5 credits (FR-INV-05)
+    # Beta builds: every account gets this plan, so testers can use every feature without paying.
+    # Limits, the monthly AI allowance and the daily AI budget still apply. Never in production.
+    beta_plan: Literal["", "student", "premium"] = ""
     # Host of share and invite links (PRD Q4): https://{invite_domain}/c/{code}
     invite_domain: str = "quizzly.app"  # the same placeholder as apps/web and the app (WEB.md)
     # FR-SEC-08: a day's AI spend across all students; reaching either pauses new AI work.
@@ -90,6 +94,10 @@ class Settings(BaseSettings):
             raise RuntimeError(
                 f"Set ENV to one of {', '.join(ENVIRONMENTS)} (got {self.env!r}). "
                 "Quizzly won't start without knowing where it runs."
+            )
+        if self.production and self.beta_plan:
+            raise RuntimeError(
+                "BETA_PLAN gives every account a paid plan; it can't be set in production."
             )
 
     @property
