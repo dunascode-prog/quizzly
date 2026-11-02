@@ -162,6 +162,7 @@ A brand-new staging project needs nothing: the first deploy applies every migrat
 ### Expo (EAS)
 
 - Set the app's variables per EAS environment (`preview` → staging, `production` → production): `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_SENTRY_DSN`. For example `eas env:create --environment preview --name EXPO_PUBLIC_API_URL --value https://staging-api.quizzly.app --visibility plaintext`.
+- Each build profile is its own app on the phone (`APP_VARIANT` in `eas.json`, read by `app.config.js`): `development` is **Quizzly Dev** (`app.quizzly.dev`), `preview` is **Quizzly Staging** (`app.quizzly.staging`), and `production` / `production-apk` are **Quizzly** (`app.quizzly`, the Play Store ID, never changes). `production-apk` is the same app as an installable APK for testers before the Play Store.
 - `expo-updates` is new native code, so the first run per channel starts a build. Install that build on test phones; later JavaScript-only changes arrive as updates.
 
 ## 7. Releasing to production
