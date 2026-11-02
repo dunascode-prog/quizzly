@@ -195,21 +195,21 @@ def supabase() -> Iterator[Supabase]:
 @pytest.fixture(scope="session")
 def make_student(api, supabase) -> Iterator[Callable[..., Student]]:
     """Makes throwaway students; every one is deleted at the end of the run."""
-    made: list[Student] = []
+    made: list[str] = []  # user ids, recorded the moment each account exists
 
     def make(onboard: bool = True, email: str | None = None, name: str = "Ada Test") -> Student:
         email = email or f"e2e-{secrets.token_hex(5)}@example.com"
         password = secrets.token_urlsafe(16)
         uid = supabase.create(email, password)
+        made.append(uid)  # before signing in: a failed sign-in must not leave the account behind
         student = Student(uid, email, password, supabase.sign_in(email, password), api)
-        made.append(student)
         if onboard:
             student.onboard(name)
         return student
 
     yield make
-    for s in made:
-        supabase.remove(s.id)
+    for uid in made:
+        supabase.remove(uid)
 
 
 def wait_for(fetch: Callable[[], dict], done: Callable[[dict], bool], timeout: float, what: str):
