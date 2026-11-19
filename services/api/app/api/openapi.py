@@ -19,9 +19,10 @@ change goes through here, so ownership is always checked (FRD §2.16).
 
 ## Signing in
 
-Every `/v1` route needs `Authorization: Bearer <token>`, where the token is the Supabase access
-token of a signed-in student. To try routes here, click **Authorize** and paste one. You can get a
-token from the app's session, or from Supabase directly:
+Every `/v1` route except the public `links` ones needs `Authorization: Bearer <token>`, where the
+token is the Supabase access token of a signed-in student. To try routes here, click
+**Authorize** and paste one. You can get a token from the app's session, or from Supabase
+directly:
 
 ```
 curl -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \\
@@ -69,6 +70,10 @@ TAGS = [
     {"name": "notifications", "description": "Inbox, read state and push tokens."},
     {"name": "sharing", "description": "Sharing courses, joining by link, members and blocking."},
     {"name": "invites", "description": "Referral claims."},
+    {
+        "name": "links",
+        "description": "Public: what invite and share link pages show, and the iPhone waitlist.",
+    },
     {"name": "ops", "description": "Health check."},
 ]
 

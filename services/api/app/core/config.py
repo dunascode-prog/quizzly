@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     beta_plan: Literal["", "student", "premium"] = ""
     # Host of share and invite links (PRD Q4): https://{invite_domain}/c/{code}
     invite_domain: str = "quizzly.app"  # the same placeholder as apps/web and the app (WEB.md)
+    # Email the API sends itself (the iPhone waitlist confirmation, FR-INV-06) goes through Resend.
+    # Off until a key is set: sign-ups are kept, unconfirmed. Sign-in codes come from Supabase.
+    resend_api_key: str = ""
+    mail_from: str = ""  # e.g. "Quizzly <hello@quizzly.app>"; defaults to hello@{invite_domain}
     # FR-SEC-08: a day's AI spend across all students; reaching either pauses new AI work.
     daily_llm_token_budget: int = 5_000_000
     daily_llm_cost_budget_usd: float = 2.0
