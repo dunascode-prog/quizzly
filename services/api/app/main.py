@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import (
+    admin,
     auth_bridge,
     chat,
     courses,
@@ -147,6 +148,7 @@ def create_app() -> FastAPI:
     app.include_router(sharing.router)
     app.include_router(invites.router)
     app.include_router(links.router)
+    app.include_router(admin.router)
     app.include_router(plans.router)
     app.include_router(chat.router)
     openapi.install(app)

@@ -23,6 +23,20 @@ The API starts without a database (it logs a warning), so `/healthz` works befor
 On Windows, keep `--reload` or add `--loop asyncio:SelectorEventLoop`: without either, uvicorn uses the
 Proactor event loop, which psycopg's async mode can't use, and every database call fails.
 
+## Admin access
+
+`/admin/*` (the admin app, WEB.md §3) needs a Supabase user with `app_metadata.role = "admin"` who
+signed in with their authenticator (2FA), so the token says `aal2`. Only the service role can set
+`app_metadata`, so make someone an admin in the Supabase SQL editor:
+
+```sql
+update auth.users set raw_app_meta_data = raw_app_meta_data || '{"role": "admin"}'
+where email = 'you@example.com';
+```
+
+They sign out and in again to get the new claim. Every admin write and every view of student data
+goes to `admin_audit_log`.
+
 ## API docs
 
 Swagger is at `/docs` when running locally. The exported spec and how to keep it current are in

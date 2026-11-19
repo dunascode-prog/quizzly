@@ -4299,6 +4299,312 @@
         }
       }
     },
+    "/admin/overview": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Overview",
+        "description": "30a: activity, sign-ups, documents, open reports, today's AI spend and system health.",
+        "operationId": "overview_admin_overview_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "today",
+                "7d",
+                "30d"
+              ],
+              "type": "string",
+              "default": "today",
+              "title": "Range"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/costs": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Costs",
+        "description": "30b: AI usage at list price and paid, per provider and task, and the costliest students.",
+        "operationId": "costs_admin_costs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "today",
+                "7d",
+                "30d"
+              ],
+              "type": "string",
+              "default": "30d",
+              "title": "Range"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/system": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "System",
+        "description": "30g: the job queue, worker heartbeat, job times, recent failures and AI breakers.",
+        "operationId": "system_admin_system_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/students/summary": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Students Summary",
+        "description": "30f tiles and tables: activity, weekly goals, retention, schools, how students found us.",
+        "operationId": "students_summary_admin_students_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentsSummaryOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/students": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Students",
+        "description": "30f table: display names, school, plan, activity, usage and status. No emails, notes or\nprogress. Each view is written to the audit log.",
+        "operationId": "students_admin_students_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "default": "",
+              "title": "Search"
+            }
+          },
+          {
+            "name": "school",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "School"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StudentRow"
+                  },
+                  "title": "Response Students Admin Students Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/plans": {
       "get": {
         "tags": [
@@ -5015,6 +5321,58 @@
         ],
         "title": "AttemptSummary"
       },
+      "Attention": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "reports": {
+            "type": "integer",
+            "title": "Reports"
+          },
+          "last_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last At"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "target_id",
+          "note",
+          "reason",
+          "reports",
+          "last_at",
+          "hidden"
+        ],
+        "title": "Attention"
+      },
       "BlockIn": {
         "properties": {
           "user_id": {
@@ -5060,6 +5418,24 @@
           "created_at"
         ],
         "title": "BlockedOut"
+      },
+      "Breaker": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "open": {
+            "type": "boolean",
+            "title": "Open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "open"
+        ],
+        "title": "Breaker"
       },
       "CelebrationOut": {
         "properties": {
@@ -5230,6 +5606,147 @@
           "token"
         ],
         "title": "ConfirmIn"
+      },
+      "CostDay": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "paid_usd": {
+            "type": "number",
+            "title": "Paid Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "paid_usd"
+        ],
+        "title": "CostDay"
+      },
+      "CostlyStudent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "school": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "School"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "plan": {
+            "type": "string",
+            "title": "Plan"
+          },
+          "list_usd": {
+            "type": "number",
+            "title": "List Usd"
+          },
+          "quiz_sets": {
+            "type": "integer",
+            "title": "Quiz Sets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "school",
+          "level",
+          "plan",
+          "list_usd",
+          "quiz_sets"
+        ],
+        "title": "CostlyStudent"
+      },
+      "CostsOut": {
+        "properties": {
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "free_calls": {
+            "type": "integer",
+            "title": "Free Calls"
+          },
+          "list_usd": {
+            "type": "number",
+            "title": "List Usd"
+          },
+          "paid_usd": {
+            "type": "number",
+            "title": "Paid Usd"
+          },
+          "active": {
+            "type": "integer",
+            "title": "Active"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/CostDay"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderCost"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskCost"
+            },
+            "type": "array",
+            "title": "Tasks"
+          },
+          "top_students": {
+            "items": {
+              "$ref": "#/components/schemas/CostlyStudent"
+            },
+            "type": "array",
+            "title": "Top Students"
+          },
+          "health": {
+            "$ref": "#/components/schemas/Health"
+          }
+        },
+        "type": "object",
+        "required": [
+          "calls",
+          "free_calls",
+          "list_usd",
+          "paid_usd",
+          "active",
+          "daily",
+          "providers",
+          "tasks",
+          "top_students",
+          "health"
+        ],
+        "title": "CostsOut"
       },
       "Countdown": {
         "properties": {
@@ -5986,6 +6503,46 @@
         "type": "object",
         "title": "ExplanationRequest"
       },
+      "Failure": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "job": {
+            "type": "string",
+            "title": "Job"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "max_attempts": {
+            "type": "integer",
+            "title": "Max Attempts"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job",
+          "at",
+          "attempts",
+          "max_attempts",
+          "reason"
+        ],
+        "title": "Failure"
+      },
       "FeedbackIn": {
         "properties": {
           "target_type": {
@@ -6091,6 +6648,49 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "waiting": {
+            "type": "integer",
+            "title": "Waiting"
+          },
+          "running": {
+            "type": "integer",
+            "title": "Running"
+          },
+          "failed_24h": {
+            "type": "integer",
+            "title": "Failed 24H"
+          },
+          "worker_beat_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Beat S"
+          },
+          "breakers": {
+            "items": {
+              "$ref": "#/components/schemas/Breaker"
+            },
+            "type": "array",
+            "title": "Breakers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "waiting",
+          "running",
+          "failed_24h",
+          "worker_beat_s",
+          "breakers"
+        ],
+        "title": "Health"
       },
       "HomeOut": {
         "properties": {
@@ -6234,6 +6834,53 @@
           "short_name"
         ],
         "title": "InstitutionOut"
+      },
+      "JobStats": {
+        "properties": {
+          "job": {
+            "type": "string",
+            "title": "Job"
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "p50_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50 S"
+          },
+          "p95_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 S"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "done",
+          "failed",
+          "p50_s",
+          "p95_s"
+        ],
+        "title": "JobStats"
       },
       "JoinIn": {
         "properties": {
@@ -7112,6 +7759,84 @@
         ],
         "title": "OutlineOut"
       },
+      "OverviewOut": {
+        "properties": {
+          "active": {
+            "type": "integer",
+            "title": "Active"
+          },
+          "active_month": {
+            "type": "integer",
+            "title": "Active Month"
+          },
+          "signups": {
+            "type": "integer",
+            "title": "Signups"
+          },
+          "invited": {
+            "type": "integer",
+            "title": "Invited"
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents"
+          },
+          "duplicates": {
+            "type": "integer",
+            "title": "Duplicates"
+          },
+          "open_reports": {
+            "type": "integer",
+            "title": "Open Reports"
+          },
+          "auto_hidden": {
+            "type": "integer",
+            "title": "Auto Hidden"
+          },
+          "cost_today": {
+            "type": "number",
+            "title": "Cost Today"
+          },
+          "daily_budget_usd": {
+            "type": "number",
+            "title": "Daily Budget Usd"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderDay"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "attention": {
+            "items": {
+              "$ref": "#/components/schemas/Attention"
+            },
+            "type": "array",
+            "title": "Attention"
+          },
+          "health": {
+            "$ref": "#/components/schemas/Health"
+          }
+        },
+        "type": "object",
+        "required": [
+          "active",
+          "active_month",
+          "signups",
+          "invited",
+          "documents",
+          "duplicates",
+          "open_reports",
+          "auto_hidden",
+          "cost_today",
+          "daily_budget_usd",
+          "providers",
+          "attention",
+          "health"
+        ],
+        "title": "OverviewOut"
+      },
       "PageImageOut": {
         "properties": {
           "url": {
@@ -7865,6 +8590,70 @@
         "type": "object",
         "title": "ProfileUpdate"
       },
+      "ProviderCost": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors"
+          },
+          "p50_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50 Ms"
+          },
+          "paid_usd": {
+            "type": "number",
+            "title": "Paid Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "calls",
+          "errors",
+          "p50_ms",
+          "paid_usd"
+        ],
+        "title": "ProviderCost"
+      },
+      "ProviderDay": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "cost": {
+            "type": "number",
+            "title": "Cost"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "day",
+          "cost"
+        ],
+        "title": "ProviderDay"
+      },
       "PurchaseIn": {
         "properties": {
           "product_id": {
@@ -8558,6 +9347,24 @@
         ],
         "title": "ReportIn"
       },
+      "School": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "students": {
+            "type": "integer",
+            "title": "Students"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "students"
+        ],
+        "title": "School"
+      },
       "SeenIn": {
         "properties": {
           "ids": {
@@ -8910,6 +9717,193 @@
         ],
         "title": "ShareOut"
       },
+      "Source": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
+          "n": {
+            "type": "integer",
+            "title": "N"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "n"
+        ],
+        "title": "Source"
+      },
+      "StudentRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "school": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "School"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "plan": {
+            "type": "string",
+            "title": "Plan"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_active": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Active"
+          },
+          "quiz_sets": {
+            "type": "integer",
+            "title": "Quiz Sets"
+          },
+          "ai_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Cost Usd"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "deleting"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "school",
+          "level",
+          "plan",
+          "created_at",
+          "last_active",
+          "quiz_sets",
+          "ai_cost_usd",
+          "status"
+        ],
+        "title": "StudentRow"
+      },
+      "StudentsSummaryOut": {
+        "properties": {
+          "active_month": {
+            "type": "integer",
+            "title": "Active Month"
+          },
+          "active_today": {
+            "type": "integer",
+            "title": "Active Today"
+          },
+          "new_week": {
+            "type": "integer",
+            "title": "New Week"
+          },
+          "invited_week": {
+            "type": "integer",
+            "title": "Invited Week"
+          },
+          "goal_met_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Met Share"
+          },
+          "week4_retention": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week4 Retention"
+          },
+          "schools": {
+            "items": {
+              "$ref": "#/components/schemas/School"
+            },
+            "type": "array",
+            "title": "Schools"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "active_month",
+          "active_today",
+          "new_week",
+          "invited_week",
+          "goal_met_share",
+          "week4_retention",
+          "schools",
+          "sources"
+        ],
+        "title": "StudentsSummaryOut"
+      },
       "StudyDaysOut": {
         "properties": {
           "today": {
@@ -8936,6 +9930,76 @@
           "study_days"
         ],
         "title": "StudyDaysOut"
+      },
+      "SystemOut": {
+        "properties": {
+          "health": {
+            "$ref": "#/components/schemas/Health"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobStats"
+            },
+            "type": "array",
+            "title": "Jobs"
+          },
+          "upload_to_ready": {
+            "$ref": "#/components/schemas/UploadTimes"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/Failure"
+            },
+            "type": "array",
+            "title": "Failures"
+          }
+        },
+        "type": "object",
+        "required": [
+          "health",
+          "jobs",
+          "upload_to_ready",
+          "failures"
+        ],
+        "title": "SystemOut"
+      },
+      "TaskCost": {
+        "properties": {
+          "task": {
+            "type": "string",
+            "title": "Task"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls"
+          },
+          "tokens_in": {
+            "type": "integer",
+            "title": "Tokens In"
+          },
+          "tokens_out": {
+            "type": "integer",
+            "title": "Tokens Out"
+          },
+          "list_usd": {
+            "type": "number",
+            "title": "List Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task",
+          "model",
+          "calls",
+          "tokens_in",
+          "tokens_out",
+          "list_usd"
+        ],
+        "title": "TaskCost"
       },
       "TopicMerge": {
         "properties": {
@@ -9115,6 +10179,38 @@
           "upload_urls"
         ],
         "title": "UploadOut"
+      },
+      "UploadTimes": {
+        "properties": {
+          "p50_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50 S"
+          },
+          "p95_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 S"
+          }
+        },
+        "type": "object",
+        "required": [
+          "p50_s",
+          "p95_s"
+        ],
+        "title": "UploadTimes"
       },
       "UsageOut": {
         "properties": {
@@ -9425,6 +10521,10 @@
     {
       "name": "links",
       "description": "Public: what invite and share link pages show, and the iPhone waitlist."
+    },
+    {
+      "name": "admin",
+      "description": "The admin app. Needs `app_metadata.role = admin` and 2FA (`aal2`)."
     },
     {
       "name": "ops",

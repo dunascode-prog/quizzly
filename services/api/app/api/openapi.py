@@ -74,6 +74,10 @@ TAGS = [
         "name": "links",
         "description": "Public: what invite and share link pages show, and the iPhone waitlist.",
     },
+    {
+        "name": "admin",
+        "description": "The admin app. Needs `app_metadata.role = admin` and 2FA (`aal2`).",
+    },
     {"name": "ops", "description": "Health check."},
 ]
 
