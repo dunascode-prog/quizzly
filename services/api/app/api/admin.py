@@ -1,18 +1,20 @@
-"""Admin app data (E4, WEB.md §3): Overview (30a), AI costs (30b), System (30g), Students (30f).
+"""Admin app (E4, WEB.md §3): Overview, AI costs, System, Students, Reports and Takedowns.
 
 Every route needs an admin token with 2FA (app.core.admin). Views of student data are written to
-the audit log. Actions (reports, takedowns, limits) come in later routes."""
+the audit log, and so is every report or takedown action. Limits and plans come later."""
 
+import re
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Path, Query, Response, status
+from pydantic import BaseModel, Field
 
 from app.api.deps import AppSettings, Conn
 from app.core.admin import Admin, audit
 from app.domain import admin as stats
+from app.domain import moderation
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 RangeQ = Annotated[Literal["today", "7d", "30d"], Query()]
@@ -213,3 +215,211 @@ async def students(
     rows = await stats.students(conn, settings.timezone, search.strip(), school, limit, offset)
     await audit(conn, admin, "students.list", search or None, {"school": school, "rows": len(rows)})
     return [StudentRow(**r) for r in rows]
+
+
+# --- reports (30c, FR-MOD-01/02) ------------------------------------------------------------------
+
+ReportTarget = Literal["question", "explanation", "chat_message", "course"]
+TargetPath = Annotated[ReportTarget, Path()]
+
+
+class ReportGroup(BaseModel):
+    type: str
+    target_id: UUID
+    reports: int
+    reporters: int
+    last_at: datetime
+    reason: str
+    note: str | None  # the newest note a reporter wrote
+    hidden: bool  # a question hidden by 3 reports (FR-MOD-02)
+    preview: str  # the question, course or topic it's about
+
+
+@router.get("/reports")
+async def reports(
+    _: Admin,
+    conn: Conn,
+    status_: Annotated[Literal["open", "resolved", "dismissed"], Query(alias="status")] = "open",
+    type_: Annotated[ReportTarget | None, Query(alias="type")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> list[ReportGroup]:
+    """30c queue: reports grouped by the item they're about, newest first."""
+    rows = await moderation.queue_list(conn, status_, type_, limit)
+    return [ReportGroup(**r) for r in rows]
+
+
+class Reporter(BaseModel):
+    reason: str
+    note: str | None
+    status: str
+    created_at: datetime
+    school: str | None  # no names (WEB.md §3)
+    level: str | None
+
+
+class ReportDetailOut(BaseModel):
+    type: str
+    target_id: UUID
+    item: dict[str, Any] | None  # the reported item itself; null if it was deleted
+    reporters: list[Reporter]
+
+
+@router.get("/reports/{target_type}/{target_id}")
+async def report_detail(
+    admin: Admin, conn: Conn, target_type: TargetPath, target_id: UUID
+) -> ReportDetailOut:
+    """30c detail: the reported item, its cited source and every reporter's note. Logged."""
+    data = await moderation.detail(conn, target_type, target_id)
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No reports for this item")
+    await audit(conn, admin, "reports.view", f"{target_type}:{target_id}")
+    return ReportDetailOut(**data)
+
+
+class ClosedOut(BaseModel):
+    closed: int
+
+
+@router.post("/reports/{target_type}/{target_id}/dismiss")
+async def dismiss_reports(
+    admin: Admin, conn: Conn, target_type: TargetPath, target_id: UUID
+) -> ClosedOut:
+    """Nothing wrong: closes the reports and brings a hidden question back into quizzes."""
+    async with conn.transaction():
+        closed = await moderation.dismiss(conn, target_type, target_id)
+        target = f"{target_type}:{target_id}"
+        await audit(conn, admin, "reports.dismiss", target, {"closed": closed})
+    return ClosedOut(closed=closed)
+
+
+@router.post("/reports/{target_type}/{target_id}/keep-hidden")
+async def keep_hidden(
+    admin: Admin, conn: Conn, target_type: TargetPath, target_id: UUID
+) -> ClosedOut:
+    """Really wrong: a question stays out of quizzes; the reports are resolved."""
+    async with conn.transaction():
+        closed = await moderation.keep_hidden(conn, target_type, target_id)
+        target = f"{target_type}:{target_id}"
+        await audit(conn, admin, "reports.keep_hidden", target, {"closed": closed})
+    return ClosedOut(closed=closed)
+
+
+class FixIn(BaseModel):
+    answer: bool | int | str  # true_false: bool; mcq: option index; fill_blank: text
+    explanation: str | None = Field(default=None, max_length=2000)
+
+
+class FixedOut(BaseModel):
+    remarked: int  # past answers re-marked
+    rescored: int  # finished attempts rescored
+    thanked: int  # reporters told it was fixed
+
+
+@router.post("/reports/question/{question_id}/fix-answer")
+async def fix_answer(admin: Admin, conn: Conn, question_id: UUID, body: FixIn) -> FixedOut:
+    """Corrects the answer, re-marks every past answer and rescores those attempts, brings the
+    question back and thanks the reporters."""
+    try:
+        async with conn.transaction():
+            result = await moderation.fix_answer(conn, question_id, body.answer, body.explanation)
+            detail = {"answer": body.answer, **result}
+            await audit(conn, admin, "reports.fix_answer", f"question:{question_id}", detail)
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Question not found") from exc
+    except moderation.BadAnswer as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return FixedOut(**result)
+
+
+# --- takedowns (30d, FR-MOD-04/05) ----------------------------------------------------------------
+
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+class TakedownIn(BaseModel):
+    target_type: Literal["file", "course"]
+    target: str = Field(min_length=4, max_length=64)  # a file's SHA-256, or a share code
+    reason: Literal["copyright", "inappropriate", "other"]
+    requested_by: str | None = Field(default=None, max_length=200)
+    note: str | None = Field(default=None, max_length=2000)  # internal only
+    notify: bool = True  # tell students whose file it was (a course's members are always told)
+
+
+class TakedownOut(BaseModel):
+    id: UUID
+    students_affected: int
+
+
+class TakedownRow(BaseModel):
+    id: UUID
+    target_type: str
+    target: str
+    reason: str
+    requested_by: str | None
+    students_affected: int
+    admin_id: UUID
+    status: str
+    created_at: datetime
+    reversed_at: datetime | None
+
+
+class NearUnshare(BaseModel):
+    code: str
+    title: str | None
+    share_code: str
+    member_count: int
+    reporters: int  # 5 different members unshare it automatically (FR-MOD-05)
+
+
+class TakedownsOut(BaseModel):
+    log: list[TakedownRow]
+    near_unshare: list[NearUnshare]
+
+
+@router.get("/takedowns")
+async def list_takedowns(_: Admin, conn: Conn) -> TakedownsOut:
+    """30d: the takedown log and shared courses close to the automatic unshare."""
+    return TakedownsOut(
+        log=[TakedownRow(**r) for r in await moderation.takedowns(conn, 100)],
+        near_unshare=[NearUnshare(**r) for r in await moderation.courses_near_unshare(conn)],
+    )
+
+
+@router.post("/takedowns", status_code=status.HTTP_201_CREATED)
+async def take_down(admin: Admin, conn: Conn, body: TakedownIn) -> TakedownOut:
+    """Blocks a file (deletes everything made from it, fails every copy, refuses re-uploads) or
+    takes down a shared course (members lose access and are told)."""
+    target = body.target.strip()
+    async with conn.transaction():
+        if body.target_type == "file":
+            target = target.lower()
+            if not SHA256.match(target):
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "That isn't a SHA-256.")
+            affected = await moderation.take_down_file(conn, target, body.notify)
+        else:
+            found = await moderation.take_down_course(conn, target)
+            if found is None:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND, "No active shared course with that code"
+                )
+            affected = found
+        row = body.model_dump(exclude={"notify"})
+        row |= {"target": target, "students_affected": affected, "admin_id": admin.id}
+        takedown_id = await moderation.log_takedown(conn, row)
+        detail = {"reason": body.reason, "affected": affected}
+        await audit(conn, admin, "takedowns.create", f"{body.target_type}:{target}", detail)
+    return TakedownOut(id=takedown_id, students_affected=affected)
+
+
+@router.post("/takedowns/{takedown_id}/reverse", status_code=status.HTTP_204_NO_CONTENT)
+async def reverse_takedown(admin: Admin, conn: Conn, takedown_id: UUID) -> Response:
+    """Unblocks a file so it can be uploaded again. Course takedowns can't be reversed (members
+    were removed; the owner can share it again)."""
+    async with conn.transaction():
+        row = await moderation.reverse(conn, takedown_id, admin.id)
+        if row is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, "Only an active file takedown can be reversed."
+            )
+        await audit(conn, admin, "takedowns.reverse", f"file:{row['target']}")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

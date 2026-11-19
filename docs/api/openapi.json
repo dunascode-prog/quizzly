@@ -4605,6 +4605,543 @@
         }
       }
     },
+    "/admin/reports": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Reports",
+        "description": "30c queue: reports grouped by the item they're about, newest first.",
+        "operationId": "reports_admin_reports_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "open",
+                "resolved",
+                "dismissed"
+              ],
+              "type": "string",
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "question",
+                    "explanation",
+                    "chat_message",
+                    "course"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReportGroup"
+                  },
+                  "title": "Response Reports Admin Reports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/reports/{target_type}/{target_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Report Detail",
+        "description": "30c detail: the reported item, its cited source and every reporter's note. Logged.",
+        "operationId": "report_detail_admin_reports__target_type___target_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "target_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "question",
+                "explanation",
+                "chat_message",
+                "course"
+              ],
+              "type": "string",
+              "title": "Target Type"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/reports/{target_type}/{target_id}/dismiss": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Dismiss Reports",
+        "description": "Nothing wrong: closes the reports and brings a hidden question back into quizzes.",
+        "operationId": "dismiss_reports_admin_reports__target_type___target_id__dismiss_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "target_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "question",
+                "explanation",
+                "chat_message",
+                "course"
+              ],
+              "type": "string",
+              "title": "Target Type"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClosedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/reports/{target_type}/{target_id}/keep-hidden": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Keep Hidden",
+        "description": "Really wrong: a question stays out of quizzes; the reports are resolved.",
+        "operationId": "keep_hidden_admin_reports__target_type___target_id__keep_hidden_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "target_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "question",
+                "explanation",
+                "chat_message",
+                "course"
+              ],
+              "type": "string",
+              "title": "Target Type"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClosedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/reports/question/{question_id}/fix-answer": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Fix Answer",
+        "description": "Corrects the answer, re-marks every past answer and rescores those attempts, brings the\nquestion back and thanks the reporters.",
+        "operationId": "fix_answer_admin_reports_question__question_id__fix_answer_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/takedowns": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Takedowns",
+        "description": "30d: the takedown log and shared courses close to the automatic unshare.",
+        "operationId": "list_takedowns_admin_takedowns_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakedownsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Take Down",
+        "description": "Blocks a file (deletes everything made from it, fails every copy, refuses re-uploads) or\ntakes down a shared course (members lose access and are told).",
+        "operationId": "take_down_admin_takedowns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakedownIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakedownOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/takedowns/{takedown_id}/reverse": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Reverse Takedown",
+        "description": "Unblocks a file so it can be uploaded again. Course takedowns can't be reversed (members\nwere removed; the owner can share it again).",
+        "operationId": "reverse_takedown_admin_takedowns__takedown_id__reverse_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "takedown_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Takedown Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/plans": {
       "get": {
         "tags": [
@@ -5592,6 +6129,19 @@
         ],
         "title": "Citation"
       },
+      "ClosedOut": {
+        "properties": {
+          "closed": {
+            "type": "integer",
+            "title": "Closed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "closed"
+        ],
+        "title": "ClosedOut"
+      },
       "ConfirmIn": {
         "properties": {
           "token": {
@@ -6575,6 +7125,64 @@
         ],
         "title": "FeedbackIn"
       },
+      "FixIn": {
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Answer"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer"
+        ],
+        "title": "FixIn"
+      },
+      "FixedOut": {
+        "properties": {
+          "remarked": {
+            "type": "integer",
+            "title": "Remarked"
+          },
+          "rescored": {
+            "type": "integer",
+            "title": "Rescored"
+          },
+          "thanked": {
+            "type": "integer",
+            "title": "Thanked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "remarked",
+          "rescored",
+          "thanked"
+        ],
+        "title": "FixedOut"
+      },
       "FlashcardsCreate": {
         "properties": {
           "topic_id": {
@@ -7238,6 +7846,46 @@
           "created_at"
         ],
         "title": "MessageOut"
+      },
+      "NearUnshare": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "share_code": {
+            "type": "string",
+            "title": "Share Code"
+          },
+          "member_count": {
+            "type": "integer",
+            "title": "Member Count"
+          },
+          "reporters": {
+            "type": "integer",
+            "title": "Reporters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title",
+          "share_code",
+          "member_count",
+          "reporters"
+        ],
+        "title": "NearUnshare"
       },
       "NextReward": {
         "properties": {
@@ -9299,6 +9947,108 @@
         ],
         "title": "ReferralOut"
       },
+      "ReportDetailOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Id"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
+          "reporters": {
+            "items": {
+              "$ref": "#/components/schemas/Reporter"
+            },
+            "type": "array",
+            "title": "Reporters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "target_id",
+          "item",
+          "reporters"
+        ],
+        "title": "ReportDetailOut"
+      },
+      "ReportGroup": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Id"
+          },
+          "reports": {
+            "type": "integer",
+            "title": "Reports"
+          },
+          "reporters": {
+            "type": "integer",
+            "title": "Reporters"
+          },
+          "last_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last At"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden"
+          },
+          "preview": {
+            "type": "string",
+            "title": "Preview"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "target_id",
+          "reports",
+          "reporters",
+          "last_at",
+          "reason",
+          "note",
+          "hidden",
+          "preview"
+        ],
+        "title": "ReportGroup"
+      },
       "ReportIn": {
         "properties": {
           "target_type": {
@@ -9346,6 +10096,66 @@
           "reason"
         ],
         "title": "ReportIn"
+      },
+      "Reporter": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "school": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "School"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason",
+          "note",
+          "status",
+          "created_at",
+          "school",
+          "level"
+        ],
+        "title": "Reporter"
       },
       "School": {
         "properties": {
@@ -9962,6 +10772,188 @@
           "failures"
         ],
         "title": "SystemOut"
+      },
+      "TakedownIn": {
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "file",
+              "course"
+            ],
+            "title": "Target Type"
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 4,
+            "title": "Target"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "copyright",
+              "inappropriate",
+              "other"
+            ],
+            "title": "Reason"
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "notify": {
+            "type": "boolean",
+            "title": "Notify",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_type",
+          "target",
+          "reason"
+        ],
+        "title": "TakedownIn"
+      },
+      "TakedownOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "students_affected": {
+            "type": "integer",
+            "title": "Students Affected"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "students_affected"
+        ],
+        "title": "TakedownOut"
+      },
+      "TakedownRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
+          },
+          "students_affected": {
+            "type": "integer",
+            "title": "Students Affected"
+          },
+          "admin_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Admin Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "reversed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reversed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "target_type",
+          "target",
+          "reason",
+          "requested_by",
+          "students_affected",
+          "admin_id",
+          "status",
+          "created_at",
+          "reversed_at"
+        ],
+        "title": "TakedownRow"
+      },
+      "TakedownsOut": {
+        "properties": {
+          "log": {
+            "items": {
+              "$ref": "#/components/schemas/TakedownRow"
+            },
+            "type": "array",
+            "title": "Log"
+          },
+          "near_unshare": {
+            "items": {
+              "$ref": "#/components/schemas/NearUnshare"
+            },
+            "type": "array",
+            "title": "Near Unshare"
+          }
+        },
+        "type": "object",
+        "required": [
+          "log",
+          "near_unshare"
+        ],
+        "title": "TakedownsOut"
       },
       "TaskCost": {
         "properties": {

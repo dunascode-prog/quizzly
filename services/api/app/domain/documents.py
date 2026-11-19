@@ -28,6 +28,7 @@ FAILURE_MESSAGES = {
     "upload_missing": "The upload didn't finish. Try adding the file again.",
     "internal": "Something went wrong while reading this file. Try uploading it again.",
     "crashed": "We couldn't process this file. Try exporting it again as PDF, or split it up.",
+    "blocked": "This file was removed after a copyright request, so Quizzly can't use it.",
 }
 
 _SELECT = """
