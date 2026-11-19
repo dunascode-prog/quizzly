@@ -31,6 +31,7 @@ STUDY_TYPES = (
     "reminder_exam",
     "reminder_due",
     "invite_joined",
+    "report_resolved",
 )
 
 # Which notification_settings.types toggle (FR-HAB-08) allows a push. Types not listed always
