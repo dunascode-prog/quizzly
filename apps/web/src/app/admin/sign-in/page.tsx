@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/Icon";
 import { DOMAIN } from "@/lib/site";
-import { SignInForm } from "./SignInForm";
+import { SignInPanel } from "./SignInPanel";
 
 export const metadata: Metadata = { title: "Team sign-in" };
 
@@ -26,7 +26,7 @@ export default function SignInPage() {
           <p>This area is for the Quizzly team only. Students sign in in the app.</p>
           <p>We send a 6-digit code to team emails. Two-step verification is required, and every admin action is logged.</p>
         </div>
-        <SignInForm />
+        <SignInPanel />
         <Link href="/" className="a-back">
           ← Back to {DOMAIN}
         </Link>

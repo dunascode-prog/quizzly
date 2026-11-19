@@ -2,29 +2,77 @@
 
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import type { AdminEnvironment } from "@/lib/site";
 
 // Team sign-in and calls to the admin API (WEB.md §3). The API checks role = admin and 2FA (aal2)
 // on every request; the gate below only keeps the console from showing to anyone else.
+//
+// Each environment (staging, production) is its own Supabase project and API, so each has its own
+// client and saved session: switching never signs you out of the other one.
 
-export type AdminConfig = { apiUrl: string; supabaseUrl: string; supabaseAnonKey: string };
+export type AdminConfig = AdminEnvironment;
 
-type Ctx = { config: AdminConfig; client: SupabaseClient | null };
+type Ctx = {
+  config: AdminConfig;
+  client: SupabaseClient | null;
+  environments: AdminEnvironment[];
+  switchTo: (id: string) => void;
+};
 const AdminContext = createContext<Ctx | null>(null);
 
-let client: SupabaseClient | null = null;
+const clients = new Map<string, SupabaseClient>();
 
 function clientFor(config: AdminConfig): SupabaseClient | null {
   if (!config.supabaseUrl || !config.supabaseAnonKey) return null;
-  client ??= createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    auth: { persistSession: true, storageKey: "quizzly-admin", detectSessionInUrl: false },
-  });
+  let client = clients.get(config.id);
+  if (!client) {
+    client = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: { persistSession: true, storageKey: `quizzly-admin-${config.id}`, detectSessionInUrl: false },
+    });
+    clients.set(config.id, client);
+  }
   return client;
 }
 
-export function AdminProvider({ config, children }: { config: AdminConfig; children: React.ReactNode }) {
-  return <AdminContext.Provider value={{ config, client: clientFor(config) }}>{children}</AdminContext.Provider>;
+// The chosen environment, remembered in this browser. Read with useSyncExternalStore so the server
+// render (no storage) and the browser agree, and every tab follows a switch.
+const ENV_KEY = "quizzly-admin-env";
+const listeners = new Set<() => void>();
+function readEnv(): string | null {
+  try {
+    return window.localStorage.getItem(ENV_KEY);
+  } catch {
+    return null;
+  }
 }
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+export function AdminProvider({ environments, children }: { environments: AdminEnvironment[]; children: React.ReactNode }) {
+  const chosen = useSyncExternalStore(subscribe, readEnv, () => null);
+  const config = environments.find((e) => e.id === chosen) ?? environments[0];
+  const switchTo = useCallback((id: string) => {
+    try {
+      window.localStorage.setItem(ENV_KEY, id);
+    } catch {
+      // Storage blocked: the switch still applies to this page.
+    }
+    listeners.forEach((l) => l());
+  }, []);
+  return (
+    <AdminContext.Provider value={{ config, client: clientFor(config), environments, switchTo }}>{children}</AdminContext.Provider>
+  );
+}
+
+/** Production gets a warning colour everywhere, so nobody acts on it thinking it's staging. */
+export const isProduction = (env: AdminEnvironment) => /prod/i.test(env.id);
 
 export function useAdmin(): Ctx {
   const ctx = useContext(AdminContext);
@@ -32,7 +80,8 @@ export function useAdmin(): Ctx {
   return ctx;
 }
 
-export const NOT_CONFIGURED = "Team sign-in isn't set up: SUPABASE_URL and SUPABASE_ANON_KEY are missing.";
+export const NOT_CONFIGURED =
+  "Team sign-in isn't set up for this environment: set ADMIN_ENVIRONMENTS (or SUPABASE_URL and SUPABASE_ANON_KEY).";
 
 /** True when the session is an admin who has passed their second factor. */
 export function isAdmin(session: Session | null): boolean {
