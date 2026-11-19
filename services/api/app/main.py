@@ -28,7 +28,7 @@ from app.api import (
     study,
 )
 from app.api.routes import router
-from app.core import db
+from app.core import db, live_config
 from app.core.config import get_settings
 from app.core.logging import configure_logging, request_id_var
 from app.core.observability import init_sentry
@@ -44,6 +44,8 @@ async def lifespan(app: FastAPI):
     configure_logging(settings.log_level)
     if settings.database_url:
         await db.open_pool()
+        # Limits and plans changed in the admin app, re-read every minute (E4).
+        app.state.live_config = asyncio.create_task(live_config.keep_fresh(settings))
         # Load the embedding model now, not on the first chat question (FR-CHAT-04).
         app.state.warm_embeddings = asyncio.create_task(
             asyncio.to_thread(embed.load, settings.embedding_model)
@@ -51,6 +53,8 @@ async def lifespan(app: FastAPI):
     else:
         log.warning("DATABASE_URL is not set; running without a database")
     yield
+    if task := getattr(app.state, "live_config", None):
+        task.cancel()
     await db.close_pool()
 
 
