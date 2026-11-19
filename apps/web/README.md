@@ -1,6 +1,6 @@
 # apps/web
 
-The public site at `quizzly.app`: the landing page, the invite/share link pages, the iPhone waitlist and the legal pages. The admin app at `/admin` comes later. Spec: [docs/WEB.md](../../docs/WEB.md). Approved designs: [docs/reference/](../../docs/reference/) (open the HTML in a browser) and `docs/design/web/`.
+The public site at `quizzly.app`: the landing page, the invite/share link pages, the iPhone waitlist and the legal pages. The admin app is at `/admin`: team sign-in with an email code and an authenticator, then the console on the admin API. Spec: [docs/WEB.md](../../docs/WEB.md). Approved designs: [docs/reference/](../../docs/reference/) (open the HTML in a browser) and `docs/design/web/`.
 
 Next.js 16 (App Router, TypeScript, Cache Components). Next 16 changed a lot, so read the guides in `node_modules/next/dist/docs/` before relying on older patterns (see `AGENTS.md`).
 
@@ -24,6 +24,7 @@ Read at **build time**, so set them in the Cloudflare Pages build settings.
 | `ANDROID_PACKAGE` | `app.quizzly` | Play link fallback; App Links later |
 | `PLAY_STORE_URL` | Play listing for `ANDROID_PACKAGE` | Download buttons and the QR code |
 | `API_URL` | `https://api.{INVITE_DOMAIN}` | Link previews and the waitlist, called from the browser. Add this site's origin to the API's `CORS_ORIGINS`. |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | empty | Team sign-in for `/admin` (the same Supabase project as the app and API). Admin rights come from `app_metadata.role = admin`, set in Supabase (`services/api/README.md` → Admin access). |
 | `ANDROID_CERT_SHA256` | empty | App signing certificate fingerprint(s) for `/.well-known/assetlinks.json` (Play Console → App integrity). Empty: links open the website. |
 
 ## Layout
@@ -38,7 +39,7 @@ src/app/(site)/waitlist/   iPhone waitlist and its email confirmation (FR-INV-06
 src/app/(site)/privacy, terms, copyright/  Legal pages (drafts until reviewed, E3)
 src/app/.well-known/       assetlinks.json for Android App Links
 src/app/admin/             Admin app (WEB.md §3): sign-in, then the (console) sidebar shell and its pages.
-                           Each page keeps sample data in a data.ts beside it until the admin API (E4) exists.
+                           Pages load from the admin API in the browser (lib/admin/session.tsx: sign-in, the 2FA gate, fetch).
 src/app/admin/admin.css    Shared admin styles (a- prefix); page styles sit next to each page
 src/components/admin/      Admin building blocks: PageHead, Tiles, Chip, CardHead, Meter, DayBars, Segmented, AdminNav
 src/components/            Icon, Phone (light/dark screenshot pair), PlayQrCode, ThemeToggle

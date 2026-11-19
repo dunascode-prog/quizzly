@@ -5,11 +5,11 @@ import "./limits.css";
 
 export const metadata: Metadata = { title: "Limits and plans" };
 
-// 30e Limits and plans (docs/reference/admin-limits-plans.html). Data: app_config and config_audit, once the admin API exists.
+// 30e Limits and plans (docs/reference/admin-limits-plans.html): GET and PUT /admin/limits.
 export default function LimitsPage() {
   return (
     <>
-      <PageHead eyebrow="Usage limits, safety limits and features" title="Limits and " highlight="plans" />
+      <PageHead eyebrow="Daily limits, storage, AI allowances and safety limits" title="Limits and " highlight="plans" />
       <LimitsForm />
     </>
   );

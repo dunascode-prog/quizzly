@@ -1,52 +1,109 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
-import { CardHead, Chip } from "@/components/admin/ui";
-import { admin } from "@/lib/admin/mock";
-import { changes as initialChanges, features, planLimits, plans, prices, safety, worstCase, type PlanKey } from "./data";
+import { DataState } from "@/components/admin/DataState";
+import { CardHead } from "@/components/admin/ui";
+import type { LimitField, Limits } from "@/lib/admin/api";
+import { shortDate, time } from "@/lib/admin/format";
+import { useAdminData, useAdminFetch } from "@/lib/admin/session";
 
-type Limits = Record<string, Record<PlanKey, string>>;
+const PLANS = ["Free", "Student", "Premium"] as const;
+const PRICE: Record<(typeof PLANS)[number], string> = { Free: "$0", Student: "$6 / month", Premium: "$10 / month" };
+const show = (f: LimitField, v: number | string) => (f.unit === "USD" ? `$${v}` : f.unit ? `${v} ${f.unit}` : `${v}`);
+const text = (f: LimitField, v: number) => (f.decimals ? v.toFixed(2) : String(v));
 
-const initialLimits = (): Limits =>
-  Object.fromEntries(planLimits.map((l) => [l.key, Object.fromEntries(plans.map((p) => [p.key, String(l.values[p.key])])) as Record<PlanKey, string>]));
-const initialSafety = () => Object.fromEntries(safety.map((s) => [s.key, s.value.toFixed(s.decimals ?? 0)]));
-const initialFeatures = () => Object.fromEntries(features.map((f) => [f.key, f.on]));
-
-const valid = (v: string) => /^\d+(\.\d+)?$/.test(v.trim());
-const show = (s: (typeof safety)[number], v: string) => `${s.prefix ?? ""}${v}${s.suffix ?? ""}`;
-
-// The whole page is one form: edits enable Save changes; saving logs each change locally.
-// TODO(E4): PATCH /admin/config (applies within 1 minute, written to config_audit).
-export function LimitsForm() {
-  const [saved, setSaved] = useState(() => ({ limits: initialLimits(), safety: initialSafety(), features: initialFeatures() }));
-  const [limits, setLimits] = useState(saved.limits);
-  const [safe, setSafe] = useState(saved.safety);
-  const [flags, setFlags] = useState(saved.features);
-  const [log, setLog] = useState(initialChanges);
-  const [status, setStatus] = useState("");
-
-  const diff = useMemo(() => {
-    const out: string[] = [];
-    for (const l of planLimits)
-      for (const p of plans)
-        if (limits[l.key][p.key] !== saved.limits[l.key][p.key])
-          out.push(`${p.name} · ${l.label.toLowerCase()} ${saved.limits[l.key][p.key]} → ${limits[l.key][p.key]}`);
-    for (const s of safety)
-      if (safe[s.key] !== saved.safety[s.key]) out.push(`${s.label} ${show(s, saved.safety[s.key])} → ${show(s, safe[s.key])}`);
-    for (const f of features) if (flags[f.key] !== saved.features[f.key]) out.push(`${f.label} ${flags[f.key] ? "on" : "off"}`);
-    return out;
-  }, [limits, safe, flags, saved]);
-
-  const invalid = Object.values(limits).some((r) => Object.values(r).some((v) => !valid(v))) || Object.values(safe).some((v) => !valid(v));
-
-  function save(e: React.FormEvent) {
-    e.preventDefault();
-    if (invalid || diff.length === 0) return;
-    setLog((l) => [...diff.map((change) => ({ when: "Just now", who: admin.name, change })), ...l]);
-    setSaved({ limits, safety: safe, features: flags });
-    setStatus(`Saved ${diff.length} ${diff.length === 1 ? "change" : "changes"}. They apply within 1 minute.`);
+/** Which plan column a field belongs to, and the row it sits on. */
+function cell(f: LimitField): { plan: (typeof PLANS)[number]; row: string } | null {
+  const daily = /^(Free|Student|Premium) plan, a day$/.exec(f.group);
+  if (daily) return { plan: daily[1] as (typeof PLANS)[number], row: `${f.label} a day` };
+  if (f.group === "Storage per student" || f.group === "Monthly AI allowance") {
+    return { plan: f.label as (typeof PLANS)[number], row: f.group === "Storage per student" ? "Storage (MB)" : "Monthly AI allowance (USD)" };
   }
+  return null;
+}
+
+// 30e Limits and plans (docs/reference/admin-limits-plans.html): GET and PUT /admin/limits. The page is
+// one form; saving applies to every student within a minute and logs each change with its old value.
+export function LimitsForm() {
+  const { data, loading, error, reload } = useAdminData<Limits>("/admin/limits");
+  const adminFetch = useAdminFetch();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (data) setValues(Object.fromEntries(data.fields.map((f) => [f.key, text(f, f.value)])));
+  }, [data]);
+
+  const fields = useMemo(() => data?.fields ?? [], [data]);
+  const byKey = useMemo(() => new Map(fields.map((f) => [f.key, f])), [fields]);
+  const rows = useMemo(() => {
+    const out = new Map<string, Partial<Record<(typeof PLANS)[number], LimitField>>>();
+    for (const f of fields) {
+      const c = cell(f);
+      if (c) out.set(c.row, { ...out.get(c.row), [c.plan]: f });
+    }
+    return [...out.entries()];
+  }, [fields]);
+  const safety = fields.filter((f) => !cell(f));
+
+  const valid = (f: LimitField, v: string) => {
+    if (!/^\d+(\.\d+)?$/.test(v.trim())) return false;
+    const n = Number(v);
+    return (f.decimals || Number.isInteger(n)) && n >= f.min && n <= f.max;
+  };
+  const changed = fields.filter((f) => values[f.key] !== undefined && Number(values[f.key]) !== f.value);
+  const invalid = fields.filter((f) => values[f.key] !== undefined && !valid(f, values[f.key]));
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (invalid.length || !changed.length) return;
+    setBusy(true);
+    setSaveError("");
+    try {
+      // Back at the default: clear the override instead of storing the same number.
+      const body = Object.fromEntries(changed.map((f) => [f.key, Number(values[f.key]) === f.default ? null : Number(values[f.key])]));
+      await adminFetch("/admin/limits", { method: "PUT", body: JSON.stringify({ values: body }) });
+      setStatus(`Saved ${changed.length} ${changed.length === 1 ? "change" : "changes"}. Every student gets them within ${data?.applies_within_s ?? 60} seconds.`);
+      reload();
+    } catch (err) {
+      setSaveError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function input(f: LimitField, label: string) {
+    const v = values[f.key] ?? "";
+    return (
+      <span className="lp-cell">
+        <input
+          className="lp-num"
+          inputMode={f.decimals ? "decimal" : "numeric"}
+          value={v}
+          aria-label={label}
+          aria-invalid={!valid(f, v) || undefined}
+          title={`${f.min}–${f.max}${f.unit ? ` ${f.unit}` : ""} · default ${show(f, text(f, f.default))}`}
+          onChange={(e) => setValues((s) => ({ ...s, [f.key]: e.target.value }))}
+        />
+        {Number(v) !== f.default && (
+          <button
+            type="button"
+            className="lp-reset"
+            aria-label={`Back to the default for ${label}: ${show(f, text(f, f.default))}`}
+            title={`Default ${show(f, text(f, f.default))}`}
+            onClick={() => setValues((s) => ({ ...s, [f.key]: text(f, f.default) }))}
+          >
+            <Icon name="refresh" size={14} />
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  if (!data) return <DataState loading={loading} error={error} onRetry={reload} />;
 
   return (
     <form className="lp-form" onSubmit={save} noValidate>
@@ -58,91 +115,79 @@ export function LimitsForm() {
                 <h2 id="lp-plans" className="a-h2">
                   Plan limits
                 </h2>
-                <span className="a-sub">Draft numbers from the cost model. Plans and prices are not decided yet (PRD Q3); only Free is live.</span>
+                <span className="a-sub">Per student. The arrow next to a changed value puts its default back.</span>
               </div>
-              <Chip tone="warning">Student and Premium not live</Chip>
             </div>
             <div className="a-table-wrap">
               <table className="a-table lp-table">
                 <thead>
                   <tr>
                     <th>Limit</th>
-                    {plans.map((p) => (
-                      <th key={p.key} className="a-r">
+                    {PLANS.map((p) => (
+                      <th key={p} className="a-r">
                         <span className="lp-plan">
-                          <span>{p.name}</span>
-                          <span className="lp-plan-note">{p.note}</span>
+                          <span>{p}</span>
+                          <span className="lp-plan-note">{PRICE[p]}</span>
                         </span>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {planLimits.map((l) => (
-                    <tr key={l.key}>
+                  {rows.map(([row, plans]) => (
+                    <tr key={row}>
                       <th scope="row" className="lp-row-label">
-                        {l.label}
+                        {row}
                       </th>
-                      {plans.map((p) => {
-                        const v = limits[l.key][p.key];
-                        return (
-                          <td key={p.key} className="a-r">
-                            <input
-                              className="lp-num"
-                              inputMode="numeric"
-                              value={v}
-                              aria-label={`${p.name}: ${l.label}`}
-                              aria-invalid={!valid(v) || undefined}
-                              onChange={(e) => setLimits((s) => ({ ...s, [l.key]: { ...s[l.key], [p.key]: e.target.value } }))}
-                            />
-                          </td>
-                        );
-                      })}
+                      {PLANS.map((p) => (
+                        <td key={p} className="a-r">
+                          {plans[p] ? input(plans[p]!, `${p}: ${row}`) : "—"}
+                        </td>
+                      ))}
                     </tr>
                   ))}
-                  <tr className="lp-muted-row">
-                    <th scope="row">Worst-case AI cost per student / month</th>
-                    {plans.map((p) => (
-                      <td key={p.key} className="a-r">
-                        {worstCase[p.key]}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="lp-muted-row">
-                    <th scope="row">Price</th>
-                    {plans.map((p) => (
-                      <td key={p.key} className="a-r">
-                        {prices[p.key] ? <b className="lp-price">{prices[p.key]}</b> : "Not set"}
-                      </td>
-                    ))}
-                  </tr>
                 </tbody>
               </table>
             </div>
           </section>
 
           <section className="a-card" aria-labelledby="lp-log">
-            <CardHead title="Recent changes" />
-            <div className="a-table-wrap">
-              <table className="a-table" id="lp-log">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Who</th>
-                    <th>Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {log.map((c, i) => (
-                    <tr key={`${c.change}-${i}`}>
-                      <td className="a-nw">{c.when}</td>
-                      <td>{c.who}</td>
-                      <td>{c.change}</td>
+            <CardHead title="Recent changes" sub="Every change, with who made it and the value before" />
+            {data.changes.length === 0 ? (
+              <p className="a-muted">No changes yet: every limit is at its default.</p>
+            ) : (
+              <div className="a-table-wrap">
+                <table className="a-table" id="lp-log">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Who</th>
+                      <th>Change</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {data.changes.map((c, i) => {
+                      const f = c.key ? byKey.get(c.key) : undefined;
+                      const name = f ? `${f.group.replace(", a day", "")} · ${f.label}` : (c.key ?? "Limit");
+                      const to = c.new === null ? "default" : f ? show(f, String(c.new)) : String(c.new);
+                      return (
+                        <tr key={`${c.created_at}-${i}`}>
+                          <td className="a-nw">
+                            {shortDate(c.created_at)}, {time(c.created_at)}
+                          </td>
+                          <td className="td-mono" title={c.admin_id}>
+                            #{c.admin_id.slice(0, 4).toUpperCase()}
+                          </td>
+                          <td>
+                            {name}: {f ? show(f, String(c.old)) : String(c.old)} → {to}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
 
@@ -152,51 +197,16 @@ export function LimitsForm() {
               Safety limits
             </h2>
             <div className="lp-rows">
-              {safety.map((s) => {
-                const v = safe[s.key];
-                return (
-                  <div key={s.key} className="lp-row">
-                    <label htmlFor={`lp-${s.key}`} className="lp-row-text">
-                      <span className="lp-row-title">{s.label}</span>
-                      {s.note && <span className="lp-row-note">{s.note}</span>}
-                    </label>
-                    <label className="lp-input">
-                      {s.prefix && <span aria-hidden="true">{s.prefix}</span>}
-                      <input
-                        id={`lp-${s.key}`}
-                        inputMode="decimal"
-                        size={Math.max(v.length, 1)}
-                        value={v}
-                        aria-invalid={!valid(v) || undefined}
-                        onChange={(e) => setSafe((x) => ({ ...x, [s.key]: e.target.value }))}
-                      />
-                      {s.suffix && <span aria-hidden="true">{s.suffix}</span>}
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="a-card" aria-labelledby="lp-features">
-            <h2 id="lp-features" className="a-h2 lp-h2">
-              Features
-            </h2>
-            <div className="lp-rows">
-              {features.map((f) => (
+              {safety.map((f) => (
                 <div key={f.key} className="lp-row">
-                  <span className="lp-row-text" id={`lp-f-${f.key}`}>
+                  <span className="lp-row-text">
                     <span className="lp-row-title">{f.label}</span>
-                    <span className="lp-row-note">{f.note}</span>
+                    <span className="lp-row-note">
+                      {f.min}–{f.max}
+                      {f.unit ? ` ${f.unit}` : ""} · default {show(f, text(f, f.default))}
+                    </span>
                   </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    className="a-switch"
-                    aria-checked={flags[f.key]}
-                    aria-labelledby={`lp-f-${f.key}`}
-                    onClick={() => setFlags((x) => ({ ...x, [f.key]: !x[f.key] }))}
-                  />
+                  {input(f, f.label)}
                 </div>
               ))}
             </div>
@@ -206,13 +216,18 @@ export function LimitsForm() {
 
       <div className="lp-save">
         <span className="lp-save-note" role="status">
-          {invalid ? "Use whole numbers (and a decimal for the budget)." : status && diff.length === 0 ? status : "Changes apply within 1 minute and are logged."}
+          {saveError ||
+            (invalid.length
+              ? `Check ${invalid.map((f) => f.label).join(", ")}: whole numbers within their range (decimals for money).`
+              : status && !changed.length
+                ? status
+                : `Changes apply to every student within ${data.applies_within_s} seconds and are logged.`)}
         </span>
-        <button type="submit" className="a-action lp-save-btn" disabled={invalid || diff.length === 0}>
+        <button type="submit" className="a-action lp-save-btn" disabled={busy || invalid.length > 0 || changed.length === 0}>
           <span className="a-action-circle">
             <Icon name="check" size={20} strokeWidth={2.4} />
           </span>
-          <span className="a-action-label">{diff.length > 1 ? `Save ${diff.length} changes` : "Save changes"}</span>
+          <span className="a-action-label">{busy ? "Saving…" : changed.length > 1 ? `Save ${changed.length} changes` : "Save changes"}</span>
         </button>
       </div>
     </form>

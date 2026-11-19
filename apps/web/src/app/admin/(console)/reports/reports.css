@@ -48,3 +48,5 @@
 @media (max-width: 900px) {
   .rp-layout { grid-template-columns: minmax(0, 1fr); }
 }
+.rp-fix { flex: 1; min-width: 220px; }
+.rp-fix select, .rp-fix input { min-height: 48px; }

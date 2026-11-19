@@ -20,3 +20,8 @@ export const ANDROID_CERT_SHA256 = (process.env.ANDROID_CERT_SHA256 || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+// Supabase Auth for the admin app's team sign-in (email code + authenticator). The anon key is
+// public by design; admin rights come only from app_metadata, checked by the API on every call.
+export const SUPABASE_URL = process.env.SUPABASE_URL || "";
+export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
