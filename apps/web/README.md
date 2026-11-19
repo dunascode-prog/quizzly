@@ -24,6 +24,7 @@ Read at **build time**, so set them in the Cloudflare Pages build settings.
 | `ANDROID_PACKAGE` | `app.quizzly` | Play link fallback; App Links later |
 | `PLAY_STORE_URL` | Play listing for `ANDROID_PACKAGE` | Download buttons and the QR code |
 | `API_URL` | `https://api.{INVITE_DOMAIN}` | Link previews and the waitlist, called from the browser. Add this site's origin to the API's `CORS_ORIGINS`. |
+| `ADMIN_ENVIRONMENTS` | empty | JSON list of `{id, label, apiUrl, supabaseUrl, supabaseAnonKey}` the admin app switches between (staging, production). Each has its own sign-in; an id containing `prod` is shown in red with a warning strip. See `.env.example`. |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | empty | Team sign-in for `/admin` (the same Supabase project as the app and API). Admin rights come from `app_metadata.role = admin`, set in Supabase (`services/api/README.md` → Admin access). |
 | `ANDROID_CERT_SHA256` | empty | App signing certificate fingerprint(s) for `/.well-known/assetlinks.json` (Play Console → App integrity). Empty: links open the website. |
 

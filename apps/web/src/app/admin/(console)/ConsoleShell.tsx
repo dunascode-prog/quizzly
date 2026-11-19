@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { EnvSwitch, ProductionBanner } from "@/components/admin/EnvSwitch";
 import { Icon, Logo } from "@/components/Icon";
 import type { Overview } from "@/lib/admin/api";
 import { AdminGate, useAdmin, useAdminData } from "@/lib/admin/session";
 
 // Sidebar shell for every admin page except sign-in (WEB.md §3). Shown only to an admin with 2FA.
 export function ConsoleShell({ domain, children }: { domain: string; children: React.ReactNode }) {
+  const { config } = useAdmin();
+  // Keyed by environment: a switch starts the page over, so nothing from the other one stays on screen.
   return (
-    <AdminGate>
+    <AdminGate key={config.id}>
       {(session) => (
         <Shell domain={domain} email={session.user.email ?? "Admin"}>
           {children}
@@ -39,6 +42,7 @@ function Shell({ domain, email, children }: { domain: string; email: string; chi
             <span className="a-brand-sub">Admin · {domain}/admin</span>
           </span>
         </Link>
+        <EnvSwitch />
         <AdminNav openReports={data?.open_reports ?? 0} />
         <div className="a-side-foot">
           <div className="a-side-status">
@@ -66,7 +70,10 @@ function Shell({ domain, email, children }: { domain: string; email: string; chi
           </button>
         </div>
       </aside>
-      <main className="a-main">{children}</main>
+      <main className="a-main">
+        <ProductionBanner />
+        {children}
+      </main>
     </div>
   );
 }

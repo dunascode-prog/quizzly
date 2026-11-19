@@ -25,3 +25,29 @@ export const ANDROID_CERT_SHA256 = (process.env.ANDROID_CERT_SHA256 || "")
 // public by design; admin rights come only from app_metadata, checked by the API on every call.
 export const SUPABASE_URL = process.env.SUPABASE_URL || "";
 export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+
+export type AdminEnvironment = {
+  id: string; // "staging", "production"
+  label: string;
+  apiUrl: string;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+};
+
+// The environments the admin app can switch between: a JSON list in ADMIN_ENVIRONMENTS, e.g.
+// [{"id":"staging","label":"Staging","apiUrl":"…","supabaseUrl":"…","supabaseAnonKey":"…"}, …].
+// Without it, one environment from API_URL and SUPABASE_*.
+function adminEnvironments(): AdminEnvironment[] {
+  const raw = process.env.ADMIN_ENVIRONMENTS;
+  if (raw) {
+    try {
+      const list = (JSON.parse(raw) as AdminEnvironment[]).filter((e) => e.id && e.apiUrl && e.supabaseUrl && e.supabaseAnonKey);
+      if (list.length) return list.map((e) => ({ ...e, label: e.label || e.id, apiUrl: e.apiUrl.replace(/\/$/, "") }));
+    } catch {
+      console.warn("ADMIN_ENVIRONMENTS isn't valid JSON; using API_URL and SUPABASE_* instead");
+    }
+  }
+  return [{ id: "default", label: "Quizzly", apiUrl: API_URL, supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY }];
+}
+
+export const ADMIN_ENVIRONMENTS = adminEnvironments();
