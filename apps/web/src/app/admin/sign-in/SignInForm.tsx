@@ -38,7 +38,13 @@ export function SignInForm() {
     for (const f of factors.all.filter((f) => f.factor_type === "totp" && f.status !== "verified")) {
       await auth.mfa.unenroll({ factorId: f.id });
     }
-    const { data, error: enrollError } = await auth.mfa.enroll({ factorType: "totp", friendlyName: "Quizzly admin" });
+    // Name the issuer ourselves: left out, Supabase derives it from the project's Site URL and can't
+    // make the QR code when that isn't a plain web address. It's also the name the authenticator shows.
+    const { data, error: enrollError } = await auth.mfa.enroll({
+      factorType: "totp",
+      issuer: "Quizzly",
+      friendlyName: "Quizzly admin",
+    });
     if (enrollError) throw enrollError;
     setFactor({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
     setStep("enroll");
