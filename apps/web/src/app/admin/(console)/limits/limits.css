@@ -37,3 +37,5 @@
   .lp-input { width: 112px; }
   .lp-save { flex-direction: column; align-items: stretch; }
 }
+.lp-cell { display: inline-flex; align-items: center; gap: 4px; }
+.lp-reset { width: 32px; height: 32px; border: 0; border-radius: var(--radius-pill); background: var(--field); color: var(--text); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }

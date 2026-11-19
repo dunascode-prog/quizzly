@@ -170,3 +170,10 @@
   .a-h1 { font-size: 32px; line-height: 36px; }
   .a-tile { flex-basis: 100%; }
 }
+
+/* E4: sign-out is a button now, and the console waits for the sign-in check. */
+button.a-me { border: 0; background: none; font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; width: 100%; }
+.a-gate { padding: 48px; }
+.a-enroll img { border-radius: 16px; background: var(--page); padding: 10px; }
+.a-enroll code { font-family: ui-monospace, monospace; word-break: break-all; }
+.a-state { padding: 24px 0; }
