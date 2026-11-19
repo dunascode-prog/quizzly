@@ -1,6 +1,6 @@
 # apps/web
 
-The public site at `quizzly.app` and, in later steps, the invite/share link pages and the admin app at `/admin`. Spec: [docs/WEB.md](../../docs/WEB.md). Approved designs: [docs/reference/](../../docs/reference/) (open the HTML in a browser) and `docs/design/web/`.
+The public site at `quizzly.app`: the landing page, the invite/share link pages, the iPhone waitlist and the legal pages. The admin app at `/admin` comes later. Spec: [docs/WEB.md](../../docs/WEB.md). Approved designs: [docs/reference/](../../docs/reference/) (open the HTML in a browser) and `docs/design/web/`.
 
 Next.js 16 (App Router, TypeScript, Cache Components). Next 16 changed a lot, so read the guides in `node_modules/next/dist/docs/` before relying on older patterns (see `AGENTS.md`).
 
@@ -23,6 +23,8 @@ Read at **build time**, so set them in the Cloudflare Pages build settings.
 | `INVITE_DOMAIN` | `quizzly.app` | Canonical URL, contact address, invite links |
 | `ANDROID_PACKAGE` | `app.quizzly` | Play link fallback; App Links later |
 | `PLAY_STORE_URL` | Play listing for `ANDROID_PACKAGE` | Download buttons and the QR code |
+| `API_URL` | `https://api.{INVITE_DOMAIN}` | Link previews and the waitlist, called from the browser. Add this site's origin to the API's `CORS_ORIGINS`. |
+| `ANDROID_CERT_SHA256` | empty | App signing certificate fingerprint(s) for `/.well-known/assetlinks.json` (Play Console → App integrity). Empty: links open the website. |
 
 ## Layout
 
@@ -31,6 +33,10 @@ src/app/layout.tsx         Root: fonts (next/font, self-hosted), theme script, m
 src/app/(site)/layout.tsx  Public header + footer
 src/app/(site)/page.tsx    Landing page (WEB.md §2)
 src/app/(site)/landing.css Landing styles, one column under 700px
+src/app/(site)/i, c/       Invite and share link pages (screen 24, FR-INV-02); the browser reads the code
+src/app/(site)/waitlist/   iPhone waitlist and its email confirmation (FR-INV-06)
+src/app/(site)/privacy, terms, copyright/  Legal pages (drafts until reviewed, E3)
+src/app/.well-known/       assetlinks.json for Android App Links
 src/components/            Icon, Phone (light/dark screenshot pair), PlayQrCode, ThemeToggle
 src/lib/site.ts            Domain, Play URL and other build-time values
 src/styles/tokens.css      Design tokens, light + dark. Mirrors apps/mobile/src/constants/theme.ts
