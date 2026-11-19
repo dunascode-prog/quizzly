@@ -131,12 +131,7 @@ cd apps/web && npm install && cp .env.example .env.local && npm run dev
 
 On Windows, keep `--reload` on the API, or add `--loop asyncio:SelectorEventLoop`. Without either, database calls fail.
 
-Apply the database schema to a Supabase project:
-
-```bash
-supabase link --project-ref <ref>
-supabase db push
-```
+Database schema changes (`supabase/migrations/`) are applied by GitHub Actions, not by hand: staging on every merge that adds a migration, production from **Actions → Migrate database** with approval ([docs/CI_CD.md §4](docs/CI_CD.md)).
 
 More detail: [apps/mobile](apps/mobile/README.md) · [apps/web](apps/web/README.md) · [services/api](services/api/README.md) · [infra](infra/README.md) · [evals](evals/README.md).
 

@@ -69,6 +69,13 @@ A rollback restores the previous **image**, never the previous **schema**. So ev
 
 If a migration fails halfway, the deploy stops before the new code starts. Fix it with a new migration.
 
+**Migrating without a deploy (`migrate.yml`).** The same migration step also runs on its own, without touching the servers, so the databases stay current while deploys are paused or a server is down. Nobody runs `supabase db push` by hand.
+
+- **Staging:** automatic, whenever a merge to `main` adds or changes a file in `supabase/migrations/`.
+- **Production:** **Actions → Migrate database → Run workflow → production**. The production environment asks for approval first.
+
+It shares the `deploy-<environment>` lock with Deploy, so a migration and a deploy never run against the same database at once. It uses the same `SUPABASE_DB_URL` environment secret.
+
 ## 5. Rollback
 
 | What | Automatic | By hand |

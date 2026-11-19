@@ -1,0 +1,56 @@
+name: Migrate database
+
+# Applies supabase/migrations to an environment's database without touching the servers, so the
+# schema stays current while deploys are paused or a server is down. The Deploy workflow runs the
+# same step before every deploy; both share the deploy-<environment> lock, so they never overlap.
+#   Staging: automatically when a merge to main adds or changes a migration.
+#   Production: Actions -> Migrate database -> Run workflow -> production (asks for approval).
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/migrations/**"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which database
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment || 'staging' }}
+    concurrency:
+      group: deploy-${{ inputs.environment || 'staging' }}
+      cancel-in-progress: false
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Check the environment is configured
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::The ${{ inputs.environment || 'staging' }} environment needs the SUPABASE_DB_URL secret. See docs/CI_CD.md §6."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
+        with: { version: latest }
+
+      # Migrations must still work with the code that's running (CI's migration-rules).
+      - name: Migrate the database
+        run: |
+          # A database set up by hand has the tables but no migration history: a push would re-run 0001.
+          unrecorded=$(psql "$SUPABASE_DB_URL" -tAc \
+            "select to_regclass('supabase_migrations.schema_migrations') is null and to_regclass('public.documents') is not null")
+          if [ "$unrecorded" = t ]; then
+            echo "::error::This database has no migration history. Record the applied migrations first (docs/CI_CD.md §6)."
+            exit 1
+          fi
+          supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+          supabase --yes db push --db-url "$SUPABASE_DB_URL"
