@@ -16,6 +16,9 @@ PROMPT_PATH = SERVICE_ROOT / "prompts" / "questions" / f"v{PROMPT_VERSION}.md"
 OBJECTIVE_TYPES = ("mcq", "true_false", "fill_blank")  # marked on the device (FR-QUIZ-03)
 OPEN_TYPES = ("short_answer", "theory")  # marked by the LLM against a rubric (FR-QUIZ-04)
 ALL_TYPES = OBJECTIVE_TYPES + OPEN_TYPES
+FLASHCARD = "flashcard"  # front/back cards, self-rated (FR-QGEN-10); generated on their own
+FLASHCARD_PROMPT_VERSION = 1
+FLASHCARD_PROMPT_PATH = SERVICE_ROOT / "prompts" / "flashcards" / f"v{FLASHCARD_PROMPT_VERSION}.md"
 MAX_TOPIC_SHARE = 0.4  # FR-QGEN-04: no topic gets more than 40% unless it's the only one
 TOPIC_TOKENS = 1800  # most of one topic's pages sent per call
 BATCH_TOKENS = 5000  # notes per LLM call; several small topics share one call
@@ -29,6 +32,7 @@ TYPE_NAMES = {
     "fill_blank": "fill in the blank",
     "short_answer": "short answer",
     "theory": "theory (essay)",
+    "flashcard": "flashcard",
 }
 _STOPWORDS = set(
     "a an the of to in on for and or but is are was were be been being it its this that these "
@@ -89,20 +93,27 @@ def cache_key(
     difficulty: str,
     count: int,
     variant: int,
+    style_id: str | None = None,
 ) -> str:
-    """Same file, topics, types, difficulty, count and prompt version → same set (FR-QGEN-07)."""
-    raw = json.dumps(
-        [
-            source_file_id,
-            sorted(topic_ids),
-            sorted(types),
-            difficulty,
-            count,
-            variant,
-            PROMPT_VERSION,
-        ]
-    )
+    """Same file, topics, types, difficulty, count and prompt version → same set (FR-QGEN-07).
+    A past-paper style (FR-QGEN-09) makes its own set."""
+    parts: list = [
+        source_file_id,
+        sorted(topic_ids),
+        sorted(types),
+        difficulty,
+        count,
+        variant,
+        prompt_version(types),
+    ]
+    if style_id:
+        parts.append(style_id)
+    raw = json.dumps(parts)
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def prompt_version(types: list[str]) -> int:
+    return FLASHCARD_PROMPT_VERSION if list(types) == [FLASHCARD] else PROMPT_VERSION
 
 
 def allocate(topics: list[Topic], count: int) -> dict[str, int]:
@@ -232,8 +243,10 @@ def validate(
     topics_by_label: dict[str, TopicSource],
     allowed_types: list[str],
     default_difficulty: str,
+    max_theory_marks: int = 10,
 ) -> Draft | None:
-    """A Draft if the item passes every check, else None (it's dropped and topped up later)."""
+    """A Draft if the item passes every check, else None (it's dropped and topped up later).
+    A past paper's style may allow bigger theory questions (FR-QGEN-09)."""
     kind = item.get("type")
     if kind not in allowed_types:
         return None
@@ -299,7 +312,7 @@ def validate(
         except (KeyError, TypeError, ValueError):
             return None
         # FR-QGEN-06: the rubric's marks add up to the question's total.
-        if not 4 <= marks <= 10 or not 2 <= len(rubric) <= 5 or len(answer) < 40:
+        if not 4 <= marks <= max_theory_marks or not 2 <= len(rubric) <= 5 or len(answer) < 40:
             return None
         if any(not r["criterion"] or r["marks"] < 1 for r in rubric):
             return None
@@ -332,6 +345,43 @@ def validate(
     )
 
 
+def validate_flashcard(item: dict, topics_by_label: dict[str, TopicSource]) -> Draft | None:
+    """A flashcard: a short front (a term or question), a short back, an optional one-line
+    extra, and the pages it comes from. Both sides must come from those pages."""
+    topic = topics_by_label.get(str(item.get("topic")))
+    if topic is None:
+        return None
+    front = _clean(item.get("front"), 200)
+    back = _clean(item.get("back"), 300)
+    extra = _clean(item.get("extra"), 200)
+    by_number = {pg.number: pg for pg in topic.pages}
+    cited: list[int] = []
+    for raw in item.get("pages") or []:
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if n in by_number and n not in cited:
+            cited.append(n)
+    if len(front) < 3 or len(back) < 2 or not cited:
+        return None
+    if normalise(front) == normalise(back):
+        return None
+    if support(f"{front} {back}", [by_number[n] for n in cited]) < MIN_SUPPORT:
+        return None
+    return Draft(
+        type=FLASHCARD,
+        stem=front,
+        answer=back,
+        explanation=extra,
+        difficulty="medium",
+        options=None,
+        chunk_ids=[],
+        pages=sorted(cited),
+        topic_id=topic.topic_id,
+    )
+
+
 def parse(raw: str) -> list[dict]:
     try:
         data = json.loads(raw)
@@ -343,7 +393,7 @@ def parse(raw: str) -> list[dict]:
             data = json.loads(m.group(0))
         except json.JSONDecodeError:
             return []
-    items = data.get("questions") if isinstance(data, dict) else data
+    items = (data.get("questions") or data.get("cards")) if isinstance(data, dict) else data
     return [i for i in items if isinstance(i, dict)] if isinstance(items, list) else []
 
 
@@ -361,6 +411,8 @@ def shuffle_options(draft: Draft, seed: str) -> Draft:
 def stored_answer(draft: Draft) -> object:
     if draft.type == "fill_blank":
         return {"text": draft.answer, "alternatives": draft.alternatives}
+    if draft.type == FLASHCARD:
+        return {"text": draft.answer}
     if draft.type in OPEN_TYPES:
         return {"model_answer": draft.answer}
     return draft.answer
@@ -377,7 +429,10 @@ def normalise(text: str) -> str:
 
 
 def is_correct(qtype: str, answer: object, response: object) -> bool | None:
-    """None for types the device can't mark (short answer, theory)."""
+    """None for types the device can't mark (short answer, theory). A flashcard's response is
+    the student's own rating: true for "Knew it", false for "Didn't know"."""
+    if qtype == FLASHCARD:
+        return response if isinstance(response, bool) else None
     if qtype == "mcq":
         return isinstance(response, int) and not isinstance(response, bool) and response == answer
     if qtype == "true_false":

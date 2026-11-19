@@ -237,7 +237,7 @@ def test_over_the_daily_limit_the_answer_is_left_unmarked_with_a_reason(client, 
     fake["limit_reached"] = True
     client.put(f"/v1/attempts/{ATTEMPT}/answers", headers=auth(), json=BODY)
     assert fake["recorded"][0]["status"] == "not_marked"
-    assert fake["recorded"][0]["summary"].startswith("You've used today's 20 answer markings.")
+    assert fake["recorded"][0]["summary"].startswith("You've used your markings for now.")
     assert fake["finished"] >= 1
 
 

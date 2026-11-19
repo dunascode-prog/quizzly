@@ -8,6 +8,7 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
+from app.domain import avatars
 from app.worker import queue
 
 PUSH_AT_MOST_EVERY = timedelta(hours=1)  # per notification row: batching (FR-NOTIF-06)
@@ -98,9 +99,10 @@ async def inbox(
     types = {"shared": list(SHARED_TYPES), "study": list(STUDY_TYPES)}.get(kind)
     rows = await (
         await conn.execute(
-            """
+            f"""
             select n.id, n.type::text as type, n.title, n.body, n.target, n.read_at,
-                   n.created_at, n.actor_id, p.display_name as actor_name
+                   n.created_at, n.actor_id, p.display_name as actor_name,
+                   {avatars.shown_path_sql("%(u)s")} as actor_avatar_path
             from notifications n left join profiles p on p.id = n.actor_id
             where n.user_id = %(u)s
               and (%(before)s::timestamptz is null or n.created_at < %(before)s)

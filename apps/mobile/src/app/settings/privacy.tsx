@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Platform, StyleSheet, Switch, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ChevronLeft } from '@/components/icons';
 import { Banner } from '@/components/ui/banner';
@@ -9,11 +9,14 @@ import { Pill } from '@/components/ui/pill';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
+import { ToggleRow } from '@/components/ui/toggle-row';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { type Settings, useSettings, useUpdateSettings } from '@/lib/settings';
 import { useBlocked, useUnblock } from '@/lib/sharing';
+import { useOnline } from '@/lib/network';
 
 const WHO: { key: Settings['share_permission']; label: string; hint: string }[] = [
   { key: 'coursemates', label: 'Coursemates only', hint: 'People who already share a course with you' },
@@ -30,6 +33,7 @@ export default function PrivacyScreen() {
   const blocked = useBlocked();
   const unblock = useUnblock();
   const s = settings.data;
+  const online = useOnline();
   const error = settings.error ?? update.error ?? blocked.error ?? unblock.error;
 
   return (
@@ -37,6 +41,7 @@ export default function PrivacyScreen() {
       <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
       <HighlightText highlight="blocking">Privacy and blocking</HighlightText>
       {error ? <Banner message={friendlyError(error)} /> : null}
+      {!online && !s ? <NeedsInternet what="Your privacy settings" /> : null}
 
       <View style={styles.section}>
         <Text variant="heading" accessibilityRole="header">
@@ -62,23 +67,12 @@ export default function PrivacyScreen() {
         </Text>
       </View>
 
-      <View style={[styles.toggleRow, { backgroundColor: theme.backgroundSelected }]}>
-        <View style={styles.flex}>
-          <Text variant="label">Show my name on invite links and recaps</Text>
-          <Text variant="small" color="textSecondary">
-            Your first name, school and level. Turn off to stay anonymous.
-          </Text>
-        </View>
-        <Switch
-          value={s?.show_identity_on_links ?? true}
-          onValueChange={(v) => update.mutate({ show_identity_on_links: v })}
-          accessibilityLabel="Show my name on invite links and recaps"
-          trackColor={{ false: theme.line, true: theme.text }}
-          thumbColor={theme.backgroundSelected}
-          // react-native-web colours the "on" thumb itself; accents aren't for toggles (§3.2).
-          {...(Platform.OS === 'web' ? { activeThumbColor: theme.backgroundSelected } : {})}
-        />
-      </View>
+      <ToggleRow
+        label="Show my name on invite links and recaps"
+        helper="Your first name, school and level. Turn off to stay anonymous."
+        value={s?.show_identity_on_links ?? true}
+        onChange={(v) => update.mutate({ show_identity_on_links: v })}
+      />
 
       <View style={styles.section}>
         <Text variant="heading" accessibilityRole="header">

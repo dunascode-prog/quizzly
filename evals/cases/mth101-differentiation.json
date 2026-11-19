@@ -1,0 +1,61 @@
+{
+  "course": "MTH 101 Elementary Mathematics",
+  "pages": [
+    [
+      "MTH 101: Elementary Mathematics",
+      "Chapter 6: Differentiation"
+    ],
+    [
+      "The derivative",
+      "The derivative measures the rate of change of a function.",
+      "It is the gradient of the tangent to the curve at a point."
+    ],
+    [
+      "The power rule",
+      "If y = x^n, then dy/dx = n x^(n-1).",
+      "The derivative of a constant is zero."
+    ],
+    [
+      "The product and chain rules",
+      "Product rule: d(uv)/dx = u dv/dx + v du/dx.",
+      "Chain rule: dy/dx = dy/du times du/dx."
+    ],
+    [
+      "Stationary points",
+      "At a stationary point the derivative is zero.",
+      "If the second derivative is positive the point is a minimum; if negative, a maximum."
+    ]
+  ],
+  "expected": {
+    "topics": [
+      3,
+      5
+    ],
+    "topic_keywords": [
+      "derivative",
+      "power rule",
+      "stationary"
+    ],
+    "must_cover": [
+      [
+        "derivative",
+        "gradient",
+        "rate of change"
+      ],
+      [
+        "power rule",
+        "n x",
+        "constant"
+      ],
+      [
+        "product rule",
+        "chain rule"
+      ],
+      [
+        "stationary",
+        "minimum",
+        "maximum"
+      ]
+    ]
+  }
+}

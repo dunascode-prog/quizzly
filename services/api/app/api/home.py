@@ -74,6 +74,26 @@ class StudyDaysOut(BaseModel):
     study_days: int
 
 
+class CelebrationReadiness(BaseModel):
+    code: str
+    before: float | None
+    now: float
+
+
+class CelebrationOut(BaseModel):
+    """Screen 16 (FR-HAB-05): one of the student's own achievements, ready to draw."""
+
+    id: UUID
+    kind: str
+    ref: dict[str, Any]
+    ring: float
+    ring_label: str  # "80%", or "4/4" days for the weekly goal
+    subtitle: str | None
+    before: float | None  # "Since last Monday" bars; None hides the card
+    now: float | None
+    readiness: CelebrationReadiness | None
+
+
 class SeenIn(BaseModel):
     ids: list[UUID] = Field(max_length=50)
 
@@ -161,6 +181,7 @@ class NotificationTypes(BaseModel):
     recap: bool | None = None
     mates: bool | None = None
     ready: bool | None = None
+    plans: bool | None = None  # plan reminders (FR-PLAN-05)
 
 
 class NotificationSettingsOut(BaseModel):
@@ -199,8 +220,18 @@ async def get_study_days(
     return StudyDaysOut(**data)
 
 
+@router.get("/v1/achievements/{achievement_id}")
+async def get_achievement(achievement_id: UUID, user: User, conn: Conn) -> CelebrationOut:
+    """Only the student's own achievements; anyone else's is a 404."""
+    data = await home.achievement(conn, user.id, achievement_id)
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    return CelebrationOut(**data)
+
+
 @router.post("/v1/achievements/seen", status_code=status.HTTP_204_NO_CONTENT)
 async def achievements_seen(body: SeenIn, user: User, conn: Conn) -> Response:
+    """Marks celebrations as shown so they don't appear again."""
     await home.mark_achievements_seen(conn, user.id, body.ids)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -235,6 +266,7 @@ async def get_recap(week: date, user: User, conn: Conn) -> RecapOut:
 
 @router.get("/v1/me/settings", tags=["account"])
 async def get_settings(user: User, conn: Conn) -> SettingsOut:
+    """Weekly goal, theme, night and low-data modes, share permission, identity on links."""
     data = await settings.get_settings(conn, user.id)
     if data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile not found")
@@ -256,6 +288,7 @@ async def update_settings(body: SettingsIn, user: User, conn: Conn) -> SettingsO
 
 @router.get("/v1/me/notification-settings", tags=["account"])
 async def get_notification_settings(user: User, conn: Conn) -> NotificationSettingsOut:
+    """Daily reminder and its time, quiet hours, and per-type toggles (FR-HAB-08)."""
     return NotificationSettingsOut(**await settings.get_notification_settings(conn, user.id))
 
 

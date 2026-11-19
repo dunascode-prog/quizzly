@@ -1,0 +1,9 @@
+{
+  "outline_in_range": 0.8,
+  "outline_recall": 0.6,
+  "question_valid_rate": 0.6,
+  "question_coverage": 0.5,
+  "flashcard_valid_rate": 0.6,
+  "leaks": 0,
+  "errors": 1
+}

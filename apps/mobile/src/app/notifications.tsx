@@ -4,15 +4,18 @@ import { FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChevronLeft } from '@/components/icons';
-import { initials } from '@/components/profile-header';
+import { Avatar } from '@/components/ui/avatar';
 import { Banner } from '@/components/ui/banner';
 import { IconButton } from '@/components/ui/icon-button';
 import { Pill } from '@/components/ui/pill';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Accent, FontFamily, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAccent } from '@/lib/appearance';
 import { friendlyError } from '@/lib/errors';
+import { useOnline } from '@/lib/network';
 import {
   blockUser,
   type InboxFilter,
@@ -65,6 +68,7 @@ function Title({ n }: { n: Notification }) {
 function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
   const theme = useTheme();
   const accept = useAcceptShare();
+  const dot = useAccent() ?? Accent.lagoon;
   const unread = !n.read_at;
   const pendingShare = n.type === 'course_shared' && n.target?.params?.memberId;
   return (
@@ -77,11 +81,7 @@ function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
         accessibilityHint="Opens it. Long-press for more options"
         style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}>
         {n.actor_name ? (
-          <View style={[styles.avatar, { backgroundColor: theme.text }]}>
-            <Text variant="label" color="onInk">
-              {initials(n.actor_name)}
-            </Text>
-          </View>
+          <Avatar name={n.actor_name} uri={n.actor_avatar_url} size={48} tone="ink" remote />
         ) : (
           <View style={[styles.avatar, { borderWidth: 1.5, borderColor: theme.line }]}>
             <Text variant="label">Q</Text>
@@ -99,7 +99,7 @@ function Row({ n, onLongPress }: { n: Notification; onLongPress: () => void }) {
           </Text>
         </View>
         {/* Unread dot: one of the places an accent may appear (DESIGN.md §3.2). */}
-        {unread ? <View style={[styles.dot, { backgroundColor: Accent.lagoon }]} accessible={false} /> : null}
+        {unread ? <View style={[styles.dot, { backgroundColor: dot }]} accessible={false} /> : null}
       </Pressable>
       <View style={styles.below}>
         {pendingShare && unread ? (
@@ -128,6 +128,7 @@ export default function NotificationsScreen() {
   const [menu, setMenu] = useState<Notification | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inbox = useInbox(filter);
+  const online = useOnline();
   const markAll = useMarkAllRead();
   const rows = inbox.data?.pages.flatMap((p) => p.notifications) ?? [];
   const unread = inbox.data?.pages[0]?.unread ?? 0;
@@ -149,7 +150,7 @@ export default function NotificationsScreen() {
           <View style={styles.header}>
             <View style={styles.topBar}>
               <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
-              {unread ? <Pill label="Mark all read" onPress={() => markAll.mutate()} /> : null}
+              {unread && online ? <Pill label="Mark all read" onPress={() => markAll.mutate()} /> : null}
             </View>
             <View style={styles.titleRow}>
               <Text variant="display" accessibilityRole="header">
@@ -169,6 +170,7 @@ export default function NotificationsScreen() {
               ))}
             </View>
             {inbox.isError ? <Banner message={friendlyError(inbox.error)} /> : null}
+            {!online && !inbox.data ? <NeedsInternet what="Your notifications" /> : null}
             {error ? <Banner message={error} /> : null}
           </View>
         }

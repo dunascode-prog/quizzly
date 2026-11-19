@@ -2,19 +2,22 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { ArrowRight, X } from '@/components/icons';
+import { ArrowRight, Lock, RotateCcw, X } from '@/components/icons';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
+import { HeroCard } from '@/components/ui/hero-card';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { IconButton } from '@/components/ui/icon-button';
 import { Pill } from '@/components/ui/pill';
 import { Screen } from '@/components/ui/screen';
 import { SegmentedPill } from '@/components/ui/segmented-pill';
 import { Text } from '@/components/ui/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Size, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
-import { createQuiz, type Difficulty, type Mode, type QuestionType } from '@/lib/quiz';
+import { useCourses } from '@/lib/library';
+import { createQuiz, type Difficulty, type Mode, type PaperStyle, type QuestionType, usePaperStyles } from '@/lib/quiz';
+import { useMe } from '@/lib/profile';
 import { useOutline } from '@/lib/study';
 
 const TYPES: { value: QuestionType; label: string }[] = [
@@ -31,20 +34,66 @@ const DIFFICULTIES: { value: Difficulty; label: string }[] = [
   { value: 'hard', label: 'Hard' },
 ];
 const COUNTS = [5, 10, 20, 30] as const;
+const FREE_COUNTS: readonly number[] = [5, 10]; // 20 and 30 are on Student and Premium (FR-PLAN-04)
 const TIMERS = [0, 10, 20, 30, 60] as const; // minutes; 0 = no timer
 
-function CountCircle({ n, selected, onPress }: { n: number; selected: boolean; onPress: () => void }) {
+const yearOf = (s: PaperStyle) => (s.year && s.year !== 'older' ? s.year : 'an older');
+
+/** Screen 26b: the past paper this quiz copies (FR-QGEN-09). */
+function StyleCard({ code, style, onChange }: { code: string; style: PaperStyle; onChange: () => void }) {
+  const theme = useTheme();
+  return (
+    <HeroCard>
+      <View style={styles.styleTop}>
+        <View style={[styles.styleIcon, { backgroundColor: theme.onInk }]}>
+          <RotateCcw size={24} color={theme.text} />
+        </View>
+        <View style={styles.flex}>
+          <Text variant="small" color="mutedOnInk">
+            Style
+          </Text>
+          <Text variant="heading" color="onInk">
+            Past questions ({code}, {style.year && style.year !== 'older' ? style.year : 'older'})
+          </Text>
+        </View>
+        <Pill label="Change" onPress={onChange} accessibilityLabel="Change the quiz style" />
+      </View>
+      <Text variant="small" color="mutedOnInk">
+        Same format as {style.year && style.year !== 'older' ? `the ${style.year}` : 'that'} paper. Every answer comes from your notes.
+      </Text>
+    </HeroCard>
+  );
+}
+
+function CountCircle({
+  n,
+  selected,
+  locked,
+  onPress,
+}: {
+  n: number;
+  selected: boolean;
+  locked?: boolean;
+  onPress: () => void;
+}) {
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
-      accessibilityLabel={`${n} questions`}
+      accessibilityLabel={`${n} questions${locked ? ', on Student and Premium' : ''}`}
+      accessibilityHint={locked ? 'Opens the plans' : undefined}
       style={[styles.circle, { backgroundColor: selected ? theme.text : theme.backgroundSelected }]}>
-      <Text variant="title" color={selected ? 'onInk' : 'text'}>
+      <Text variant="title" color={selected ? 'onInk' : locked ? 'textSecondary' : 'text'} maxFontSizeMultiplier={1.3}>
         {n}
       </Text>
+      {/* A paid-plan size for a free student (FR-PLAN-04). */}
+      {locked ? (
+        <View style={[styles.lock, { backgroundColor: theme.text, borderColor: theme.background }]}>
+          <Lock size={12} color={theme.onInk} strokeWidth={2.5} />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -52,6 +101,7 @@ function CountCircle({ n, selected, onPress }: { n: number; selected: boolean; o
 // Screen 09 (DESIGN.md §7): scope, types, count and mode (FR-QGEN-01; defaults whole document,
 // multiple choice, mixed, 10). Short answer and theory are marked by the AI; exams may be timed.
 export default function QuizSetup() {
+  const theme = useTheme();
   const { documentId, topicId } = useLocalSearchParams<{ documentId: string; topicId?: string }>();
   const outline = useOutline(documentId);
   const topics = outline.data?.topics ?? [];
@@ -64,6 +114,31 @@ export default function QuizSetup() {
   const [changing, setChanging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Past-question style (FR-QGEN-09): only for the student's own courses.
+  const courseId = outline.data?.document.course_id ?? null;
+  const course = useCourses().data?.find((c) => c.id === courseId);
+  const own = Boolean(course && !course.shared_by);
+  const paperStyles = usePaperStyles(own ? courseId : null).data ?? [];
+  const ready = paperStyles.filter((p) => p.status === 'ready');
+  const learning = paperStyles.some((p) => p.status === 'pending' || p.status === 'generating');
+  const [styleId, setStyleId] = useState<string | null>(null);
+  // Free students see paid options with a padlock that opens the plans (FR-PLAN-04).
+  const plan = useMe().data?.plan ?? 'free';
+  const free = plan === 'free';
+  const toPlans = () => router.push('/plans');
+  const [picking, setPicking] = useState(false);
+  const [editTypes, setEditTypes] = useState(false);
+  const chosen = ready.find((p) => p.id === styleId);
+  const pickStyle = (p: PaperStyle | null) => {
+    setPicking(false);
+    setEditTypes(false);
+    setStyleId(p?.id ?? null);
+    if (p) {
+      setTypes(p.question_types.length ? p.question_types : ['theory']);
+      setMode('exam'); // a past paper is practised like the exam (26b)
+    }
+  };
+  const addPaper = () => courseId && router.push({ pathname: '/course/[id]/past-paper', params: { id: courseId } });
 
   const scope =
     topicIds.length === 0 || topicIds.length === topics.length
@@ -86,6 +161,7 @@ export default function QuizSetup() {
         count,
         mode,
         ...(mode === 'exam' && timer ? { time_limit_min: timer } : {}),
+        ...(chosen ? { style_id: chosen.id } : {}),
       });
       router.replace({ pathname: '/quiz/[id]/play', params: { id: quiz.id, mode } });
     } catch (e) {
@@ -139,19 +215,57 @@ export default function QuizSetup() {
         </View>
       ) : null}
 
+      {own && chosen && !picking ? <StyleCard code={course?.code ?? ''} style={chosen} onChange={() => setPicking(true)} /> : null}
+      {own && (!chosen || picking) ? (
+        <View style={styles.group}>
+          <Text variant="label">Style</Text>
+          <View style={styles.pills} accessibilityRole="radiogroup" accessibilityLabel="Quiz style">
+            <Pill label="From my notes" role="radio" selected={!chosen} onPress={() => pickStyle(null)} />
+            {ready.map((p) => (
+              <Pill
+                key={p.id}
+                label={`Like the ${p.year && p.year !== 'older' ? p.year : 'older'} paper`}
+                role="radio"
+                selected={chosen?.id === p.id}
+                locked={free}
+                onPress={() => (free ? toPlans() : pickStyle(p))}
+              />
+            ))}
+            <Pill label="+ Past paper" accessibilityLabel="Add a past paper" locked={free} onPress={free ? toPlans : addPaper} />
+          </View>
+          <Text variant="small" color="textSecondary">
+            {learning
+              ? "We're learning your past paper's style. It'll show here in a minute."
+              : ready.length
+                ? `Copy the question types, wording and marks of ${yearOf(ready[0])} paper. Every answer still comes from your notes.`
+                : 'Add a past paper and new questions copy its style, using only your notes.'}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.group}>
         <Text variant="label">Question types</Text>
-        <View style={styles.pills}>
-          {TYPES.map((t) => (
-            <Pill
-              key={t.value}
-              label={t.label}
-              role="checkbox"
-              selected={types.includes(t.value)}
-              onPress={() => setTypes((list) => toggle(list, t.value))}
-            />
-          ))}
-        </View>
+        {chosen && !editTypes ? (
+          <View style={[styles.matches, { backgroundColor: theme.backgroundElement }]}>
+            <Text variant="body" style={styles.flex}>
+              Matches the paper:{' '}
+              <Text variant="label">{types.map((t) => TYPES.find((x) => x.value === t)?.label ?? t).join(', ')}</Text>
+            </Text>
+            <Pill label="Edit" onPress={() => setEditTypes(true)} accessibilityLabel="Edit question types" />
+          </View>
+        ) : (
+          <View style={styles.pills}>
+            {TYPES.map((t) => (
+              <Pill
+                key={t.value}
+                label={t.label}
+                role="checkbox"
+                selected={types.includes(t.value)}
+                onPress={() => setTypes((list) => toggle(list, t.value))}
+              />
+            ))}
+          </View>
+        )}
         {types.some((t) => t === 'short_answer' || t === 'theory') ? (
           <Text variant="small" color="textSecondary">
             Written answers are marked by AI against a marking scheme from your notes.
@@ -162,9 +276,12 @@ export default function QuizSetup() {
       <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel="Number of questions">
         <Text variant="label">Questions</Text>
         <View style={styles.counts}>
-          {COUNTS.map((n) => (
-            <CountCircle key={n} n={n} selected={count === n} onPress={() => setCount(n)} />
-          ))}
+          {COUNTS.map((n) => {
+            const locked = free && !FREE_COUNTS.includes(n);
+            return (
+              <CountCircle key={n} n={n} selected={count === n} locked={locked} onPress={() => (locked ? toPlans() : setCount(n))} />
+            );
+          })}
         </View>
       </View>
 
@@ -189,7 +306,14 @@ export default function QuizSetup() {
           <Text variant="label">Timer</Text>
           <View style={styles.pills} accessibilityRole="radiogroup" accessibilityLabel="Timer">
             {TIMERS.map((m) => (
-              <Pill key={m} label={m ? `${m} min` : 'No timer'} role="radio" selected={timer === m} onPress={() => setTimer(m)} />
+              <Pill
+                key={m}
+                label={m ? `${m} min` : 'No timer'}
+                role="radio"
+                selected={timer === m}
+                locked={free && m > 0}
+                onPress={() => (free && m > 0 ? toPlans() : setTimer(m))}
+              />
             ))}
           </View>
         </View>
@@ -207,4 +331,8 @@ const styles = StyleSheet.create({
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   counts: { flexDirection: 'row', justifyContent: 'space-between' },
   circle: { width: 72, height: 72, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  lock: { position: 'absolute', right: -2, bottom: -2, width: 26, height: 26, borderRadius: 13, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  styleTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  styleIcon: { width: Size.minTouch, height: Size.minTouch, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  matches: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.three, paddingLeft: Spacing.gutter, borderRadius: Radius.option },
 });

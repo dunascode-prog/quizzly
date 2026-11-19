@@ -4,6 +4,7 @@ import uuid
 import pytest
 
 from app.domain import quizzes, study, usage
+from app.domain import topics as topic_overrides
 from app.rag import questions as q
 from app.worker import queue
 from tests.conftest import JWT_SECRET
@@ -186,7 +187,7 @@ def auth():
 
 @pytest.fixture
 def fake(client, monkeypatch):
-    state = {"sets": {}, "used": 0, "jobs": [], "quizzes": {}}
+    state = {"sets": {}, "used": 0, "jobs": [], "quizzes": {}, "overrides": {}}
     doc = {
         "id": DOC,
         "title": "Stacks and queues",
@@ -214,7 +215,7 @@ def fake(client, monkeypatch):
     ]
 
     async def ready_document(conn, user_id, document_id):
-        return doc if document_id == DOC else None
+        return doc | {"course_id": state.get("doc_course")} if document_id == DOC else None
 
     async def topics_for(conn, sf):
         return topics
@@ -222,7 +223,9 @@ def fake(client, monkeypatch):
     async def find_set(conn, key):
         return state["sets"].get(key)
 
-    async def create_set(conn, sf, key, topic_ids, types, difficulty, count, variant):
+    async def create_set(
+        conn, sf, key, topic_ids, types, difficulty, count, variant, style_id=None
+    ):
         state["sets"][key] = {
             "id": uuid.uuid4(),
             "status": "pending",
@@ -242,10 +245,13 @@ def fake(client, monkeypatch):
     async def enqueue(conn, job_type, payload, *, user_id=None, dedupe_key=None):
         state["jobs"].append(dedupe_key)
 
-    async def create_quiz(conn, user_id, document_id, set_id, title, mode, time_limit_sec=None):
+    async def create_quiz(
+        conn, user_id, document_id, set_id, title, mode, time_limit_sec=None, kind="quiz"
+    ):
         qid = uuid.uuid4()
         state["quizzes"][qid] = {
             "id": qid,
+            "kind": kind,
             "title": title,
             "document_id": document_id,
             "mode": mode,
@@ -263,7 +269,11 @@ def fake(client, monkeypatch):
     async def questions_for(conn, set_id, question_ids=None):
         return []
 
+    async def overrides(conn, user_id, sf):
+        return state["overrides"]
+
     for mod, name, fn in [
+        (topic_overrides, "overrides", overrides),
         (study, "ready_document", ready_document),
         (study, "topics", topics_for),
         (quizzes, "find_set", find_set),
@@ -291,7 +301,7 @@ def test_new_quiz_queues_a_set_and_the_same_choices_reuse_it_free(client, fake):
     assert len(fake["sets"]) == 1
 
 
-def test_new_questions_makes_another_set_and_counts(client, fake):
+def test_new_questions_makes_another_set_and_counts(client, fake, student_plan):
     client.post(URL, headers=auth(), json={})
     client.post(URL, headers=auth(), json={"new_questions": True})
     assert fake["used"] == 2
@@ -311,7 +321,9 @@ def test_daily_quiz_limit_and_unsupported_types(client, fake):
     fake["used"] = 15
     r = client.post(URL, headers=auth(), json={})
     assert r.status_code == 429
-    assert r.json()["detail"] == "You've used today's 15 quiz generations. Resets at 12:00 AM."
+    assert r.json()["detail"] == (
+        "You've used your quiz sets for now. 5 more arrive at midnight. Student gives you 30 a day."
+    )
     assert client.post(URL, headers=auth(), json={"types": ["essay"]}).status_code == 422
     assert client.post(URL, headers=auth(), json={"count": 7}).status_code == 422
 
@@ -382,3 +394,81 @@ def test_exam_answers_stay_hidden_until_the_attempt_is_submitted(
         assert (q0["answer"], q0["explanation"]) == (0, QUESTION["explanation"])
     else:
         assert (q0["answer"], q0["explanation"], q0["rubric"]) == (None, None, None)
+
+
+# --- flashcards (FR-QGEN-10) --------------------------------------------------------------------
+
+FLASH_URL = f"/v1/documents/{DOC}/flashcards"
+
+
+def test_flashcards_are_a_cached_practice_round_for_one_topic(client, fake, student_plan):
+    r = client.post(FLASH_URL, headers=auth(), json={"topic_id": str(T2)})
+    assert r.status_code == 201
+    body = r.json()
+    assert body["kind"] == "flashcards" and body["mode"] == "practice" and body["title"] == "Queues"
+    (only,) = fake["sets"].values()
+    assert only["topic_ids"] == [T2] and only["requested_count"] == 20
+    assert fake["used"] == 1 and len(fake["jobs"]) == 1
+    # Same topic again: the cached cards, free. A quiz on the same topic is a different set.
+    client.post(FLASH_URL, headers=auth(), json={"topic_id": str(T2)})
+    assert fake["used"] == 1 and len(fake["sets"]) == 1
+    client.post(URL, headers=auth(), json={"topic_ids": [str(T2)], "count": 20})
+    assert len(fake["sets"]) == 2
+
+
+def test_flashcards_need_a_readable_document_and_one_of_its_topics(client, fake):
+    """FR-SEC: someone else's document is a 404; a topic from another document is rejected."""
+    other_doc = client.post(
+        f"/v1/documents/{uuid.uuid4()}/flashcards", headers=auth(), json={"topic_id": str(T2)}
+    )
+    assert other_doc.status_code == 404
+    other_topic = client.post(FLASH_URL, headers=auth(), json={"topic_id": str(uuid.uuid4())})
+    assert other_topic.status_code == 422
+    assert fake["used"] == 0 and not fake["sets"]
+
+
+def test_flashcards_count_against_the_daily_generation_limit(client, fake):
+    fake["used"] = 15
+    r = client.post(FLASH_URL, headers=auth(), json={"topic_id": str(T1)})
+    assert r.status_code == 429
+
+
+def test_a_flashcard_must_come_from_its_pages():
+    good = {
+        "topic": "t1",
+        "front": "What does peek return?",
+        "back": "The top item.",
+        "extra": "Pop removes it.",
+        "pages": [4],
+    }
+    d = q.validate_flashcard(good, TOPICS)
+    assert d is not None and d.type == q.FLASHCARD and d.pages == [4]
+    assert q.stored_answer(d) == {"text": "The top item."}
+    assert q.validate_flashcard(good | {"pages": [9]}, TOPICS) is None  # not this topic's page
+    assert q.validate_flashcard(good | {"topic": "t9"}, TOPICS) is None
+    assert q.validate_flashcard(good | {"back": "Photosynthesis in plant cells"}, TOPICS) is None
+    assert q.validate_flashcard(good | {"back": "what does peek return"}, TOPICS) is None
+    assert q.validate_flashcard(good | {"front": "Pe"}, TOPICS) is None
+
+
+def test_flashcards_are_self_rated_and_keyed_on_their_own_prompt_version():
+    assert q.is_correct("flashcard", {"text": "x"}, True) is True
+    assert q.is_correct("flashcard", {"text": "x"}, False) is False
+    assert q.is_correct("flashcard", {"text": "x"}, "x") is None
+    assert q.prompt_version([q.FLASHCARD]) == q.FLASHCARD_PROMPT_VERSION
+    assert q.parse('{"cards": [{"front": "a"}]}') == [{"front": "a"}]
+    assert q.cache_key("sf", ["t"], ["flashcard"], "mixed", 20, 0) != q.cache_key(
+        "sf", ["t"], ["mcq"], "mixed", 20, 0
+    )
+
+
+def test_flashcards_for_a_merged_topic_cover_its_parts_under_the_students_name(client, fake):
+    """FR-TOP-03: after merging Queues into Stacks, one round covers both topics."""
+    fake["overrides"] = {
+        T2: {"topic_id": T2, "title": None, "merged_into_topic_id": T1},
+        T1: {"topic_id": T1, "title": "Stacks and queues", "merged_into_topic_id": None},
+    }
+    body = client.post(FLASH_URL, headers=auth(), json={"topic_id": str(T1)}).json()
+    assert body["title"] == "Stacks and queues"
+    (only,) = fake["sets"].values()
+    assert only["topic_ids"] == sorted([T1, T2])

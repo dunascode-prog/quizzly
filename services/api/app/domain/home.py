@@ -43,7 +43,7 @@ select distinct on (qn.id) qn.id, qn.topic_id, qn.question_set_id, d.id as docum
 from questions qn
 join question_sets s on s.id = qn.question_set_id
 join documents d on d.source_file_id = s.source_file_id
-where d.status = 'ready' and d.id in (select readable_documents(%(user)s))
+where d.status = 'ready' and d.kind = 'notes' and d.id in (select readable_documents(%(user)s))
   and not qn.hidden and qn.type::text = any(%(types)s)
 """
 
@@ -178,23 +178,31 @@ async def _daily5_state(conn: AsyncConnection, user_id: UUID, today: date) -> di
               (select count(*) from review_queue rq
                where rq.user_id = %(u)s and rq.due_on <= %(d)s
                  and rq.question_id in (select id from ("""
-            + _POOL
+            + _POOL.replace("%(types)s", "%(review_types)s")
             + """) p)) as due,
               exists ("""
             + _POOL
             + """) as any_questions
             """,
-            {"u": user_id, "user": user_id, "d": today, "types": list(progress.OBJECTIVE_TYPES)},
+            {
+                "u": user_id,
+                "user": user_id,
+                "d": today,
+                "types": list(progress.OBJECTIVE_TYPES),
+                "review_types": list(progress.REVIEW_TYPES),
+            },
         )
     ).fetchone()
-    return {"done": bool(row["done"]), "due": row["due"], "available": row["any_questions"]}
+    # Due flashcards alone are enough for a Daily 5 (FR-QGEN-10).
+    available = row["any_questions"] or row["due"] > 0
+    return {"done": bool(row["done"]), "due": row["due"], "available": available}
 
 
 async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUID | None) -> list:
     """FR-HOME-05: up to 3 rows (about 15 min)."""
     has_notes = await (
         await conn.execute(
-            "select 1 from documents d where d.status = 'ready' "
+            "select 1 from documents d where d.status = 'ready' and d.kind = 'notes' "
             "and d.id in (select readable_documents(%s)) limit 1",
             (user_id,),
         )
@@ -210,12 +218,13 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
     weak = await (
         await conn.execute(
             """
-            select distinct on (m.mastery, m.topic_id) m.topic_id, t.title, m.mastery,
-                   d.id as document_id
+            select distinct on (m.mastery, m.topic_id) m.topic_id,
+                   coalesce(o.title, t.title) as title, m.mastery, d.id as document_id
             from topic_mastery m
             join topics t on t.id = m.topic_id
+            left join topic_overrides o on o.topic_id = t.id and o.user_id = m.user_id
             join documents d on d.source_file_id = t.source_file_id and d.status = 'ready'
-              and d.id in (select readable_documents(m.user_id))
+              and d.kind = 'notes' and d.id in (select readable_documents(m.user_id))
             where m.user_id = %s and m.answered >= %s and m.mastery < %s
             order by m.mastery, m.topic_id, d.created_at desc
             limit 1
@@ -237,10 +246,13 @@ async def plan(conn: AsyncConnection, user_id: UUID, today: date, course_id: UUI
     new = await (
         await conn.execute(
             """
-            select t.id as topic_id, t.title, t.token_count, d.id as document_id
+            select t.id as topic_id, coalesce(o.title, t.title) as title, t.token_count,
+                   d.id as document_id
             from documents d
             join topics t on t.source_file_id = d.source_file_id and t.parent_id is null
-            where d.status = 'ready' and d.id in (select readable_documents(%(u)s))
+            left join topic_overrides o on o.topic_id = t.id and o.user_id = %(u)s
+            where d.status = 'ready' and d.kind = 'notes'
+              and d.id in (select readable_documents(%(u)s))
               and not exists (select 1 from topic_reads r where r.user_id = %(u)s
                               and r.topic_id = t.id)
               and not exists (select 1 from topic_mastery m where m.user_id = %(u)s
@@ -341,6 +353,154 @@ async def mark_achievements_seen(conn: AsyncConnection, user_id: UUID, ids: list
     )
 
 
+# --- Celebration (FR-HAB-05) ---------------------------------------------------------------------
+
+
+def _fraction_mastery(rows: list[dict]) -> tuple[float, int]:
+    fractions = [
+        f
+        for r in rows
+        if r["type"] != progress.FLASHCARD
+        and (f := progress.answer_fraction(r["score"], r["is_correct"], r["marks"])) is not None
+    ]
+    return progress.topic_mastery(fractions), len(fractions)
+
+
+async def _course_readiness(
+    conn: AsyncConnection, user_id: UUID, course_id: UUID | None, monday: date
+) -> dict | None:
+    """The course's readiness before this week and now, from the daily snapshots."""
+    if course_id is None:
+        return None
+    row = await (
+        await conn.execute(
+            """
+            select c.code,
+              (select readiness from readiness_snapshots where user_id = %(u)s
+               and course_id = c.id and day < %(m)s order by day desc limit 1) as before,
+              (select readiness from readiness_snapshots where user_id = %(u)s
+               and course_id = c.id order by day desc limit 1) as now
+            from courses c where c.id = %(c)s
+            """,
+            {"u": user_id, "c": course_id, "m": monday},
+        )
+    ).fetchone()
+    if row is None or row["now"] is None:
+        return None
+    return {
+        "code": row["code"],
+        "before": None if row["before"] is None else float(row["before"]),
+        "now": float(row["now"]),
+    }
+
+
+async def achievement(conn: AsyncConnection, user_id: UUID, achievement_id: UUID) -> dict | None:
+    """What screen 16 shows for one of the student's own achievements: the ring value, a
+    subtitle, "since last Monday" before and now bars and the course readiness change."""
+    ctx = await context(conn, user_id)
+    if ctx is None:
+        return None
+    a = await (
+        await conn.execute(
+            "select id, kind::text as kind, ref from achievements where id = %s and user_id = %s",
+            (achievement_id, user_id),
+        )
+    ).fetchone()
+    if a is None:
+        return None
+    monday = progress.week_start(ctx["today"])
+    ref: dict = a["ref"] or {}
+    out: dict[str, Any] = {
+        "id": a["id"],
+        "kind": a["kind"],
+        "ref": ref,
+        "ring": 1.0,
+        "ring_label": None,
+        "subtitle": None,
+        "before": None,
+        "now": None,
+        "readiness": None,
+    }
+    course_id: UUID | None = None
+
+    if a["kind"] == "topic_mastered" and ref.get("topic_id"):
+        topic = await (
+            await conn.execute(
+                "select t.title, m.course_id, m.mastery, c.code from topic_mastery m "
+                "join topics t on t.id = m.topic_id left join courses c on c.id = m.course_id "
+                "where m.user_id = %s and m.topic_id = %s",
+                (user_id, ref["topic_id"]),
+            )
+        ).fetchone()
+        if topic:
+            rows = await (
+                await conn.execute(
+                    progress_job._ANSWERS + " and q.topic_id = %s"
+                    " and (aa.answered_at at time zone p.timezone)::date < %s",
+                    (user_id, ref["topic_id"], monday),
+                )
+            ).fetchall()
+            before, _ = _fraction_mastery(rows)
+            now = float(topic["mastery"])
+            course_id = topic["course_id"]
+            out |= {
+                "ring": now,
+                "subtitle": " · ".join(x for x in (topic["title"], topic["code"]) if x),
+                "before": before,
+                "now": now,
+            }
+    elif a["kind"] == "personal_best" and ref.get("attempt_id"):
+        row = await (
+            await conn.execute(
+                """
+                select a.score / nullif(a.max_score, 0) as pct, d.course_id, c.code,
+                  (select max(b.score / b.max_score) from quiz_attempts b
+                   where b.user_id = a.user_id and b.id <> a.id and b.status = 'completed'
+                     and b.max_score > 0 and b.started_at < a.started_at) as best
+                from quiz_attempts a
+                join quizzes z on z.id = a.quiz_id join documents d on d.id = z.document_id
+                left join courses c on c.id = d.course_id
+                where a.id = %s and a.user_id = %s
+                """,
+                (ref["attempt_id"], user_id),
+            )
+        ).fetchone()
+        if row and row["pct"] is not None:
+            course_id = row["course_id"]
+            out |= {
+                "ring": float(row["pct"]),
+                "subtitle": f"Your best quiz score{' · ' + row['code'] if row['code'] else ''}",
+                "before": None if row["best"] is None else float(row["best"]),
+                "now": float(row["pct"]),
+            }
+    elif a["kind"] == "readiness_up" and ref.get("course_id"):
+        course_id = UUID(ref["course_id"])
+    elif a["kind"] == "weekly_goal":
+        counted = await _counted_days(conn, user_id, ctx["today"])
+        goal = ctx["weekly_goal_days"]
+        days = progress.days_this_week(counted, ctx["today"])
+        in_a_row = progress.weeks_in_a_row(counted, goal, ctx["today"])
+        out |= {
+            "ring": min(1.0, days / goal) if goal else 1.0,
+            "ring_label": f"{days}/{goal}",
+            "subtitle": f"{days} of {goal} days"
+            + (f" · {in_a_row} weeks in a row" if in_a_row > 1 else ""),
+        }
+
+    readiness = await _course_readiness(conn, user_id, course_id, monday)
+    out["readiness"] = readiness
+    if a["kind"] == "readiness_up" and readiness:
+        out |= {
+            "ring": readiness["now"],
+            "subtitle": f"{readiness['code']} readiness",
+            "before": readiness["before"],
+            "now": readiness["now"],
+        }
+    if out["ring_label"] is None:
+        out["ring_label"] = f"{round(out['ring'] * 100)}%"
+    return out
+
+
 # --- Daily 5 (FR-HAB-01) -------------------------------------------------------------------------
 
 
@@ -360,10 +520,12 @@ async def _pick(conn: AsyncConnection, user_id: UUID, today: date) -> list[dict]
         ).fetchall()
         picked.extend(rows)
 
+    params["types"] = list(progress.REVIEW_TYPES)  # due flashcards come back here only
     await take(
         "join review_queue rq on rq.question_id = p.id and rq.user_id = %(user)s "
         "where rq.due_on <= %(d)s and p.id <> all(%(skip)s) order by rq.due_on, rq.box"
     )
+    params["types"] = list(progress.OBJECTIVE_TYPES)
     await take(
         "join topic_mastery m on m.topic_id = p.topic_id and m.user_id = %(user)s "
         f"where m.answered >= {WEAK_TOPIC_MIN_ANSWERS} and m.mastery < {WEAK_TOPIC_BELOW} "

@@ -6,6 +6,7 @@ import { ArrowRight, Bell as BellIcon, X } from '@/components/icons';
 import { ProfileHeader } from '@/components/profile-header';
 import { ActionPill } from '@/components/ui/action-pill';
 import { Banner } from '@/components/ui/banner';
+import { ExamPlanCard } from '@/components/exam-plan-card';
 import { CountdownCard } from '@/components/ui/countdown-card';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { IconButton } from '@/components/ui/icon-button';
@@ -16,6 +17,8 @@ import { TextField } from '@/components/ui/text-field';
 import { WeekStrip } from '@/components/ui/week-strip';
 import { Accent, BottomTabInset, Colors, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAccent } from '@/lib/appearance';
+import { useCelebrateOnce } from '@/lib/celebrate';
 import { friendlyError } from '@/lib/errors';
 import { getDaily5, type PlanItem, useHome, useJoinByCode } from '@/lib/home';
 import { useMe } from '@/lib/profile';
@@ -38,6 +41,7 @@ type Row = { title: string; meta: string; hint?: string; onPress: () => void };
 /** The bell (screen 14 → 22) with the unread count on a Lagoon badge (DESIGN.md §3.2). */
 function Bell({ count }: { count: number }) {
   const theme = useTheme();
+  const badge = useAccent() ?? Accent.lagoon;
   return (
     <View>
       <IconButton
@@ -46,7 +50,7 @@ function Bell({ count }: { count: number }) {
         onPress={() => router.push('/notifications')}
       />
       {count ? (
-        <View style={[styles.badge, { backgroundColor: Accent.lagoon, borderColor: theme.background }]} pointerEvents="none">
+        <View style={[styles.badge, { backgroundColor: badge, borderColor: theme.background }]} pointerEvents="none">
           <Text variant="caption" style={styles.badgeText}>
             {count > 9 ? '9+' : count}
           </Text>
@@ -109,6 +113,7 @@ export default function TodayScreen() {
   const [error, setError] = useState<string | null>(null);
   const firstName = me.data?.full_name?.split(' ')[0];
   const data = home.data;
+  useCelebrateOnce(data?.achievements); // at most one celebration a session (FR-HAB-05)
 
   // Back from a quiz or a reading: show the new progress.
   const { refetch } = home;
@@ -205,6 +210,7 @@ export default function TodayScreen() {
                 : router.push('/course/new')
             }
           />
+          <ExamPlanCard countdown={data.countdown} />
           <WeekStrip days={data.week.days} today={data.today} studyDays={data.week.study_days} goal={data.week.goal} />
 
           <View style={styles.section}>

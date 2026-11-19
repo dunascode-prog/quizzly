@@ -144,3 +144,35 @@ def test_study_days_grid_is_whole_weeks(client, monkeypatch):
     assert r.status_code == 200 and len(r.json()["days"]) == 35
     assert r.json()["days"][0]["day"] == "2026-09-28"  # a Monday
     assert client.get("/v1/study-days?weeks=13", headers=auth()).status_code == 422
+
+
+def test_a_celebration_is_only_for_its_owner(client, monkeypatch):
+    """FR-HAB-05 / FR-SEC: the domain looks the achievement up by id and the caller's user id;
+    someone else's id is a 404, never their data."""
+    mine = uuid.uuid4()
+    seen: list = []
+
+    async def achievement(conn, user_id, achievement_id):
+        seen.append((user_id, achievement_id))
+        if achievement_id != mine:
+            return None
+        return {
+            "id": mine,
+            "kind": "topic_mastered",
+            "ref": {"topic_id": str(uuid.uuid4())},
+            "ring": 0.8,
+            "ring_label": "80%",
+            "subtitle": "Evaluating expressions · CSC 225",
+            "before": 0.0,
+            "now": 0.8,
+            "readiness": {"code": "CSC 225", "before": 0.64, "now": 0.71},
+        }
+
+    monkeypatch.setattr(home, "achievement", achievement)
+    r = client.get(f"/v1/achievements/{mine}", headers=auth())
+    assert r.status_code == 200
+    assert r.json()["ring"] == 0.8 and r.json()["readiness"]["code"] == "CSC 225"
+    other = uuid.uuid4()
+    assert client.get(f"/v1/achievements/{other}", headers=auth()).status_code == 404
+    assert seen == [(USER, mine), (USER, other)]
+    assert client.get(f"/v1/achievements/{mine}").status_code == 401

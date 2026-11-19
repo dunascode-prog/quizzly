@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Type } from '@/constants/theme';
+import { Colors, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAccent } from '@/lib/appearance';
 
 import { Text } from './text';
 
@@ -17,6 +18,7 @@ type Props = {
  * phrase stays together on its block. */
 export function HighlightText({ children, highlight, variant = 'display' }: Props) {
   const theme = useTheme();
+  const accent = useAccent();
   const at = children.indexOf(highlight);
   const words =
     highlight && at >= 0
@@ -32,8 +34,9 @@ export function HighlightText({ children, highlight, variant = 'display' }: Prop
     <View style={styles.row} accessible accessibilityRole="header" accessibilityLabel={children}>
       {words.map((word, i) =>
         word === highlight ? (
-          <View key={i} style={[styles.block, { backgroundColor: theme.text }]}>
-            <Text variant={variant} color="onInk">
+          <View key={i} style={[styles.block, { backgroundColor: accent ?? theme.text }]}>
+            {/* Text on an accent is always ink (DESIGN.md §3.2). */}
+            <Text variant={variant} color="onInk" style={accent ? { color: Colors.light.text } : undefined}>
               {word}
             </Text>
           </View>

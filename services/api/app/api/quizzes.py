@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 from app.api.deps import AppSettings, Conn, User
-from app.domain import quizzes, study, usage
+from app.domain import plans, quizzes, study, styles, topics, usage
 from app.rag import questions as q
 from app.worker import marking as marking_worker
 from app.worker import queue
@@ -14,6 +14,7 @@ from app.worker import queue
 router = APIRouter(tags=["quizzes"])
 
 ID_IN_USE = "That ID is already used by something else. Start again."
+STYLE_NOT_READY = "We're still learning that past paper's style. Try again in a minute."
 
 QuestionType = Literal["mcq", "true_false", "fill_blank", "short_answer", "theory"]
 
@@ -29,6 +30,8 @@ class QuizCreate(BaseModel):
     new_questions: bool = False
     # Exam mode only: unanswered questions score zero when time runs out (FR-QUIZ-02).
     time_limit_min: int | None = Field(default=None, ge=1, le=180)
+    # Copy the format of one of the student's past papers for this course (FR-QGEN-09).
+    style_id: UUID | None = None
 
 
 class QuestionOut(BaseModel):
@@ -120,6 +123,7 @@ class AttemptSummary(BaseModel):
     question_count: int
     score: float | None
     max_score: float | None
+    kind: str = "quiz"  # "flashcards" rounds open screen 25, not the quiz player
 
 
 class WeakTopic(BaseModel):
@@ -157,8 +161,9 @@ class AttemptOut(BaseModel):
 
 def _notice(row: dict) -> str | None:
     if row["status"] == "ready" and row["generated_count"] < row["requested_count"]:
+        what = "cards" if row.get("kind") == "flashcards" else "questions"
         return (
-            f"We made {row['generated_count']} good questions out of {row['requested_count']} "
+            f"We made {row['generated_count']} good {what} out of {row['requested_count']} "
             "— your notes on this topic are short."
         )
     return None
@@ -215,49 +220,59 @@ async def _attempt_out(conn, row: dict) -> AttemptOut:
     )
 
 
-@router.post("/v1/documents/{document_id}/quizzes", status_code=status.HTTP_201_CREATED)
-async def create_quiz(
-    document_id: UUID, body: QuizCreate, user: User, conn: Conn, settings: AppSettings
-) -> QuizOut:
-    doc = await study.ready_document(conn, user.id, document_id)
-    if doc is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found or not ready yet")
-    all_topics = await study.topics(conn, doc["source_file_id"])
-    known = {t["id"]: t for t in all_topics}
-    chosen = [known[t] for t in dict.fromkeys(body.topic_ids) if t in known] or all_topics
-    if body.topic_ids and len(chosen) != len(set(body.topic_ids)):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown topic")
-    topic_ids = sorted(t["id"] for t in chosen)
-    types = sorted(set(body.types))
-    sf = str(doc["source_file_id"])
+async def _question_set(
+    conn,
+    user_id: UUID,
+    settings,
+    source_file_id: UUID,
+    topic_ids: list[UUID],
+    types: list[str],
+    difficulty: str,
+    count: int,
+    new_questions: bool = False,
+    style_id: UUID | None = None,
+    plan: str = "free",
+) -> dict:
+    """The cached set for these choices (FR-QGEN-07), or a new one from today's allowance; queues
+    generation when it isn't written yet."""
+    sf = str(source_file_id)
 
     def key(variant: int) -> str:
         return q.cache_key(
-            sf, [str(t) for t in topic_ids], types, body.difficulty, body.count, variant
+            sf,
+            [str(t) for t in topic_ids],
+            types,
+            difficulty,
+            count,
+            variant,
+            str(style_id) if style_id else None,
         )
 
     variant = 0
     existing = await quizzes.find_set(conn, key(0))
-    if body.new_questions:
+    if new_questions:
         while existing is not None:  # the next unused variant is a brand-new set
             variant += 1
             existing = await quizzes.find_set(conn, key(variant))
     if existing is None:
-        limit = settings.daily_question_sets
-        if await usage.take(conn, user.id, "question_set", limit, settings.timezone) is None:
+        if plan == "capped":  # a new set is AI work; a cached one is free (FR-LIM-06)
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, plans.CAPPED)
+        limit = plans.daily_limit(settings, plan, "question_set")
+        if await usage.take(conn, user_id, "question_set", limit, settings.timezone) is None:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
-                f"You've used today's {limit} quiz generations. Resets at 12:00 AM.",
+                plans.used_up(settings, plan, "question_set"),
             )
         existing = await quizzes.create_set(
             conn,
-            doc["source_file_id"],
+            source_file_id,
             key(variant),
             topic_ids,
             types,
-            body.difficulty,
-            body.count,
+            difficulty,
+            count,
             variant,
+            style_id,
         )
     elif existing["status"] == "failed":
         await quizzes.retry_set(conn, existing["id"])  # our failure: retry without using another
@@ -267,13 +282,109 @@ async def create_quiz(
             conn,
             "generate_questions",
             {"question_set_id": str(existing["id"])},
-            user_id=user.id,
+            user_id=user_id,
             dedupe_key=f"questions:{existing['id']}",
         )
-    title = chosen[0]["title"] if len(chosen) == 1 and len(all_topics) > 1 else doc["title"]
+    return existing
+
+
+@router.post("/v1/documents/{document_id}/quizzes", status_code=status.HTTP_201_CREATED)
+async def create_quiz(
+    document_id: UUID, body: QuizCreate, user: User, conn: Conn, settings: AppSettings
+) -> QuizOut:
+    """A quiz on the chosen topics (all of them when none are given). The same choices reuse
+    a cached question set (FR-QGEN-07); otherwise today's allowance is used (429 when it's gone)
+    and the questions are written in the background, so poll `GET /v1/quizzes/{quiz_id}`."""
+    if plans.is_free(user.plan):  # padlocks (FR-PLAN-04)
+        locked = (
+            "quiz_size"
+            if body.count not in plans.FREE_QUIZ_SIZES
+            else "exam_timer"
+            if body.mode == "exam" and body.time_limit_min
+            else "past_paper"
+            if body.style_id
+            else "fresh_set"
+            if body.new_questions
+            else None
+        )
+        if locked:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, plans.LOCKED[locked])
+    doc = await study.ready_document(conn, user.id, document_id)
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found or not ready yet")
+    all_topics = await study.topics(conn, doc["source_file_id"])
+    known = {t["id"]: t for t in all_topics}
+    chosen = [known[t] for t in dict.fromkeys(body.topic_ids) if t in known] or all_topics
+    if body.topic_ids and len(chosen) != len(set(body.topic_ids)):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown topic")
+    topic_ids = sorted(t["id"] for t in chosen)
+    if body.style_id:
+        # Only the student's own, finished style for this document's course.
+        found = await styles.get_style(conn, user.id, body.style_id)
+        if found is None or found["course_id"] != doc["course_id"]:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Past-paper style not found")
+        if found["status"] != "ready":
+            raise HTTPException(status.HTTP_409_CONFLICT, STYLE_NOT_READY)
+    existing = await _question_set(
+        conn,
+        user.id,
+        settings,
+        doc["source_file_id"],
+        topic_ids,
+        sorted(set(body.types)),
+        body.difficulty,
+        body.count,
+        body.new_questions,
+        body.style_id,
+        plan=user.plan,
+    )
+    # The student's own name for the topic, or for a merged topic its parts (FR-TOP-03).
+    mine = await topics.outline(conn, user.id, doc["source_file_id"], all_topics)
+    group = next((t for t in mine if sorted(t["parts"]) == topic_ids), None)
+    title = group["title"] if group and len(mine) > 1 else doc["title"]
     limit_sec = body.time_limit_min * 60 if body.mode == "exam" and body.time_limit_min else None
     quiz_id = await quizzes.create_quiz(
         conn, user.id, document_id, existing["id"], title, body.mode, limit_sec
+    )
+    return await _quiz_out(conn, await quizzes.get_quiz(conn, user.id, quiz_id), user.id)
+
+
+FLASHCARDS_PER_TOPIC = 20
+
+
+class FlashcardsCreate(BaseModel):
+    topic_id: UUID
+
+
+@router.post("/v1/documents/{document_id}/flashcards", status_code=status.HTTP_201_CREATED)
+async def create_flashcards(
+    document_id: UUID, body: FlashcardsCreate, user: User, conn: Conn, settings: AppSettings
+) -> QuizOut:
+    """A round of flashcards for one topic (FR-QGEN-10, screen 25): a cached set of front/back
+    cards, played as a practice-only quiz of kind "flashcards". Rating a card is its answer."""
+    doc = await study.ready_document(conn, user.id, document_id)
+    if doc is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found or not ready yet")
+    # A topic the student merged covers all its parts, under their name for it (FR-TOP-03).
+    mine = await topics.outline(
+        conn, user.id, doc["source_file_id"], await study.topics(conn, doc["source_file_id"])
+    )
+    topic = next((t for t in mine if body.topic_id in t["parts"]), None)
+    if topic is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown topic")
+    existing = await _question_set(
+        conn,
+        user.id,
+        settings,
+        doc["source_file_id"],
+        sorted(topic["parts"]),
+        [q.FLASHCARD],
+        "mixed",
+        FLASHCARDS_PER_TOPIC,
+        plan=user.plan,
+    )
+    quiz_id = await quizzes.create_quiz(
+        conn, user.id, document_id, existing["id"], topic["title"], "practice", kind="flashcards"
     )
     return await _quiz_out(conn, await quizzes.get_quiz(conn, user.id, quiz_id), user.id)
 
@@ -289,6 +400,8 @@ async def get_quiz(quiz_id: UUID, user: User, conn: Conn) -> QuizOut:
 
 @router.post("/v1/quizzes/{quiz_id}/attempts", status_code=status.HTTP_201_CREATED)
 async def start_attempt(quiz_id: UUID, body: AttemptStart, user: User, conn: Conn) -> AttemptOut:
+    """Starts an attempt with an id the app chose, so a resent request doesn't start a
+    second one. 409 if the quiz isn't ready or the id is already used (FR-SEC-18)."""
     quiz = await quizzes.get_quiz(conn, user.id, quiz_id)
     if quiz is None or quiz["status"] != "ready":
         raise HTTPException(status.HTTP_409_CONFLICT, "This quiz isn't ready yet")
@@ -312,7 +425,9 @@ def _time_up(attempt: dict) -> bool:
     return datetime.now(UTC) > attempt["started_at"] + timedelta(seconds=limit) + TIME_GRACE
 
 
-async def _queue_marking(conn, user_id: UUID, attempt_id: UUID, settings) -> None:
+async def _queue_marking(
+    conn, user_id: UUID, attempt_id: UUID, settings, plan: str = "free"
+) -> None:
     """Queues LLM marking for written answers not yet marked. The daily allowance is used only
     when an answer is newly queued, so resending a save never counts twice (FR-LIM-01)."""
     for question_id in await quizzes.pending_marking(conn, attempt_id):
@@ -325,7 +440,7 @@ async def _queue_marking(conn, user_id: UUID, attempt_id: UUID, settings) -> Non
         )
         if job_id is None:
             continue  # already queued or being marked
-        limit = settings.daily_markings
+        limit = plans.daily_limit(settings, plan, "marking")  # 0 when capped (FR-LIM-06)
         if await usage.take(conn, user_id, "marking", limit, settings.timezone) is None:
             await conn.execute("update jobs set status = 'cancelled' where id = %s", (job_id,))
             await quizzes.record_marking(
@@ -336,8 +451,8 @@ async def _queue_marking(conn, user_id: UUID, attempt_id: UUID, settings) -> Non
                 None,
                 marking_worker.not_marked(
                     "limit",
-                    f"You've used today's {limit} answer markings. Resets at 12:00 AM. "
-                    "Compare your answer with the model answer.",
+                    plans.used_up(settings, plan, "marking")
+                    + " Compare your answer with the model answer.",
                 ),
             )
     await quizzes.finish_if_marked(conn, attempt_id)
@@ -368,7 +483,7 @@ async def save_answers(
     except quizzes.IdInUse as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, ID_IN_USE) from exc
     if attempt["mode"] == "practice":
-        await _queue_marking(conn, user.id, attempt_id, settings)
+        await _queue_marking(conn, user.id, attempt_id, settings, user.plan)
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))
 
 
@@ -388,7 +503,7 @@ async def submit(
             except quizzes.IdInUse as exc:
                 raise HTTPException(status.HTTP_409_CONFLICT, ID_IN_USE) from exc
         await quizzes.submit(conn, attempt)
-        await _queue_marking(conn, user.id, attempt_id, settings)
+        await _queue_marking(conn, user.id, attempt_id, settings, user.plan)
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))
 
 
@@ -414,4 +529,5 @@ async def practice(user: User, conn: Conn) -> PracticeOut:
 
 @router.get("/v1/attempts/{attempt_id}")
 async def get_attempt(attempt_id: UUID, user: User, conn: Conn) -> AttemptOut:
+    """One of the student's attempts, to resume it or show its results."""
     return await _attempt_out(conn, await _attempt(conn, user.id, attempt_id))

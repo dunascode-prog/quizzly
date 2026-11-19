@@ -14,13 +14,26 @@ SETTINGS_COLUMNS = (
     "low_data_mode",
     "share_permission",
     "show_identity_on_links",
-    "timezone",
 )
-NOTIFICATION_TYPES = ("exam", "due", "recap", "mates", "ready")
+NOTIFICATION_TYPES = ("exam", "due", "recap", "mates", "ready", "plans")
 
 
 class ThemeLocked(Exception):
     pass
+
+
+async def set_timezone(conn: AsyncConnection, user_id: UUID, timezone: str) -> None:
+    """Changes the student's time zone at most once a week (FR-PROF-08): daily limits roll over at
+    their midnight, so changing zones back and forth must not hand out extra days. The first
+    change (from the default) always goes through."""
+    await conn.execute(
+        """
+        update profiles set timezone = %(tz)s, timezone_changed_at = now()
+        where id = %(user)s and timezone is distinct from %(tz)s
+          and (timezone_changed_at is null or timezone_changed_at < now() - interval '7 days')
+        """,
+        {"tz": timezone, "user": user_id},
+    )
 
 
 async def unlocked_themes(conn: AsyncConnection, user_id: UUID) -> list[str]:
@@ -53,6 +66,8 @@ async def get_settings(conn: AsyncConnection, user_id: UUID) -> dict[str, Any] |
 async def update_settings(
     conn: AsyncConnection, user_id: UUID, fields: dict[str, Any]
 ) -> dict[str, Any] | None:
+    if fields.get("timezone"):
+        await set_timezone(conn, user_id, fields["timezone"])
     fields = {k: v for k, v in fields.items() if k in SETTINGS_COLUMNS}
     if "accent" in fields and fields["accent"] not in await unlocked_themes(conn, user_id):
         raise ThemeLocked(fields["accent"])
@@ -87,6 +102,8 @@ async def update_notification_settings(
         fields["types"] = json.dumps(current["types"] | fields["types"])
     allowed = {"daily_reminder", "daily_reminder_time", "quiet_start", "quiet_end", "types"}
     fields = {k: v for k, v in fields.items() if k in allowed}
+    if "daily_reminder_time" in fields:
+        fields["daily_reminder_custom"] = True  # their own choice now beats practice times
     if fields:
         sets = ", ".join(f"{k} = %s" for k in fields)
         await conn.execute(

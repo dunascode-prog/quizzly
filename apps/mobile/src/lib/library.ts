@@ -43,11 +43,22 @@ export type Doc = {
   topic_count: number;
   low_ocr_page_count: number;
   created_at: string;
+  /** A past paper: only its style is used, for quizzes (FR-QGEN-09). */
+  kind?: 'notes' | 'past_paper';
+  paper_year?: string | null;
 };
 
-export type Allowance = { used: number; limit: number; remaining: number };
+/** A past question paper for a course (screen 26a): "2023" or "older". */
+export type PastPaper = { year: string };
 
-/** Today's allowances (FR-LIM-01); they reset at midnight, Lagos time. */
+function paperFields(paper?: PastPaper) {
+  return paper ? { kind: 'past_paper', paper_year: paper.year } : {};
+}
+
+/** `remaining` includes `saved_up`: unused allowance carries forward up to a week (FR-LIM-08). */
+export type Allowance = { used: number; limit: number; remaining: number; saved_up: number };
+
+/** Allowances on the student's plan (FR-LIM-01/05); a day's worth arrives at their midnight. */
 export type Usage = {
   uploads: Allowance;
   explanations: Allowance;
@@ -195,7 +206,8 @@ async function sendFiles(docId: string, urls: string[]) {
       const result = await new File(file.uri).upload(urls[i], {
         httpMethod: 'PUT',
         mimeType: file.mimeType,
-        onProgress: ({ bytesSent }) => useUploads.getState().set(docId, { progress: (done + bytesSent) / total }),
+        // iOS reports bytesSent as a BigInt (SDK 58).
+        onProgress: ({ bytesSent }) => useUploads.getState().set(docId, { progress: (done + Number(bytesSent)) / total }),
       });
       if (result.status < 200 || result.status >= 300) throw new Error(`upload HTTP ${result.status}`);
       done += file.size;
@@ -224,8 +236,9 @@ async function register(body: object, files: LocalFile[]): Promise<Doc> {
 export function startUpload(
   file: { uri: string; name: string; size: number; mimeType?: string },
   courseId: string | null,
+  paper?: PastPaper,
 ): Promise<Doc> {
-  return register({ filename: file.name, size_bytes: file.size, course_id: courseId }, [file]);
+  return register({ filename: file.name, size_bytes: file.size, course_id: courseId, ...paperFields(paper) }, [file]);
 }
 
 /** 1–30 photos as one document, pages in this order (FR-DOC-01). */
@@ -233,6 +246,7 @@ export function startPhotoUpload(
   photos: { uri: string; size: number }[],
   title: string,
   courseId: string | null,
+  paper?: PastPaper,
 ): Promise<Doc> {
   const files = photos.map((p) => ({ uri: p.uri, size: p.size, mimeType: 'image/jpeg' }));
   return register(
@@ -241,6 +255,7 @@ export function startPhotoUpload(
       size_bytes: files.reduce((n, f) => n + f.size, 0),
       course_id: courseId,
       image_count: files.length,
+      ...paperFields(paper),
     },
     files,
   );

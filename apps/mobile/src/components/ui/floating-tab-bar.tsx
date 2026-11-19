@@ -14,7 +14,7 @@ export type TabMeta = { label: string; icon: LucideIcon };
  * Ink pill floating over the content (DESIGN.md §6): the active tab is a field-coloured pill
  * with icon + label; the others are icon-only circles that keep an accessibility label.
  */
-export function FloatingTabBar({ state, navigation, tabs }: BottomTabBarProps & { tabs: Record<string, TabMeta> }) {
+export function FloatingTabBar({ state, emitter, navigateToTab, tabs }: BottomTabBarProps & { tabs: Record<string, TabMeta> }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -27,8 +27,8 @@ export function FloatingTabBar({ state, navigation, tabs }: BottomTabBarProps & 
           const focused = state.index === index;
           const Icon = meta.icon;
           const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+            const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!focused && !event.defaultPrevented) navigateToTab(route.key);
           };
           return (
             <Pressable

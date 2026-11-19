@@ -28,5 +28,21 @@ def client(settings: Settings, monkeypatch):
     app.dependency_overrides[get_settings] = lambda: settings
     # Route tests replace app.domain queries with fakes, so the connection is never used.
     app.dependency_overrides[get_conn] = lambda: None
+
+    # The request guard (FR-SEC-20/21) has its own tests; here every request goes ahead.
+    async def go_ahead(conn, user_id, settings):
+        return None, "free"
+
+    monkeypatch.setattr("app.core.guard.check", go_ahead)
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def student_plan(monkeypatch):
+    """Requests come from a Student-plan account (no padlocks, Student limits)."""
+
+    async def as_student(conn, user_id, settings):
+        return None, "student"
+
+    monkeypatch.setattr("app.core.guard.check", as_student)

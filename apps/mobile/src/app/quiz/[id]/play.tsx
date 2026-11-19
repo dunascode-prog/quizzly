@@ -9,6 +9,7 @@ import { ActionPill } from '@/components/ui/action-pill';
 import { AnswerOption, type OptionState } from '@/components/ui/answer-option';
 import { Banner } from '@/components/ui/banner';
 import { CitationChip } from '@/components/ui/citation-chip';
+import { Flashcard, RatingPills } from '@/components/ui/flashcard';
 import { HeroCard } from '@/components/ui/hero-card';
 import { IconButton } from '@/components/ui/icon-button';
 import { ProgressRing } from '@/components/ui/progress-ring';
@@ -86,6 +87,7 @@ export default function PlayScreen() {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [flipped, setFlipped] = useState(false); // a flashcard from the review queue (FR-QGEN-10)
   const [now, setNow] = useState(() => Date.now());
   // Set when the attempt began without a connection; its start waits in the outbox (FR-OFF-02).
   const [offlineStart, setOfflineStart] = useState<number | null>(null);
@@ -191,6 +193,7 @@ export default function PlayScreen() {
 
   const choose = (response: Response) => {
     if (revealed) return;
+    if (question?.type === 'flashcard') setFlipped(true); // rating also shows the answer
     setDraft(response);
     if (mode === 'practice') record(response); // practice marks at once; exam waits for Next
   };
@@ -227,6 +230,7 @@ export default function PlayScreen() {
       return;
     }
     setIndex((i) => i + 1);
+    setFlipped(false);
     setDraft(undefined); // questions only move forward, so each starts unanswered
     setText('');
   };
@@ -266,6 +270,7 @@ export default function PlayScreen() {
     );
   }
 
+  const card = question.type === 'flashcard';
   const typed = question.type === 'fill_blank' || written;
   const feedback = revealed && written ? marked?.feedback : undefined;
   const canContinue = mode === 'practice' ? Boolean(answered) : draft !== undefined && draft !== '';
@@ -286,7 +291,7 @@ export default function PlayScreen() {
   const status =
     left !== null
       ? clock(left)
-      : feedback
+      : feedback || card
         ? `${index + 1} of ${questions.length}`
         : mode === 'exam'
           ? 'Exam mode'
@@ -313,35 +318,51 @@ export default function PlayScreen() {
 
       {data.notice && index === 0 ? <Banner tone="info" message={data.notice} /> : null}
 
-      <HeroCard>
-        <View style={styles.heroTop}>
-          <Text variant="small" color="mutedOnInk" style={styles.flex}>
-            {written ? `${TYPE_LABELS[question.type]} · ${question.marks} marks` : TYPE_LABELS[question.type]}
-          </Text>
-          {feedback ? null : (
-            <ProgressRing size={56} value={(index + 1) / questions.length} label={`${index + 1}/${questions.length}`} />
-          )}
-        </View>
-        <Text variant="title" color="onInk" accessibilityRole="header">
-          {question.stem}
-        </Text>
-        {feedback && marked?.score !== null && marked?.score !== undefined && feedback.status === 'marked' ? (
-          <View style={styles.score} accessible accessibilityLabel={`${marksText(marked.score)} out of ${question.marks} marks`}>
-            <Text variant="number" color="onInk" style={styles.scoreBig}>
-              {marksText(marked.score)}
+      {card ? (
+        <>
+          <Flashcard
+            key={question.id}
+            front={question.stem}
+            back={answerText(question)}
+            extra={question.explanation}
+            page={question.source_pages[0]}
+            flipped={flipped}
+            onFlip={() => setFlipped((f) => !f)}
+            onPage={(n) => router.push({ pathname: '/document/[id]/page/[n]', params: { id: data.document_id, n: String(n) } })}
+          />
+          <RatingPills value={typeof answered?.response === 'boolean' ? answered.response : undefined} onRate={choose} />
+        </>
+      ) : (
+        <HeroCard>
+          <View style={styles.heroTop}>
+            <Text variant="small" color="mutedOnInk" style={styles.flex}>
+              {written ? `${TYPE_LABELS[question.type]} · ${question.marks} marks` : TYPE_LABELS[question.type]}
             </Text>
-            <Text variant="heading" color="mutedOnInk">
-              / {question.marks} marks
-            </Text>
+            {feedback ? null : (
+              <ProgressRing size={56} value={(index + 1) / questions.length} label={`${index + 1}/${questions.length}`} />
+            )}
           </View>
-        ) : waiting ? (
-          <Text variant="label" color="mutedOnInk" accessibilityLiveRegion="polite">
-            Marking your answer…
+          <Text variant="title" color="onInk" accessibilityRole="header">
+            {question.stem}
           </Text>
-        ) : null}
-      </HeroCard>
+          {feedback && marked?.score !== null && marked?.score !== undefined && feedback.status === 'marked' ? (
+            <View style={styles.score} accessible accessibilityLabel={`${marksText(marked.score)} out of ${question.marks} marks`}>
+              <Text variant="number" color="onInk" style={styles.scoreBig}>
+                {marksText(marked.score)}
+              </Text>
+              <Text variant="heading" color="mutedOnInk">
+                / {question.marks} marks
+              </Text>
+            </View>
+          ) : waiting ? (
+            <Text variant="label" color="mutedOnInk" accessibilityLiveRegion="polite">
+              Marking your answer…
+            </Text>
+          ) : null}
+        </HeroCard>
+      )}
 
-      {typed && !(written && revealed) ? (
+      {card ? null : typed && !(written && revealed) ? (
         <View style={styles.options}>
           <TextField
             label="Your answer"
@@ -383,7 +404,7 @@ export default function PlayScreen() {
 
       {feedback ? <MarkedAnswer feedback={feedback} /> : null}
 
-      {revealed && answered && !written ? (
+      {revealed && answered && !written && !card ? (
         <View style={styles.feedback} accessibilityLiveRegion="polite">
           <Text variant="body">
             <Text variant="body" color={answered.correct ? 'success' : 'danger'} style={styles.verdict}>
@@ -395,7 +416,7 @@ export default function PlayScreen() {
         </View>
       ) : null}
 
-      {revealed && (!written || feedback) ? (
+      {revealed && !card && (!written || feedback) ? (
         <View style={styles.chips}>
           {question.source_pages.slice(0, 3).map((p) => (
             <CitationChip

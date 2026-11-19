@@ -53,27 +53,34 @@ From the v0.1 code review. Each task needs a regression test.
 - [x] **D2. Daily 5** play (reuses `play.tsx`) and **15** done screen with `StudyGrid`.
 - [x] **D3. Realtime notifications** (FR-NOTIF-02, 04, 07): `useNotificationsChannel` (foreground only, `AppState`), global `Toast`, bell badge, **22** inbox with filters and inline actions, catch-up fetch, push registration and tap routing with `expo-notifications`.
 - [x] **D4. Sharing UI**: **19** share sheet (`PrivacyList`, `MateChip`, `LinkCard`), members screen, **20** join screen, joined-course states in 03/05/07/08 (tag, read-only, quote view), leave/report, privacy and blocking settings.
-- [ ] **D5. Deep links and invites**: `app.json` Android `intentFilters` (`autoVerify`) for `INVITE_DOMAIN` paths `/i/*`, `/c/*`; routes `i/[code]`, `c/[code]`; pending code kept in secure storage through sign-up (FR-AUTH-07); Play Install Referrer on first launch (`react-native-device-info` `getInstallReferrer()`, development build); **23** invite screen with QR (`react-native-qrcode-svg`).
-- [ ] **D6. Website + link routes** (`apps/web`, see [WEB.md](WEB.md)): Next.js on Cloudflare Pages at `INVITE_DOMAIN`. Landing page (31) from the real screenshots, `/i/{code}` and `/c/{code}` routing (FR-INV-02) with the landing page **24**, `/.well-known/assetlinks.json`, iPhone waitlist with double opt-in, privacy/terms/copyright pages.
-- [ ] **D7. Celebrations** (16), **Recap** (17, `react-native-view-shot` + `expo-sharing`), **Themes** (18, accent applied through a theme context), **Reminders** (21).
+- [x] **D5. Deep links and invites**: `app.json` Android `intentFilters` (`autoVerify`) for `INVITE_DOMAIN` paths `/i/*`, `/c/*`; routes `i/[code]`, `c/[code]`; pending code kept in secure storage through sign-up (FR-AUTH-07); Play Install Referrer on first launch (`react-native-device-info` `getInstallReferrer()`, development build); **23** invite screen with QR (`react-native-qrcode-svg`).
+- [ ] **D6. Website + link routes** (`apps/web`, see [WEB.md](WEB.md)): Next.js on Cloudflare Pages at `INVITE_DOMAIN`. Landing page (31) from the real screenshots, `/i/{code}` and `/c/{code}` routing (FR-INV-02) with the landing page **24**, `/.well-known/assetlinks.json`, iPhone waitlist with double opt-in, privacy/terms/copyright pages. **Done:** the landing page, `/i/` and `/c/` pages with device routing, public link-preview and waitlist API, `assetlinks.json`, waitlist with double opt-in, draft legal pages. **Left:** the real domain, the signing-certificate fingerprint for `assetlinks.json`, a Resend key for waitlist emails, Cloudflare Pages deploy, and legal review of the policy pages.
+- [x] **D7. Celebrations** (16), **Recap** (17, `react-native-view-shot` + `expo-sharing`), **Themes** (18, accent applied through a theme context), **Reminders** (21).
 - [x] **D8a. Original page viewer** (screen 29, FR-DOC-10, P0 — done in A15, #41; check it against the new 29 image in D8).
-- [ ] **D8b. Flashcards** (screen 25, FR-QGEN-10, P1): generation job per topic (front/back/source pages, cached like question sets), self-rating feeds `review_queue`.
-- [ ] **D8c. Rename / merge topics** (screen 27, FR-TOP-03, P1): `topic_overrides` writes through the API (title override, merged_into, split), outline endpoint applies overrides for the requesting user only.
-- [ ] **D8d. Save course for offline** (screen 28, FR-OFF-03, P1): offline manifest endpoint (items + byte size), background download into the SQLite cache with per-part progress, "Saved for offline" state and auto-update while on.
-- [ ] **D8e. Past-question mode** (screen 26, FR-QGEN-09, P1): past-paper upload (same pipeline, `kind = past_paper`, never shared or used as answers), style extraction job (types, wording patterns, marks), `style` option on `POST /quizzes`.
-- [ ] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens.
+- [x] **D8b. Flashcards** (screen 25, FR-QGEN-10, P1): generation job per topic (front/back/source pages, cached like question sets), self-rating feeds `review_queue`.
+- [x] **D8c. Rename / merge topics** (screen 27, FR-TOP-03, P1): `topic_overrides` writes through the API (title override, merged_into, split), outline endpoint applies overrides for the requesting user only.
+- [x] **D8d. Save course for offline** (screen 28, FR-OFF-03, P1): offline manifest endpoint (items + byte size), background download into the SQLite cache with per-part progress, "Saved for offline" state and auto-update while on.
+- [x] **D8e. Past-question mode** (screen 26, FR-QGEN-09, P1): past-paper upload (same pipeline, `kind = past_paper`, never shared or used as answers), style extraction job (types, wording patterns, marks), `style` option on `POST /quizzes`.
+
+- [x] **D8. Passes**: dark mode, 200% font scale, reduce motion, TalkBack labels on all new components, low-data mode behaviour, offline states for social screens. *(2026-10-31: every touchable on the new screens has a role and label; colours are tokens only; reduce motion is honoured by the crop zoom, rays and rings; social screens show offline states; low-data mode stops downloading other students' photos; numbers in fixed circles cap their font scale at 1.3. Check 200% on a device: web emulation is unreliable.)*
+
+
+- [x] **D9. Profile setup v2 and profile photos** ([PROFILE_V2.md](PROFILE_V2.md), screens 02a–02i, FR-PROF-01/03..07, FR-MOD-06): API and migration 0018 (photo upload and delete, visibility, practice times → reminder, photo reports); app `Avatar` component, 4-step onboarding with photo sheet and crop, edit profile.
+
+- [ ] **D10. Quizzly credits and plans** ([CREDITS_AND_PLANS.md](CREDITS_AND_PLANS.md), screens 13, 23, 23b, 23c, 32; FR-INV-03..05, FR-PLAN-01..03, FR-LIM-05..07): cost controls and priority (done), credits and plans API with Google Play verification (done), app screens 13 / 23 / 23b / 23c / 32 (done). **Left:** Play Console products and offer, the service account and notifications (owner), then the native billing library in a dev build to start checkout from screen 32.
 
 ## Phase E — Beta readiness (M5)
 
-- [ ] E1. Eval set and CI run on prompt changes (NFR-11).
-- [ ] E2. Sentry in app and API; job metrics (NFR-09).
-- [ ] E3. Play Store internal testing track; store listing; privacy policy and terms updated for sharing, notifications and invites (NDPA).
+- [x] E1. Eval set and CI run on prompt changes (NFR-11). Harness, CI job and 6 sample cases; grow to 30 real documents (see evals/README.md).
+- [x] E2. Sentry in app and API; job metrics (NFR-09).
+- [ ] E3. Play Store internal testing track; store listing; privacy policy and terms updated for sharing, notifications and invites (NDPA). Repo side done (`eas.json`, [STORE_LISTING.md](STORE_LISTING.md)); account steps and policy pages remain.
 - [ ] E4. **Admin app** at `/admin` in `apps/web` (screens 30a–30h, WEB.md §3): team sign-in with 2FA and `role = admin`, Overview, AI costs, Reports (fix answer / regenerate / keep hidden / dismiss), Takedowns, Limits and plans (`app_config` + audit log), Students, System. Admin API endpoints under `/admin/*` in FastAPI with role checks and `admin_audit_log`.
+- [x] E5. CI/CD and release checks ([CI_CD.md](CI_CD.md)): CI on every PR (tests, lint, migrations, gitleaks, Semgrep, bandit, pip-audit, npm audit, ARM image); staging on merge and production on a `v*` tag with approval; automatic rollback; end-to-end smoke, security and journey tests in `services/api/e2e`. **Left (owner):** VM, GitHub environments and secrets (§6).
 
 ## Decisions still open (don't block on them)
 
 | Question | Default to build with |
 |---|---|
-| Invite/share domain (PRD Q4) | `INVITE_DOMAIN` env var; placeholder `quizzly.example` in dev |
+| Invite/share domain (PRD Q4) | `INVITE_DOMAIN` env var; placeholder `quizzly.app` (the app, the API and apps/web use the same default) |
 | Paid plan contents (PRD Q3) | Build everything free; keep limits and unlocks in config |
 | iOS timing | iPhone users see the waitlist on the landing page |

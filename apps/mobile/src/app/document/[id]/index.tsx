@@ -11,26 +11,33 @@ import { MaxContentWidth, Radius, Size, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { plural } from '@/lib/format';
-import { type Topic, useOutline } from '@/lib/study';
+import { pageRange, type Topic, useOutline } from '@/lib/study';
 
-function TopicRow({ topic, onPress }: { topic: Topic; onPress: () => void }) {
+type RowProps = { n: number; topic: Topic; onPress: () => void; onMenu: () => void };
+
+/** Long-press (or the TalkBack action) opens rename and merge (screen 27, FR-TOP-03). */
+function TopicRow({ n, topic, onPress, onMenu }: RowProps) {
   const theme = useTheme();
+  const merged = (topic.parts?.length ?? 1) > 1;
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onMenu}
       accessibilityRole="button"
-      accessibilityLabel={`Topic ${topic.ordinal + 1}: ${topic.title}${topic.page_start ? `, from page ${topic.page_start}` : ''}`}
+      accessibilityLabel={`Topic ${n}: ${topic.title}${topic.page_start ? `, from page ${topic.page_start}` : ''}`}
       accessibilityHint={topic.summary ?? 'Opens the explanation'}
+      accessibilityActions={[{ name: 'longpress', label: 'Rename or merge' }]}
+      onAccessibilityAction={(e) => e.nativeEvent.actionName === 'longpress' && onMenu()}
       style={({ pressed }) => [styles.row, { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.85 : 1 }]}>
       <View style={[styles.number, { backgroundColor: theme.backgroundElement }]}>
-        <Text variant="label">{topic.ordinal + 1}</Text>
+        <Text variant="label">{n}</Text>
       </View>
       <Text variant="label" style={styles.rowTitle}>
         {topic.title}
       </Text>
       {topic.page_start ? (
         <Text variant="small" color="textSecondary">
-          p. {topic.page_start}
+          {merged ? pageRange(topic) : `p. ${topic.page_start}`}
         </Text>
       ) : null}
     </Pressable>
@@ -104,11 +111,13 @@ export default function OutlineScreen() {
           ) : null}
           {outline.isPending
             ? [0, 1, 2].map((i) => <View key={i} style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} />)
-            : outline.data?.topics.map((t) => (
+            : outline.data?.topics.map((t, i) => (
                 <TopicRow
                   key={t.id}
+                  n={i + 1}
                   topic={t}
                   onPress={() => router.push({ pathname: '/document/[id]/topic/[topicId]', params: { id, topicId: t.id } })}
+                  onMenu={() => router.push({ pathname: '/document/[id]/topic-menu', params: { id, topicId: t.id } })}
                 />
               ))}
         </ScrollView>

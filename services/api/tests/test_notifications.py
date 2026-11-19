@@ -143,7 +143,9 @@ async def test_push_goes_to_every_device_and_drops_dead_tokens(expo):
     assert conn.ran("delete from push_tokens") == [(["ExponentPushToken[bbbbbbbbbb]"],)]
     assert len(conn.ran("update notifications set push_sent_at")) == 1
     receipt_job = conn.ran("insert into jobs")[0]
-    assert json.loads(receipt_job[2]) == {"receipts": {"ticket-1": "ExponentPushToken[aaaaaaaaaa]"}}
+    assert json.loads(receipt_job["payload"]) == {
+        "receipts": {"ticket-1": "ExponentPushToken[aaaaaaaaaa]"}
+    }
 
 
 async def test_receipts_remove_tokens_expo_says_are_gone(expo):

@@ -12,11 +12,12 @@ from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.api.deps import AppSettings, Conn, User
+from app.api.deps import AppSettings, Conn, User, require_ai
 from app.core import db
-from app.domain import chat, study, usage
+from app.domain import chat, plans, study, usage
 from app.llm import usage as llm_usage
 from app.llm.gateway import AllProvidersBusy
+from app.llm.gateway import plan as llm_plan
 from app.rag import chat as rag
 from app.rag import retrieve
 from app.worker import ingest
@@ -63,6 +64,7 @@ def _event(name: str, data: dict) -> str:
 
 @router.get("/v1/documents/{document_id}/chat")
 async def get_chat(document_id: UUID, user: User, conn: Conn) -> ChatOut:
+    """The saved chat for this document; `thread_id` is null until the first question."""
     await _document(conn, user.id, document_id)
     thread = await chat.thread_for(conn, user.id, document_id)
     rows = await chat.messages(conn, thread["id"]) if thread else []
@@ -71,7 +73,28 @@ async def get_chat(document_id: UUID, user: User, conn: Conn) -> ChatOut:
     )
 
 
-@router.post("/v1/documents/{document_id}/chat/messages")
+SSE_EXAMPLE = (
+    'event: token\ndata: {"text": "Osmosis is "}\n\n'
+    'event: token\ndata: {"text": "the movement of water (p. 4)."}\n\n'
+    'event: done\ndata: {"thread_id": "…", "question": {…}, "answer": {…}}\n\n'
+)
+
+
+@router.post(
+    "/v1/documents/{document_id}/chat/messages",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "A Server-Sent Events stream: `token` events with `{text}`, then one "
+            "`done` event with `{thread_id, question, answer}` (each a MessageOut), or one "
+            "`error` event with `{detail}`.",
+            "content": {
+                "text/event-stream": {"schema": {"type": "string"}, "example": SSE_EXAMPLE}
+            },
+        },
+        429: {"description": "Today's chat messages are used up."},
+    },
+)
 async def ask(
     document_id: UUID, body: AskIn, user: User, settings: AppSettings
 ) -> StreamingResponse:
@@ -83,11 +106,13 @@ async def ask(
     started = time.perf_counter()
     async with db.get_pool().connection() as conn:
         doc = await _document(conn, user.id, document_id)
-        limit = settings.daily_chat_messages
+        require_ai(user)  # FR-LIM-06
+        plan = plans.models_for(user.plan)  # which models answer (FR-LIM-04)
+        limit = plans.daily_limit(settings, user.plan, "chat_message")
         if await usage.take(conn, user.id, "chat_message", limit, settings.timezone) is None:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
-                f"You've used today's {limit} chat messages. Resets at 12:00 AM.",
+                plans.used_up(settings, user.plan, "chat_message"),
             )
         thread = await chat.thread_for(conn, user.id, document_id)
         history = await chat.messages(conn, thread["id"], rag.HISTORY_MESSAGES) if thread else []
@@ -109,6 +134,7 @@ async def ask(
 
     async def events() -> AsyncIterator[str]:
         llm_usage.for_user(user.id)  # llm_calls rows for chat carry the student, no job
+        llm_plan.set(plan)
         think = rag.ThinkFilter()
         # What the student sees: half-written or invalid markers are held back (FR-SEC-14).
         clean = rag.CitationStream(rag.allowed_pages(chunks))

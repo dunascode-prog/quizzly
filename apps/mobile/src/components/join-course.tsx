@@ -11,10 +11,12 @@ import { AvatarStack } from '@/components/ui/mate-chip';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Accent, FontFamily, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { useJoinLink, usePreview, useRespond } from '@/lib/sharing';
+import { useOnline } from '@/lib/network';
 
 function Tile({ value, label }: { value: number; label: string }) {
   const theme = useTheme();
@@ -41,6 +43,7 @@ export function JoinCourse({ memberId, code }: { memberId?: string; code?: strin
   const first = p?.owner_name?.split(' ')[0] ?? 'They';
   const joined = p?.status === 'active';
   const busy = respond.isPending || join.isPending;
+  const online = useOnline();
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const openCourse = (courseId: string) => router.replace({ pathname: '/course/[id]', params: { id: courseId } });
 
@@ -75,6 +78,7 @@ export function JoinCourse({ memberId, code }: { memberId?: string; code?: strin
       }>
       <IconButton icon={X} accessibilityLabel="Close" onPress={close} />
       {preview.isError ? <Banner message={friendlyError(preview.error)} /> : null}
+      {!online && !preview.data ? <NeedsInternet what="This shared course" /> : null}
       {respond.isError || join.isError ? <Banner message={friendlyError(respond.error ?? join.error)} /> : null}
 
       {p ? (
@@ -124,7 +128,7 @@ export function JoinCourse({ memberId, code }: { memberId?: string; code?: strin
             )}
           </View>
         </>
-      ) : preview.isPending ? (
+      ) : preview.isPending && online ? (
         <View style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} />
       ) : null}
     </Screen>

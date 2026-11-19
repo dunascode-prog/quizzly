@@ -1,19 +1,36 @@
 import asyncio
+import hmac
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import chat, courses, documents, home, invites, notifications, quizzes, sharing, study
+from app.api import (
+    auth_bridge,
+    chat,
+    courses,
+    documents,
+    home,
+    invites,
+    links,
+    notifications,
+    openapi,
+    plans,
+    quizzes,
+    sharing,
+    study,
+)
 from app.api.routes import router
 from app.core import db
 from app.core.config import get_settings
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, request_id_var
+from app.core.observability import init_sentry
 from app.rag import embed
 
 log = logging.getLogger("quizzly.api")
@@ -38,11 +55,14 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    init_sentry(settings, "api")  # NFR-09; off without SENTRY_DSN
     # FR-SEC-15: the interactive docs and schema only where it's explicitly not production.
     docs = settings.env in ("local", "test", "staging")
     app = FastAPI(
         title="Quizzly API",
-        version="0.1.0",
+        version=openapi.VERSION,
+        description=openapi.DESCRIPTION,
+        openapi_tags=openapi.TAGS,
         lifespan=lifespan,
         docs_url="/docs" if docs else None,
         redoc_url="/redoc" if docs else None,
@@ -80,11 +100,43 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):
-        rid = request.headers.get("x-request-id") or uuid.uuid4().hex
-        response = await call_next(request)
-        response.headers["x-request-id"] = rid
-        return response
+        """NFR-09: one structured line per request, and the request id on every log line."""
+        rid = (request.headers.get("x-request-id") or uuid.uuid4().hex)[:64]
+        token = request_id_var.set(rid)
+        started = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            response.headers["x-request-id"] = rid
+            return response
+        finally:
+            route = request.scope.get("route")
+            # The route's template ("/v1/documents/{document_id}"), never ids or query strings.
+            path = getattr(route, "path", None) or "unmatched"
+            log.info(
+                "request",
+                extra={
+                    "method": request.method,
+                    "path": path,
+                    "status": status,
+                    "ms": round((time.perf_counter() - started) * 1000, 1),
+                },
+            )
+            request_id_var.reset(token)
 
+    @app.get("/internal/metrics", include_in_schema=False)
+    async def internal_metrics(request: Request):
+        """Job queue metrics for monitoring (NFR-09). Needs METRICS_TOKEN; off without it."""
+        token = request.headers.get("x-metrics-token", "")
+        if not settings.metrics_token or not hmac.compare_digest(token, settings.metrics_token):
+            raise HTTPException(404, "Not Found")
+        from app.worker.metrics import job_metrics
+
+        async with db.get_pool().connection() as conn:
+            return await job_metrics(conn)
+
+    app.include_router(auth_bridge.router)
     app.include_router(router)
     app.include_router(courses.router)
     app.include_router(documents.router)
@@ -94,7 +146,10 @@ def create_app() -> FastAPI:
     app.include_router(notifications.router)
     app.include_router(sharing.router)
     app.include_router(invites.router)
+    app.include_router(links.router)
+    app.include_router(plans.router)
     app.include_router(chat.router)
+    openapi.install(app)
     return app
 
 

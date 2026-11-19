@@ -18,7 +18,7 @@
 | Database | **Supabase Postgres + pgvector** | Relational data and vectors in one free database |
 | Auth | **Supabase Auth** (email OTP, Google) | Free, issues JWTs the API verifies |
 | File storage | **Supabase Storage** (private bucket, signed URLs) | 1 GB free; clients upload directly |
-| LLM | **Open models on free hosted tiers**: Groq → OpenRouter (`:free` models) → Cloudflare Workers AI | ~$0 at MVP scale; no GPU to rent |
+| LLM | **Open models on free hosted tiers**: Groq → OpenRouter (`:free` models) → Cloudflare Workers AI. Free-plan students start on the cheapest model (gpt-oss-20b) for chat, explanations and questions (FR-LIM-04) | ~$0 at MVP scale; no GPU to rent; free students cost about half on paid tiers |
 | Embeddings | **`BAAI/bge-small-en-v1.5`** (384 dims) via `fastembed` (ONNX, CPU) inside the worker | Free, fast on CPU, no API quota used |
 | PDF text | `pypdfium2` (Apache/BSD); PPTX via `python-pptx` | Permissive licences (PyMuPDF is AGPL, so avoided) |
 | OCR | **Tesseract** in the worker container; vision-model OCR as a P1 fallback | Free; runs on CPU |
@@ -259,8 +259,10 @@ Storage watch: 384-dim vectors are about 1.5 KB each. 100k chunks (about 2,500 d
 | Env | Database | Deploy |
 |---|---|---|
 | local | Supabase CLI (`supabase start`, Docker) | `docker compose up` + `npx expo start` |
-| staging | Free Supabase project #2 | GitHub Actions on merge to `main` |
-| production | Supabase project | Manual release tag; EAS build for the app |
+| staging | Free Supabase project #2 | GitHub Actions on merge to `main`; EAS Update `preview` channel |
+| production | Supabase project | `v*` release tag + approval; EAS Update or build on the `production` channel |
+
+Both run on the same VM and roll back automatically when their checks fail. Pipeline, rollback and setup: [CI_CD.md](CI_CD.md).
 
 ## 9. Observability
 

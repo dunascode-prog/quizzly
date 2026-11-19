@@ -1,0 +1,62 @@
+name: Remote deploy
+description: Copy the compose file and deploy.sh to the VM over SSH, then deploy an image or roll back.
+
+inputs:
+  environment:
+    description: staging or production
+    required: true
+  target:
+    description: An image reference to deploy, or "rollback"
+    required: true
+  host:
+    required: true
+  user:
+    required: true
+  ssh-key:
+    description: Private key of the deploy user (DEPLOY_SSH_KEY)
+    required: true
+  known-hosts:
+    description: The VM's host key line from ssh-keyscan (DEPLOY_KNOWN_HOSTS)
+    required: true
+  registry-token:
+    description: Token that can pull from GHCR (the job's GITHUB_TOKEN with packages:read)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ENV_NAME: ${{ inputs.environment }}
+        TARGET: ${{ inputs.target }}
+        HOST: ${{ inputs.host }}
+        DEPLOY_USER: ${{ inputs.user }}
+        SSH_KEY: ${{ inputs.ssh-key }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+        REGISTRY_TOKEN: ${{ inputs.registry-token }}
+      run: |
+        if [ -z "$HOST" ] || [ -z "$SSH_KEY" ] || [ -z "$KNOWN_HOSTS" ]; then
+          echo "::error::Set DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS (see infra/README.md)."
+          exit 1
+        fi
+        # Both go into a remote shell command, so accept only the shapes we produce.
+        [[ $ENV_NAME =~ ^(staging|production)$ ]] || { echo "::error::Bad environment: $ENV_NAME"; exit 1; }
+        [[ $TARGET =~ ^(rollback|ghcr\.io/[a-z0-9._/-]+:sha-[0-9a-f]{12})$ ]] || { echo "::error::Bad target: $TARGET"; exit 1; }
+        install -d -m 700 ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        # Host key pinned from a secret: never trust whatever answers on first connect.
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+        remote="$DEPLOY_USER@$HOST"
+        ssh_opts=(-i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+        home="/opt/quizzly/$ENV_NAME"
+
+        scp "${ssh_opts[@]}" infra/docker-compose.yml infra/deploy.sh "$remote:$home/"
+        ssh "${ssh_opts[@]}" "$remote" "docker login ghcr.io -u '$GITHUB_ACTOR' --password-stdin >/dev/null" <<<"$REGISTRY_TOKEN"
+        set +e
+        ssh "${ssh_opts[@]}" "$remote" "bash $home/deploy.sh '$ENV_NAME' '$TARGET'"
+        status=$?
+        set -e
+        ssh "${ssh_opts[@]}" "$remote" "docker logout ghcr.io >/dev/null" || true
+        rm -f ~/.ssh/deploy_key
+        exit $status

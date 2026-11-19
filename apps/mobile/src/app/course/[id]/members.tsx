@@ -2,8 +2,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { ChevronLeft, UserX } from '@/components/icons';
-import { initials } from '@/components/profile-header';
+import { ChevronLeft, Flag, UserX } from '@/components/icons';
+import { Avatar } from '@/components/ui/avatar';
 import { Banner } from '@/components/ui/banner';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { IconButton } from '@/components/ui/icon-button';
@@ -11,19 +11,23 @@ import { Pill } from '@/components/ui/pill';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { TextButton } from '@/components/ui/text-button';
+import { NeedsInternet } from '@/components/ui/needs-internet';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { friendlyError } from '@/lib/errors';
 import { useCourses } from '@/lib/library';
 import { useMembers, useRegenerateLink, useRemoveMember, useStopSharing } from '@/lib/sharing';
+import { useOnline } from '@/lib/network';
 
-// Members of a shared course (DESIGN.md §7, FR-SHARE-07): display names only, remove a member,
-// regenerate the link (the old one stops working), stop sharing.
+// Members of a shared course (DESIGN.md §7, FR-SHARE-07): display names, and photos of those who
+// show them (FR-PROF-05, which can be reported: FR-MOD-06); remove a member, regenerate the link
+// (the old one stops working), stop sharing.
 export default function MembersScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const course = useCourses().data?.find((c) => c.id === id);
   const members = useMembers(id);
+  const online = useOnline();
   const remove = useRemoveMember(id);
   const regenerate = useRegenerateLink(id);
   const stop = useStopSharing(id);
@@ -38,9 +42,10 @@ export default function MembersScreen() {
       <IconButton icon={ChevronLeft} accessibilityLabel="Back" onPress={() => router.back()} />
       <HighlightText highlight="coursemates">{`${course?.code ?? 'Course'} coursemates`}</HighlightText>
       {error ? <Banner message={friendlyError(error)} /> : null}
+      {!online && !members.data ? <NeedsInternet what="Who's in this course" /> : null}
 
       {members.isPending ? (
-        <View style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} />
+        online ? <View style={[styles.skeleton, { backgroundColor: theme.backgroundElement }]} /> : null
       ) : active.length + pending.length === 0 ? (
         <Text variant="body" color="textSecondary">
           Nobody has joined yet. Share the link from the course&apos;s share button.
@@ -49,17 +54,20 @@ export default function MembersScreen() {
         <View style={styles.list}>
           {[...active, ...pending].map((m) => (
             <View key={m.member_id} style={[styles.row, { backgroundColor: theme.backgroundSelected }]}>
-              <View style={[styles.avatar, { backgroundColor: theme.text }]}>
-                <Text variant="label" color="onInk">
-                  {initials(m.display_name)}
-                </Text>
-              </View>
+              <Avatar name={m.display_name} uri={m.avatar_url} size={40} tone="ink" remote />
               <View style={styles.flex}>
                 <Text variant="label">{m.display_name ?? 'Coursemate'}</Text>
                 <Text variant="small" color="textSecondary">
                   {m.status === 'pending' ? 'Invited, not added yet' : 'Studying it'}
                 </Text>
               </View>
+              {m.avatar_url && removing !== m.member_id ? (
+                <IconButton
+                  icon={Flag}
+                  accessibilityLabel={`Report ${m.display_name ?? 'coursemate'}'s photo`}
+                  onPress={() => router.push({ pathname: '/report', params: { targetType: 'avatar', targetId: m.user_id } })}
+                />
+              ) : null}
               {removing === m.member_id ? (
                 <Pill label="Remove" onPress={() => remove.mutate(m.member_id, { onSettled: () => setRemoving(null) })} />
               ) : (
@@ -94,7 +102,6 @@ export default function MembersScreen() {
 const styles = StyleSheet.create({
   list: { gap: Spacing.two },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, padding: Spacing.three, borderRadius: Radius.option },
-  avatar: { width: 44, height: 44, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
   actions: { gap: Spacing.two, alignItems: 'center', marginTop: Spacing.three },
   center: { textAlign: 'center' },

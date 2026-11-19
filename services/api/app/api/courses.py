@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.deps import AppSettings, Conn, StorageDep, User
-from app.domain import courses, documents, sharing
+from app.domain import courses, documents, offline, sharing, styles
+from app.rag import style as paper_style
 from app.worker import cleanup
 
 router = APIRouter(prefix="/v1/courses", tags=["courses"])
@@ -92,6 +93,8 @@ async def _not_member(conn, user_id: UUID, course_id: UUID) -> None:
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_course(body: CourseCreate, user: User, conn: Conn) -> CourseOut:
+    """Adds a course. A code the student already uses is a 409; the exam date must be
+    today or later (FR-CRS-04)."""
     if not body.code:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Course code is required")
     await _check_exam_date(conn, user.id, body.exam_date)
@@ -107,6 +110,7 @@ async def create_course(body: CourseCreate, user: User, conn: Conn) -> CourseOut
 
 @router.patch("/{course_id}")
 async def update_course(course_id: UUID, body: CourseUpdate, user: User, conn: Conn) -> CourseOut:
+    """Changes only the fields sent. A course shared with the student is a 403 (FR-DOC-12)."""
     fields = body.model_dump(exclude_unset=True)
     if "code" in fields and not fields["code"]:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Course code is required")
@@ -143,3 +147,81 @@ async def delete_course(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
     await cleanup.remove_or_queue(conn, storage, paths)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class OfflineDocument(BaseModel):
+    id: UUID
+    title: str
+    bytes: int
+
+
+class OfflineExplanation(BaseModel):
+    document_id: UUID
+    topic_id: UUID
+    style: str
+    bytes: int
+
+
+class OfflineQuiz(BaseModel):
+    id: UUID
+    document_id: UUID
+    questions: int
+    bytes: int
+
+
+class OfflineManifest(BaseModel):
+    """What "Save for offline" fetches, with sizes, so the size shows first (FR-OFF-03)."""
+
+    course_id: UUID
+    documents: list[OfflineDocument]
+    explanations: list[OfflineExplanation]
+    quizzes: list[OfflineQuiz]
+    bytes: int
+
+
+@router.get("/{course_id}/offline")
+async def offline_manifest(course_id: UUID, user: User, conn: Conn) -> OfflineManifest:
+    """Outlines, written explanations and the student's quizzes for one of their courses, or a
+    course shared with them. Original files are never included (FR-SHARE-02)."""
+    data = await offline.manifest(conn, user.id, course_id)
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Course not found")
+    return OfflineManifest(**data)
+
+
+class PaperStyleOut(BaseModel):
+    """A past paper's style for quiz setup (FR-QGEN-09, screen 26b). Only its format, never its
+    questions."""
+
+    id: UUID
+    document_id: UUID
+    title: str
+    year: str | None
+    # pending/generating while it's being learnt; ready or failed after.
+    status: str
+    types: dict[str, float] = {}
+    marks: dict[str, int] = {}
+    # The question types a quiz in this style uses ("Matches the paper: Theory, Short answer").
+    question_types: list[str] = []
+
+
+@router.get("/{course_id}/paper-styles")
+async def paper_styles(course_id: UUID, user: User, conn: Conn) -> list[PaperStyleOut]:
+    """The student's own past papers for this course; nobody else's, even in a shared course."""
+    rows = await styles.list_styles(conn, user.id, course_id)
+    out = []
+    for r in rows:
+        found = r["style"] or {}
+        out.append(
+            PaperStyleOut(
+                id=r["id"],
+                document_id=r["document_id"],
+                title=r["title"],
+                year=r["year"],
+                status=r["status"],
+                types=found.get("types", {}),
+                marks=found.get("marks", {}),
+                question_types=paper_style.question_types(found) if found.get("types") else [],
+            )
+        )
+    return out

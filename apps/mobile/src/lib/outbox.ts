@@ -1,25 +1,31 @@
 import NetInfo from '@react-native-community/netinfo';
 import { onlineManager } from '@tanstack/react-query';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useSyncExternalStore } from 'react';
 
-import { ApiError, apiFetch } from '@/lib/api';
+import { File } from 'expo-file-system';
+
+import { ApiError, apiFetch, apiUpload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { deviceStore } from '@/lib/device-store';
 import { queryClient } from '@/lib/query-client';
+import type { Me } from '@/lib/profile';
 import type { AnswerIn, Attempt, Mode } from '@/lib/quiz';
 
 /*
  * Quiz work done offline waits here and is sent when the device reconnects (FR-OFF-02,
  * ARCHITECTURE §5.7). Every request carries ids the app chose (attempt id, answer ids), and the
  * API treats a repeat as the same request, so a resend never makes a duplicate.
+ * A new profile photo (or its removal) waits here too, and is shown from the device meanwhile
+ * (FR-PROF-04); only the latest change is kept.
  */
 
 type Base = { userId: string; attemptId: string };
 export type OutboxItem =
   | (Base & { kind: 'start'; quizId: string; mode: Mode })
   | (Base & { kind: 'answers'; answers: AnswerIn[]; currentIndex: number })
-  | (Base & { kind: 'submit'; answers: AnswerIn[] });
+  | (Base & { kind: 'submit'; answers: AnswerIn[] })
+  | { userId: string; kind: 'avatar'; uri: string | null; attemptId?: never };
 
 type NewItem = OutboxItem extends infer T ? (T extends OutboxItem ? Omit<T, 'userId'> : never) : never;
 
@@ -57,7 +63,11 @@ export async function enqueue(item: NewItem) {
   if (!userId) return;
   const full = { ...item, userId } as OutboxItem;
   const last = items[items.length - 1];
-  if (full.kind === 'start') {
+  if (full.kind === 'avatar') {
+    const old = items.filter((i) => i.kind === 'avatar' && i.userId === userId);
+    await save([...items.filter((i) => !old.includes(i)), full]);
+    old.forEach(forgetPhoto);
+  } else if (full.kind === 'start') {
     // An answer can be saved while the start request is still failing; the start must go first.
     const at = items.findIndex((i) => i.attemptId === full.attemptId);
     await save(at < 0 ? [...items, full] : [...items.slice(0, at), full, ...items.slice(at)]);
@@ -74,8 +84,21 @@ export async function enqueue(item: NewItem) {
   }
 }
 
+/** Deletes the device copy of a queued photo once it's sent or replaced. */
+function forgetPhoto(item: OutboxItem) {
+  if (item.kind !== 'avatar' || !item.uri || Platform.OS === 'web') return;
+  try {
+    new File(item.uri).delete();
+  } catch {}
+}
+
 async function send(item: OutboxItem) {
-  if (item.kind === 'start') {
+  if (item.kind === 'avatar') {
+    const me = item.uri
+      ? await apiUpload<Me>('/v1/me/avatar', item.uri, 'image/webp')
+      : await apiFetch<Me>('/v1/me/avatar', { method: 'DELETE' });
+    queryClient.setQueryData(['me', item.userId], me);
+  } else if (item.kind === 'start') {
     await apiFetch<Attempt>(`/v1/quizzes/${item.quizId}/attempts`, {
       method: 'POST',
       body: JSON.stringify({ id: item.attemptId, mode: item.mode }),
@@ -98,7 +121,7 @@ async function send(item: OutboxItem) {
 
 /** The server won't accept this however often it's sent (already submitted, time up, gone). */
 function rejected(e: unknown) {
-  return e instanceof ApiError && [404, 409, 422].includes(e.status);
+  return e instanceof ApiError && [404, 409, 413, 422].includes(e.status);
 }
 
 let flushing: Promise<void> | null = null;
@@ -118,6 +141,7 @@ async function sendAll() {
     }
     sent = true;
     await save(items.filter((i) => i !== item));
+    forgetPhoto(item);
   }
   if (sent) {
     void queryClient.invalidateQueries({ queryKey: ['practice'] });
@@ -145,7 +169,7 @@ export function flush(): Promise<void> {
 
 /** Whether anything for this attempt is still waiting to be sent. */
 export function isPending(attemptId: string) {
-  return items.some((i) => i.attemptId === attemptId);
+  return items.some((i) => i.kind !== 'avatar' && i.attemptId === attemptId);
 }
 
 const RETRY_MS = 30_000;
@@ -180,5 +204,20 @@ export function usePendingAttempts() {
     },
     () => items,
   );
-  return new Set(snapshot.filter((i) => i.userId === userId).map((i) => i.attemptId)).size;
+  return new Set(snapshot.filter((i) => i.userId === userId && i.kind !== 'avatar').map((i) => i.attemptId)).size;
+}
+
+/** A photo change still waiting to be sent, if any: `uri` is the device copy, null for removed. */
+export function usePendingAvatar() {
+  const userId = useAuth((s) => s.session?.user.id);
+  const snapshot = useSyncExternalStore(
+    (onChange) => {
+      listeners.add(onChange);
+      void load();
+      return () => listeners.delete(onChange);
+    },
+    () => items,
+  );
+  const item = snapshot.findLast((i) => i.userId === userId && i.kind === 'avatar');
+  return item?.kind === 'avatar' ? { uri: item.uri } : null;
 }

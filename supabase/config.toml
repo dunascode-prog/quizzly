@@ -1,0 +1,3 @@
+# Supabase CLI settings. CI only needs this file to exist for `supabase db push --db-url`
+# (docs/CI_CD.md); everything else uses the CLI defaults.
+project_id = "quizzly"

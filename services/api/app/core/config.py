@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,6 +19,13 @@ class Settings(BaseSettings):
     # Websites allowed to call the API from a browser (CORS). Native apps aren't subject to CORS.
     cors_origins: list[str] = []
     log_level: str = "info"
+    # NFR-09: error tracking (Sentry free tier); off when empty. A release name (e.g. the git sha)
+    # groups errors by deploy; traces are off unless a sample rate is set.
+    sentry_dsn: str = ""
+    sentry_traces_rate: float = 0.0
+    release: str = ""
+    # GET /internal/metrics needs this token in X-Metrics-Token; the route is off when empty.
+    metrics_token: str = ""
     timezone: str = "Africa/Lagos"
     # Optional: Expo push security token (FR-NOTIF-03). Pushes work without it unless the
     # Expo project requires one.
@@ -29,20 +37,49 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     database_url: str = ""
     storage_bucket: str = "documents"
+    # Profile photos (FR-PROF-04): a separate private bucket the API alone writes to.
+    avatars_bucket: str = "avatars"
     # Bump when the Terms or Privacy Policy change; stored on the profile at consent (FR-AUTH-03).
     terms_version: str = "2026-10-22"
 
     # Free-plan limits (PRD §9, FR-DOC-02, FR-LIM-01).
     max_upload_bytes: int = 25 * 1024 * 1024
     max_document_pages: int = 150
-    daily_uploads: int = 5
-    daily_explanations: int = 30
-    daily_question_sets: int = 15
-    daily_markings: int = 20  # theory / short answers marked by the LLM (PRD §9)
-    daily_chat_messages: int = 40
+    daily_uploads: int = 3
+    daily_explanations: int = 20
+    daily_question_sets: int = 5
+    daily_markings: int = 5  # theory / short answers marked by the LLM (PRD §9)
+    daily_chat_messages: int = 20
     daily_share_recipients: int = 20  # people a student can send courses to per day (FR-SHARE-10)
+    daily_avatar_uploads: int = 10  # profile photo changes per day (FR-SEC-22)
+    # Monthly AI allowance per plan, at paid-tier list prices (FR-LIM-06). Typical free use is
+    # about $0.10 a month; these stop one account from costing more than its plan brings in.
+    monthly_ai_ceiling_free_usd: float = 0.60
+    trial_days: int = 7  # the Student free trial, run by Google Play (FR-PLAN-06)
+    monthly_ai_ceiling_student_usd: float = 2.00
+    monthly_ai_ceiling_premium_usd: float = 3.50
+    # Total stored upload size per plan, in MB (FR-LIM-05).
+    storage_free_mb: int = 500
+    storage_student_mb: int = 2000
+    storage_premium_mb: int = 5000
+    # API requests per student per minute (FR-SEC-20); far above what the app makes.
+    requests_per_minute: int = 120
+    # Google Play Billing (FR-PLAN-03). Payments stay off until a service account is set.
+    play_package_name: str = "app.quizzly"
+    play_service_account_json: str = ""  # key JSON of a service account with Android Publisher
+    play_rtdn_secret: str = ""  # shared secret on the Pub/Sub push URL for Play notifications
+    play_student_product: str = "quizzly_student"
+    play_premium_product: str = "quizzly_premium"
+    play_invite_offer: str = "invite-10"  # the 10% offer for 5 credits (FR-INV-05)
+    # Beta builds: every account gets this plan, so testers can use every feature without paying.
+    # Limits, the monthly AI allowance and the daily AI budget still apply. Never in production.
+    beta_plan: Literal["", "student", "premium"] = ""
     # Host of share and invite links (PRD Q4): https://{invite_domain}/c/{code}
-    invite_domain: str = "quizzly.example"
+    invite_domain: str = "quizzly.app"  # the same placeholder as apps/web and the app (WEB.md)
+    # Email the API sends itself (the iPhone waitlist confirmation, FR-INV-06) goes through Resend.
+    # Off until a key is set: sign-ups are kept, unconfirmed. Sign-in codes come from Supabase.
+    resend_api_key: str = ""
+    mail_from: str = ""  # e.g. "Quizzly <hello@quizzly.app>"; defaults to hello@{invite_domain}
     # FR-SEC-08: a day's AI spend across all students; reaching either pauses new AI work.
     daily_llm_token_budget: int = 5_000_000
     daily_llm_cost_budget_usd: float = 2.0
@@ -61,6 +98,10 @@ class Settings(BaseSettings):
             raise RuntimeError(
                 f"Set ENV to one of {', '.join(ENVIRONMENTS)} (got {self.env!r}). "
                 "Quizzly won't start without knowing where it runs."
+            )
+        if self.production and self.beta_plan:
+            raise RuntimeError(
+                "BETA_PLAN gives every account a paid plan; it can't be set in production."
             )
 
     @property

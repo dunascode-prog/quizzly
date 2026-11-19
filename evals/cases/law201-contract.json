@@ -1,0 +1,59 @@
+{
+  "course": "LAW 201 Law of Contract",
+  "pages": [
+    [
+      "LAW 201: Law of Contract",
+      "Topic 1: Formation of a contract"
+    ],
+    [
+      "Offer",
+      "An offer is a definite promise to be bound on specific terms.",
+      "An invitation to treat, such as goods displayed in a shop window, is not an offer."
+    ],
+    [
+      "Acceptance",
+      "Acceptance must be unconditional and match the offer exactly.",
+      "A counter-offer rejects the original offer.",
+      "Under the postal rule, acceptance is complete when the letter is posted."
+    ],
+    [
+      "Consideration",
+      "Consideration is something of value given by each party.",
+      "Consideration must move from the promisee but need not be adequate."
+    ],
+    [
+      "Intention to create legal relations",
+      "In commercial agreements the intention is presumed.",
+      "In social and domestic agreements it is presumed not to exist."
+    ]
+  ],
+  "expected": {
+    "topics": [
+      3,
+      5
+    ],
+    "topic_keywords": [
+      "offer",
+      "acceptance",
+      "consideration"
+    ],
+    "must_cover": [
+      [
+        "offer",
+        "invitation to treat"
+      ],
+      [
+        "acceptance",
+        "counter-offer",
+        "counter offer",
+        "postal rule"
+      ],
+      "consideration",
+      [
+        "intention",
+        "domestic",
+        "commercial"
+      ]
+    ]
+  }
+}

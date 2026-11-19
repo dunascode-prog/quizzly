@@ -1,13 +1,15 @@
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { X } from '@/components/icons';
 import { initials } from '@/components/profile-header';
+import { Avatar } from '@/components/ui/avatar';
 import { Accent, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAccent, useCalmMotion } from '@/lib/appearance';
 import { openTarget, useToast } from '@/lib/notifications';
 
 import { IconButton } from './icon-button';
@@ -22,8 +24,9 @@ const SLIDE_MS = 250;
 export function Toast() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useCalmMotion();
   const { current: n, hide } = useToast();
+  const dot = useAccent() ?? Accent.lagoon;
   const y = useSharedValue(-200);
 
   useEffect(() => {
@@ -47,18 +50,23 @@ export function Toast() {
         accessibilityLiveRegion="polite"
         accessibilityLabel={`${n.title}. ${n.body ?? ''}`}>
         <View style={[styles.card, { backgroundColor: theme.text }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.inkRaised }]}>
-            <Text variant="label" color="onInk">
-              {initials(who)}
-            </Text>
-          </View>
+          {/* The sender's photo only when they show it (FR-PROF-05); a Realtime row has none. */}
+          {n.actor_avatar_url ? (
+            <Avatar name={who} uri={n.actor_avatar_url} size={40} remote />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: theme.inkRaised }]}>
+              <Text variant="label" color="onInk">
+                {initials(who)}
+              </Text>
+            </View>
+          )}
           <View style={styles.text}>
             <Text variant="label" color="onInk" numberOfLines={2}>
               {n.title}
             </Text>
             <View style={styles.meta}>
               {/* The live dot is one of the places an accent may appear (DESIGN.md §3.2). */}
-              <View style={[styles.dot, { backgroundColor: Accent.lagoon }]} />
+              <View style={[styles.dot, { backgroundColor: dot }]} />
               <Text variant="small" color="mutedOnInk" numberOfLines={2} style={styles.flex}>
                 Just now{n.body ? ` · ${n.body}` : ''}
               </Text>

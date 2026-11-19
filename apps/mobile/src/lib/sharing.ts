@@ -7,8 +7,16 @@ import { homeKey } from '@/lib/home';
 import { queryClient } from '@/lib/query-client';
 
 export type Share = { code: string; link: string; member_count: number; sent?: number | null };
-export type Member = { member_id: string; display_name: string | null; status: 'pending' | 'active'; joined_at: string | null };
-export type Coursemate = { user_id: string; display_name: string | null };
+export type Member = {
+  member_id: string;
+  user_id: string;
+  display_name: string | null;
+  status: 'pending' | 'active';
+  joined_at: string | null;
+  /** Only when that student shows their photo to classmates (FR-PROF-05). */
+  avatar_url: string | null;
+};
+export type Coursemate = { user_id: string; display_name: string | null; avatar_url: string | null };
 export type Preview = {
   member_id: string | null;
   status: string | null;

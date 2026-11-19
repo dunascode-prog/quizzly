@@ -13,13 +13,26 @@ router = APIRouter(tags=["invites"])
 
 
 class Friend(BaseModel):
-    display_name: str | None  # first name + last initial only
-    credited_at: datetime
+    display_name: str | None
+    credited_at: datetime | None
+    # counted: a credit; started: joined, studied on `study_days` of 3 days so far (FR-INV-04)
+    state: Literal["counted", "started"]
+    study_days: int
 
 
 class NextReward(BaseModel):
-    theme: str
+    kind: Literal["lavender", "discount"]
+    at: int  # credits needed
+    percent: int | None = None  # for the discount
+
+
+class Discount(BaseModel):
+    """5 credits: 10% off Student or Premium (FR-INV-05)."""
+
+    percent: int
     at: int
+    unlocked: bool
+    celebrate: bool  # show 23c once, then POST /v1/me/invite/reward-seen
 
 
 class InviteOut(BaseModel):
@@ -29,6 +42,7 @@ class InviteOut(BaseModel):
     credited: int
     next_reward: NextReward | None
     lavender_unlocked: bool
+    discount: Discount
 
 
 class ReferralIn(BaseModel):
@@ -51,6 +65,12 @@ async def my_invite(user: User, conn: Conn, settings: AppSettings) -> InviteOut:
     if data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile not found")
     return InviteOut(**data)
+
+
+@router.post("/v1/me/invite/reward-seen", status_code=status.HTTP_204_NO_CONTENT, tags=["account"])
+async def reward_seen(user: User, conn: Conn) -> None:
+    """The app showed the discount celebration (23c); it isn't shown again."""
+    await invites.mark_reward_seen(conn, user.id)
 
 
 @router.post("/v1/referrals")
