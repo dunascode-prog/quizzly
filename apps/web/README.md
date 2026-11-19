@@ -37,6 +37,10 @@ src/app/(site)/i, c/       Invite and share link pages (screen 24, FR-INV-02); t
 src/app/(site)/waitlist/   iPhone waitlist and its email confirmation (FR-INV-06)
 src/app/(site)/privacy, terms, copyright/  Legal pages (drafts until reviewed, E3)
 src/app/.well-known/       assetlinks.json for Android App Links
+src/app/admin/             Admin app (WEB.md §3): sign-in, then the (console) sidebar shell and its pages.
+                           Each page keeps sample data in a data.ts beside it until the admin API (E4) exists.
+src/app/admin/admin.css    Shared admin styles (a- prefix); page styles sit next to each page
+src/components/admin/      Admin building blocks: PageHead, Tiles, Chip, CardHead, Meter, DayBars, Segmented, AdminNav
 src/components/            Icon, Phone (light/dark screenshot pair), PlayQrCode, ThemeToggle
 src/lib/site.ts            Domain, Play URL and other build-time values
 src/styles/tokens.css      Design tokens, light + dark. Mirrors apps/mobile/src/constants/theme.ts

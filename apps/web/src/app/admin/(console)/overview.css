@@ -1,0 +1,20 @@
+/* 30a Overview (docs/reference/admin-overview.html) */
+.ov-cost { display: flex; gap: 20px; }
+.ov-cost-sum { width: 210px; flex: none; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
+.ov-cost-top { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.ov-cost-value { font-size: 56px; line-height: 56px; }
+.ov-cost-meter { display: flex; flex-direction: column; gap: 8px; }
+.ov-small { font-size: 13px; }
+.ov-link { font-size: 14px; font-weight: 700; color: var(--onInk); min-height: 24px; }
+.ov-providers { flex: 1; min-width: 0; display: flex; gap: 12px; }
+.ov-provider { flex: 1; min-width: 0; padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
+.ov-provider-head { display: flex; justify-content: space-between; gap: 8px; }
+.ov-provider-name { font-size: 15px; font-weight: 700; }
+.ov-provider .ov-small { font-size: 12px; }
+@media (max-width: 900px) {
+  .ov-cost { flex-direction: column; }
+  .ov-cost-sum { width: auto; }
+}
+@media (max-width: 860px) {
+  .ov-providers { flex-direction: column; }
+}
