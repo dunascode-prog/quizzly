@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import AppSettings, Conn
+from app.core import live_config
 from app.core.admin import Admin, audit
 from app.domain import admin as stats
 from app.domain import moderation
@@ -423,3 +424,103 @@ async def reverse_takedown(admin: Admin, conn: Conn, takedown_id: UUID) -> Respo
             )
         await audit(conn, admin, "takedowns.reverse", f"file:{row['target']}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- limits and plans (30e) -----------------------------------------------------------------------
+
+
+class LimitField(BaseModel):
+    key: str
+    label: str
+    group: str
+    unit: str
+    min: float
+    max: float
+    decimals: bool
+    default: float  # from the environment and code
+    value: float  # in force now (the default unless an admin changed it)
+    changed: bool
+
+
+class LimitChange(BaseModel):
+    admin_id: UUID
+    key: str | None
+    old: Any
+    new: Any  # null: reset to the default
+    created_at: datetime
+
+
+class LimitsOut(BaseModel):
+    fields: list[LimitField]
+    changes: list[LimitChange]  # the 20 most recent
+    applies_within_s: int  # every API and worker process re-reads within this
+
+
+class LimitsIn(BaseModel):
+    # key -> new value, or null to go back to the default. Only the keys in GET /admin/limits.
+    values: dict[str, float | None] = Field(min_length=1, max_length=len(live_config.FIELDS))
+
+
+async def _limits(conn, settings) -> LimitsOut:
+    overrides = await live_config.load(conn)
+    live = live_config.apply(settings, overrides)  # this process is current at once
+    base = live_config.defaults(settings)
+    changes = await (
+        await conn.execute(
+            "select admin_id, target as key, detail->'old' as old, detail->'new' as new, "
+            "created_at from admin_audit_log where action = 'config.update' "
+            "order by created_at desc limit 20"
+        )
+    ).fetchall()
+    fields = [
+        LimitField(
+            key=f.key,
+            label=f.label,
+            group=f.group,
+            unit=f.unit,
+            min=f.lo,
+            max=f.hi,
+            decimals=f.decimals,
+            default=base[f.key],
+            value=live[f.key],
+            changed=f.key in overrides and live[f.key] != base[f.key],
+        )
+        for f in live_config.FIELDS
+    ]
+    return LimitsOut(
+        fields=fields,
+        changes=[LimitChange(**c) for c in changes],
+        applies_within_s=live_config.REFRESH_SECONDS,
+    )
+
+
+@router.get("/limits")
+async def limits(_: Admin, conn: Conn, settings: AppSettings) -> LimitsOut:
+    """30e: every limit an admin can change, its default, the value in force, and recent changes."""
+    return await _limits(conn, settings)
+
+
+@router.put("/limits")
+async def update_limits(
+    admin: Admin, conn: Conn, settings: AppSettings, body: LimitsIn
+) -> LimitsOut:
+    """Changes limits for every student within a minute. Each key is checked against its bounds;
+    one bad value refuses the whole change. Every changed key is logged with its old value."""
+    clean: dict[str, Any] = {}
+    for key, value in body.values.items():
+        field = live_config.BY_KEY.get(key)
+        if field is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown limit: {key}")
+        try:
+            clean[key] = None if value is None else field.check(value)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    async with conn.transaction():
+        current = await live_config.load(conn)
+        base = live_config.defaults(settings)
+        await live_config.save(conn, admin.id, clean)
+        for key, new in clean.items():
+            old = current.get(key, base[key])
+            if new != old:
+                await audit(conn, admin, "config.update", key, {"old": old, "new": new})
+    return await _limits(conn, settings)

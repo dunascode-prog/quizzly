@@ -46,3 +46,20 @@ def student_plan(monkeypatch):
         return None, "student"
 
     monkeypatch.setattr("app.core.guard.check", as_student)
+
+
+@pytest.fixture(autouse=True)
+def fresh_live_config():
+    """Live limits (E4 30e) change module state: the paid-plan limits and the remembered
+    defaults. Put both back after every test."""
+    import copy
+
+    from app.core import live_config
+    from app.domain import plans
+
+    saved = copy.deepcopy(plans.PAID_LIMITS)
+    live_config._defaults = None
+    yield
+    plans.PAID_LIMITS.clear()
+    plans.PAID_LIMITS.update(saved)
+    live_config._defaults = None

@@ -14,7 +14,7 @@ from datetime import timedelta
 
 from psycopg import AsyncConnection
 
-from app.core import db, guard
+from app.core import db, guard, live_config
 from app.core.config import get_settings
 from app.core.logging import configure_logging, job_id_var
 from app.core.observability import init_sentry
@@ -172,10 +172,14 @@ async def main() -> None:
     pool = await db.open_pool()
     beat = asyncio.create_task(heartbeat(worker_id))
     log.info("worker %s started", worker_id)
-    last_sweep = last_snapshot = last_reminders = last_metrics = 0.0
+    last_sweep = last_snapshot = last_reminders = last_metrics = last_config = 0.0
     try:
         while True:
             async with pool.connection() as conn:
+                if time.monotonic() - last_config > live_config.REFRESH_SECONDS:
+                    # Limits and plans changed in the admin app (E4).
+                    await live_config.refresh(conn, settings)
+                    last_config = time.monotonic()
                 if time.monotonic() - last_sweep > SWEEP_INTERVAL:
                     await sweep(conn)
                     last_sweep = time.monotonic()

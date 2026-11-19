@@ -5142,6 +5142,98 @@
         }
       }
     },
+    "/admin/limits": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Limits",
+        "description": "30e: every limit an admin can change, its default, the value in force, and recent changes.",
+        "operationId": "limits_admin_limits_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update Limits",
+        "description": "Changes limits for every student within a minute. Each key is checked against its bounds;\none bad value refuses the whole change. Every changed key is logged with its old value.",
+        "operationId": "update_limits_admin_limits_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LimitsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/plans": {
       "get": {
         "tags": [
@@ -7532,6 +7624,104 @@
         ],
         "title": "JoinedOut"
       },
+      "LimitChange": {
+        "properties": {
+          "admin_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Admin Id"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "old": {
+            "title": "Old"
+          },
+          "new": {
+            "title": "New"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "admin_id",
+          "key",
+          "old",
+          "new",
+          "created_at"
+        ],
+        "title": "LimitChange"
+      },
+      "LimitField": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "min": {
+            "type": "number",
+            "title": "Min"
+          },
+          "max": {
+            "type": "number",
+            "title": "Max"
+          },
+          "decimals": {
+            "type": "boolean",
+            "title": "Decimals"
+          },
+          "default": {
+            "type": "number",
+            "title": "Default"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "changed": {
+            "type": "boolean",
+            "title": "Changed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "group",
+          "unit",
+          "min",
+          "max",
+          "decimals",
+          "default",
+          "value",
+          "changed"
+        ],
+        "title": "LimitField"
+      },
       "Limits": {
         "properties": {
           "upload": {
@@ -7564,6 +7754,60 @@
           "marking"
         ],
         "title": "Limits"
+      },
+      "LimitsIn": {
+        "properties": {
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "maxProperties": 26,
+            "minProperties": 1,
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "values"
+        ],
+        "title": "LimitsIn"
+      },
+      "LimitsOut": {
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/LimitField"
+            },
+            "type": "array",
+            "title": "Fields"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/LimitChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "applies_within_s": {
+            "type": "integer",
+            "title": "Applies Within S"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fields",
+          "changes",
+          "applies_within_s"
+        ],
+        "title": "LimitsOut"
       },
       "MeOut": {
         "properties": {
