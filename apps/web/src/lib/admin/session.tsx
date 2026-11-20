@@ -17,6 +17,8 @@ type Ctx = {
   config: AdminConfig;
   client: SupabaseClient | null;
   environments: AdminEnvironment[];
+  /** The environment switched away from, so sign-in can offer the way back. */
+  previous: AdminEnvironment | null;
   switchTo: (id: string) => void;
 };
 const AdminContext = createContext<Ctx | null>(null);
@@ -38,14 +40,17 @@ function clientFor(config: AdminConfig): SupabaseClient | null {
 // The chosen environment, remembered in this browser. Read with useSyncExternalStore so the server
 // render (no storage) and the browser agree, and every tab follows a switch.
 const ENV_KEY = "quizzly-admin-env";
+const PREV_KEY = "quizzly-admin-env-prev";
 const listeners = new Set<() => void>();
-function readEnv(): string | null {
+function read(key: string): string | null {
   try {
-    return window.localStorage.getItem(ENV_KEY);
+    return window.localStorage.getItem(key);
   } catch {
     return null;
   }
 }
+const readEnv = () => read(ENV_KEY);
+const readPrev = () => read(PREV_KEY);
 function subscribe(listener: () => void) {
   listeners.add(listener);
   window.addEventListener("storage", listener);
@@ -57,17 +62,20 @@ function subscribe(listener: () => void) {
 
 export function AdminProvider({ environments, children }: { environments: AdminEnvironment[]; children: React.ReactNode }) {
   const chosen = useSyncExternalStore(subscribe, readEnv, () => null);
+  const prevId = useSyncExternalStore(subscribe, readPrev, () => null);
   const config = environments.find((e) => e.id === chosen) ?? environments[0];
+  const previous = environments.find((e) => e.id === prevId && e.id !== config.id) ?? null;
   const switchTo = useCallback((id: string) => {
     try {
+      if (config.id !== id) window.localStorage.setItem(PREV_KEY, config.id);
       window.localStorage.setItem(ENV_KEY, id);
     } catch {
       // Storage blocked: the switch still applies to this page.
     }
     listeners.forEach((l) => l());
-  }, []);
+  }, [config.id]);
   return (
-    <AdminContext.Provider value={{ config, client: clientFor(config), environments, switchTo }}>{children}</AdminContext.Provider>
+    <AdminContext.Provider value={{ config, client: clientFor(config), environments, previous, switchTo }}>{children}</AdminContext.Provider>
   );
 }
 

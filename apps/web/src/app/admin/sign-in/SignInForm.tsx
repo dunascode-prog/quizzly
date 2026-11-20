@@ -1,9 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { NOT_CONFIGURED, useAdmin } from "@/lib/admin/session";
+
+const RESEND_AFTER_S = 60; // like the app's sign-in (DESIGN.md 01, step 3)
+
+/** "For security purposes, you can only request this after 4 seconds." → 4 */
+function waitSeconds(err: unknown): number | null {
+  const m = /after (\d+) seconds?/i.exec(err instanceof Error ? err.message : "");
+  return m ? Number(m[1]) : null;
+}
+
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 // 30h: team email → 6-digit email code → authenticator code (TOTP). The first sign-in sets the
 // authenticator up with a QR code. Only accounts with app_metadata.role = admin get past the code;
@@ -21,9 +31,40 @@ export function SignInForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [factor, setFactor] = useState<{ id: string; qr?: string; secret?: string } | null>(null);
+  // When a new email code may be asked for: Supabase's own wait, or the resend countdown.
+  const [waitUntil, setWaitUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(0); // set when a countdown starts (no clock read while prerendering)
+
+  useEffect(() => {
+    if (!waitUntil) return;
+    const t = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= waitUntil) clearInterval(t);
+    }, 250);
+    return () => clearInterval(t);
+  }, [waitUntil]);
 
   if (!client) return <p className="a-error">{NOT_CONFIGURED}</p>;
   const auth = client.auth;
+  const remaining = waitUntil ? Math.max(0, Math.ceil((waitUntil - now) / 1000)) : 0;
+
+  function waitFor(seconds: number) {
+    setNow(Date.now());
+    setWaitUntil(Date.now() + seconds * 1000);
+  }
+
+  /** Sends the email code; a "wait N seconds" answer becomes the live countdown, not an error. */
+  async function sendCode(): Promise<boolean> {
+    const { error: otpError } = await auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false } });
+    const wait = waitSeconds(otpError);
+    if (wait !== null) {
+      waitFor(wait);
+      return false;
+    }
+    if (otpError) throw otpError;
+    waitFor(RESEND_AFTER_S);
+    return true;
+  }
 
   async function secondFactor() {
     const { data: factors, error: listError } = await auth.mfa.listFactors();
@@ -57,10 +98,9 @@ export function SignInForm() {
     try {
       if (step === "email") {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter your team email.");
-        // Team accounts already exist: never create one from this form.
-        const { error: otpError } = await auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false } });
-        if (otpError) throw otpError;
-        setStep("code");
+        if (remaining > 0) return;
+        // Team accounts already exist: never create one from this form (sendCode).
+        if (await sendCode()) setStep("code");
       } else if (step === "code") {
         if (!/^\d{6}$/.test(code)) return setError("Enter the 6-digit code from your email.");
         const { data, error: verifyError } = await auth.verifyOtp({ email: email.trim(), token: code, type: "email" });
@@ -79,13 +119,28 @@ export function SignInForm() {
         router.replace("/admin");
       }
     } catch (err) {
-      setError(friendly(err));
+      const wait = waitSeconds(err);
+      if (wait !== null) waitFor(wait);
+      else setError(friendly(err));
     } finally {
       setBusy(false);
     }
   }
 
-  const label = { email: "Send my code", code: "Continue", enroll: "Turn on and sign in", totp: "Sign in" }[step];
+  async function resend() {
+    setError("");
+    setCode("");
+    try {
+      await sendCode();
+    } catch (err) {
+      setError(friendly(err));
+    }
+  }
+
+  const waiting = step === "email" && remaining > 0;
+  const label = waiting
+    ? `Send my code in ${clock(remaining)}`
+    : { email: "Send my code", code: "Continue", enroll: "Turn on and sign in", totp: "Sign in" }[step];
 
   return (
     <form className="a-stack" style={{ gap: 20 }} onSubmit={submit} noValidate>
@@ -139,7 +194,12 @@ export function SignInForm() {
           {error}
         </p>
       )}
-      <button type="submit" className="a-action" disabled={busy}>
+      {waiting && (
+        <p className="a-muted" role="status" aria-live="polite">
+          For security, you can ask for a new code in {remaining} {remaining === 1 ? "second" : "seconds"}.
+        </p>
+      )}
+      <button type="submit" className="a-action" disabled={busy || waiting}>
         <span className="a-action-circle">
           <Icon name="arrowRight" size={22} strokeWidth={2.2} />
         </span>
@@ -148,6 +208,11 @@ export function SignInForm() {
           ›››
         </span>
       </button>
+      {step === "code" && (
+        <button type="button" className="a-back" style={{ background: "none" }} disabled={remaining > 0} onClick={resend}>
+          {remaining > 0 ? `Resend code in ${clock(remaining)}` : "Resend code"}
+        </button>
+      )}
       {step !== "email" && (
         <button
           type="button"
